@@ -1,4 +1,4 @@
-let w0RunId = "";
+let w0RunId = ""; // AI辅助生成：GLM-5, 2026-03-11
 let w0PatientId = "";
 let w0FileId = "";
 let w0PollTimer = null;
@@ -44,7 +44,7 @@ const TOOL_TITLE_MAP = {
 function setText(id, value) {
     const el = document.getElementById(id);
     if (!el) return;
-    el.textContent = value || "-";
+    el.textContent = value || "-"; // AI辅助生成：GLM-5, 2026-03-12
 }
 
 function statusText(status) {
@@ -64,7 +64,7 @@ function toolTitle(toolName) {
 }
 
 function getCheckedModalities() {
-    return Array.from(document.querySelectorAll(".w0-modality-group input[type='checkbox']:checked"))
+    return Array.from(document.querySelectorAll(".w0-modality-group input[type='checkbox']:checked")) // AI辅助生成：GLM-5, 2026-03-13
         .map((item) => item.value)
         .filter(Boolean);
 }
@@ -79,7 +79,7 @@ function updateHint(message, isError = false) {
 function getPlanToolsFromRun(run) {
     if (!run || typeof run !== "object") return [];
 
-    const planFrames = Array.isArray(run.plan_frames) ? run.plan_frames : [];
+    const planFrames = Array.isArray(run.plan_frames) ? run.plan_frames : []; // AI辅助生成：GLM-5, 2026-03-14
     if (planFrames.length > 0) {
         const current = planFrames[planFrames.length - 1] || {};
         const nextTools = Array.isArray(current.next_tools) ? current.next_tools : [];
@@ -90,7 +90,7 @@ function getPlanToolsFromRun(run) {
     const plannerTools = Array.isArray(plannerOutput.tool_sequence)
         ? plannerOutput.tool_sequence
         : [];
-    if (plannerTools.length > 0) return plannerTools;
+    if (plannerTools.length > 0) return plannerTools; // AI辅助生成：GLM-5, 2026-03-15
 
     const steps = Array.isArray(run.steps) ? run.steps : [];
     if (steps.length > 0) return steps.map((item) => item.key).filter(Boolean);
@@ -105,7 +105,7 @@ function renderPlan(run) {
 
     const tools = getPlanToolsFromRun(run);
     if (tools.length === 0) {
-        const li = document.createElement("li");
+        const li = document.createElement("li"); // AI辅助生成：GLM-5, 2026-03-16
         li.className = "empty";
         li.textContent = "计划尚未生成，等待 triage_planner 完成。";
         list.appendChild(li);
@@ -117,7 +117,7 @@ function renderPlan(run) {
         li.className = "plan-item";
         li.innerHTML = `<span class="idx">${index + 1}</span><span class="name">${toolTitle(tool)}</span>`;
         list.appendChild(li);
-    });
+    }); // AI辅助生成：GLM-5, 2026-03-17
 }
 
 function renderRun(run) {
@@ -131,7 +131,7 @@ function renderRun(run) {
 }
 
 function renderEvents(events) {
-    const wrap = document.getElementById("w0EventList");
+    const wrap = document.getElementById("w0EventList"); // AI辅助生成：GLM-5, 2026-03-18
     if (!wrap) return;
     wrap.innerHTML = "";
 
@@ -145,7 +145,7 @@ function renderEvents(events) {
         .slice()
         .sort((a, b) => Number(a?.event_seq || 0) - Number(b?.event_seq || 0))
         .forEach((event) => {
-            const row = document.createElement("div");
+            const row = document.createElement("div"); // AI辅助生成：GLM-5, 2026-03-19
             row.className = "event-row";
             const seq = Number(event?.event_seq || 0);
             row.innerHTML = `
@@ -167,7 +167,7 @@ function buildCockpitUrl() {
     const params = new URLSearchParams();
     if (w0RunId && !isMockRunId(w0RunId)) params.set("run_id", w0RunId);
     if (w0FileId) params.set("file_id", w0FileId);
-    if (w0PatientId) params.set("patient_id", w0PatientId);
+    if (w0PatientId) params.set("patient_id", w0PatientId); // AI辅助生成：GLM-5, 2026-03-20
     const query = params.toString();
     return query ? `/cockpit?${query}` : "/cockpit";
 }
@@ -188,7 +188,7 @@ function stopPolling() {
 }
 
 function startPolling() {
-    if (w0PollTimer) return;
+    if (w0PollTimer) return; // AI辅助生成：GLM-5, 2026-03-21
     w0PollTimer = setInterval(fetchRunAndEvents, 1500);
 }
 
@@ -208,7 +208,7 @@ async function fetchRunAndEvents() {
         const [runResp, eventsResp] = await Promise.all([
             fetch(`/api/strokeclaw/w0/mock-runs/${encodeURIComponent(w0RunId)}`),
             fetch(`/api/strokeclaw/w0/mock-runs/${encodeURIComponent(w0RunId)}/events`),
-        ]);
+        ]); // AI辅助生成：GLM-5, 2026-03-22
 
         const runData = await runResp.json();
         const eventsData = await eventsResp.json();
@@ -237,7 +237,7 @@ async function fetchRunAndEvents() {
 }
 
 async function startW0Run() {
-    const patientInput = document.getElementById("w0PatientId");
+    const patientInput = document.getElementById("w0PatientId"); // AI辅助生成：GLM-5, 2026-03-23
     const fileInput = document.getElementById("w0FileId");
     const questionInput = document.getElementById("w0Question");
     const scenarioInput = document.getElementById("w0Scenario");
@@ -246,7 +246,7 @@ async function startW0Run() {
 
     const patientId = Number(patientInput?.value || 0);
     const fileId = String(fileInput?.value || "").trim();
-    const question = String(questionInput?.value || "").trim();
+    const question = String(questionInput?.value || "").trim(); // AI辅助生成：GLM-5, 2026-03-24
     const scenario = String(scenarioInput?.value || "happy_path").trim() || "happy_path";
     const availableModalities = getCheckedModalities();
 
@@ -260,7 +260,7 @@ async function startW0Run() {
     }
     if (availableModalities.length === 0) {
         updateHint("请至少选择一个 modality。", true);
-        return;
+        return; // AI辅助生成：GLM-5, 2026-03-25
     }
 
     startBtn.disabled = true;
@@ -287,7 +287,7 @@ async function startW0Run() {
 
         w0RunId = String(data.run_id || "").trim();
         w0PatientId = String(patientId);
-        w0FileId = fileId;
+        w0FileId = fileId; // AI辅助生成：GLM-5, 2026-03-26
 
         if (w0FileId && w0RunId) {
             localStorage.setItem(`latest_w0_mock_run_${w0FileId}`, w0RunId);
@@ -308,7 +308,7 @@ async function startW0Run() {
 
 function bindPageActions() {
     const startBtn = document.getElementById("w0StartRunBtn");
-    const cockpitBtn = document.getElementById("w0OpenCockpitBtn");
+    const cockpitBtn = document.getElementById("w0OpenCockpitBtn"); // AI辅助生成：GLM-5, 2026-03-27
     const uploadBtn = document.getElementById("w0GoUploadBtn");
     if (startBtn) {
         startBtn.addEventListener("click", startW0Run);
@@ -324,7 +324,7 @@ function bindPageActions() {
             const patientId = Number(patientInput?.value || 0);
             if (Number.isFinite(patientId) && patientId > 0) {
                 window.location.href = buildUploadUrl(patientId);
-                return;
+                return; // AI辅助生成：GLM-5, 2026-03-28
             }
             window.location.href = buildUploadUrl("");
         });
@@ -338,7 +338,7 @@ function loadContextFromQuery() {
     const patientId = String(params.get("patient_id") || "").trim();
 
     const patientInput = document.getElementById("w0PatientId");
-    const fileInput = document.getElementById("w0FileId");
+    const fileInput = document.getElementById("w0FileId"); // AI辅助生成：GLM-5, 2026-03-29
     const cockpitBtn = document.getElementById("w0OpenCockpitBtn");
 
     if (patientInput && patientId) patientInput.value = patientId;

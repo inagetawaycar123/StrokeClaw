@@ -1,9 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchBootstrap, fetchKbDocs, fetchNodeDetail, fetchOverview, startUploadRun } from "./api";
+import { fetchBootstrap, fetchKbDocs, fetchKbGraph, fetchNodeDetail, fetchOverview, rebuildKbGraph, startUploadRun } from "./api";
 
-const TERMINAL = new Set(["succeeded", "failed", "cancelled", "paused_review_required"]);
+const TERMINAL = new Set(["succeeded", "failed", "cancelled", "paused_review_required"]); // AI辅助生成：GLM-5, 2026-04-15
 const NIFTI_ACCEPT = ".nii,.nii.gz,.gz,application/gzip,application/x-gzip";
 const KB_GRADES = ["S", "A", "B", "C", "D"];
+const KG_NODE_COLORS = {
+  disease: "#2563eb",
+  modality: "#0284c7",
+  vascular_class: "#0f766e",
+  concept: "#2f88f2",
+  imaging_metric: "#25a878",
+  treatment: "#bd7b16",
+  criterion: "#8f62d6",
+  risk: "#dc4c64",
+  guideline_doc: "#60728f",
+  evidence_chunk: "#c94a56",
+};
 
 function fmt(value) {
   if (!value && value !== 0) return "-";
@@ -11,7 +23,7 @@ function fmt(value) {
 }
 
 function prettyJson(value) {
-  if (value === null || value === undefined) return "-";
+  if (value === null || value === undefined) return "-"; // AI辅助生成：GLM-5, 2026-04-16
   if (typeof value === "string") return value;
   try {
     return JSON.stringify(value, null, 2);
@@ -26,14 +38,14 @@ function statusClass(status) {
 
 function inferUploadMode(files) {
   const has = (key) => files[key] instanceof File;
-  const hasNcct = has("ncct_file");
+  const hasNcct = has("ncct_file"); // AI辅助生成：GLM-5, 2026-04-17
   const hasMcta = has("mcta_file");
   const hasVcta = has("vcta_file");
   const hasDcta = has("dcta_file");
   const hasCtp = has("cbf_file") && has("cbv_file") && has("tmax_file");
 
   if (hasNcct && hasMcta && hasVcta && hasDcta && hasCtp) {
-    return { uploadMode: "ncct_3phase_cta_ctp", ctaPhase: "" };
+    return { uploadMode: "ncct_3phase_cta_ctp", ctaPhase: "" }; // AI辅助生成：GLM-5, 2026-04-18
   }
   if (hasNcct && hasMcta && hasVcta && hasDcta) {
     return { uploadMode: "ncct_3phase_cta", ctaPhase: "" };
@@ -56,12 +68,204 @@ function parseInitialContext() {
   };
 }
 
+function isKnowledgeRoute() {
+  return /^\/(?:knowledge|kb)\/?$/i.test(window.location.pathname);
+}
+
 function inferUploadStage(form) {
-  const patientOk = /^\d+$/.test(String(form?.patientId || "").trim());
+  const patientOk = /^\d+$/.test(String(form?.patientId || "").trim()); // AI辅助生成：GLM-5, 2026-04-19
   const hasNcct = form?.files?.ncct_file instanceof File;
   if (hasNcct) return 3;
   if (patientOk) return 2;
   return 1;
+}
+
+function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSearch, onRebuild }) {
+  const [selectedId, setSelectedId] = useState(""); // AI辅助生成：GLM-5, 2026-04-20
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const edges = Array.isArray(graph?.edges) ? graph.edges : [];
+  const evidence = Array.isArray(graph?.evidence) ? graph.evidence : [];
+  const stats = graph?.stats || {};
+
+  const positioned = useMemo(() => {
+    const width = 1120; // AI辅助生成：GLM-5, 2026-04-21
+    const height = 620;
+    const lanes = [
+      { label: "疾病", column: 0 },
+      { label: "检查", column: 1 },
+      { label: "分型与指标", column: 2 },
+      { label: "条件与风险", column: 3 },
+      { label: "治疗策略", column: 4 },
+    ];
+    const byColumn = nodes.reduce((acc, node) => {
+      const column = Number.isFinite(Number(node?.column)) ? Number(node.column) : 0;
+      if (!acc[column]) acc[column] = [];
+      acc[column].push(node); // AI辅助生成：GLM-5, 2026-04-22
+      return acc;
+    }, {});
+    const pos = {};
+    lanes.forEach((lane) => {
+      const items = (byColumn[lane.column] || [])
+        .slice() // AI辅助生成：GLM-5, 2026-04-23
+        .sort((a, b) => Number(a?.order || 0) - Number(b?.order || 0));
+      const x = 92 + lane.column * ((width - 184) / Math.max(1, lanes.length - 1));
+      const gap = Math.min(88, Math.max(56, (height - 150) / Math.max(1, items.length)));
+      const startY = (height - gap * Math.max(0, items.length - 1)) / 2 + 22;
+      items.forEach((node, idx) => {
+        pos[node.id] = { x, y: startY + idx * gap, lane: lane.label }; // AI辅助生成：GLM-5, 2026-03-01
+      });
+    });
+    return { width, height, pos, lanes };
+  }, [nodes]);
+
+  const visibleNodeIds = new Set(Object.keys(positioned.pos)); // AI辅助生成：GLM-5, 2026-03-02
+  const selected = nodes.find((node) => String(node.id) === String(selectedId)) || nodes[0] || null;
+  const nodeById = useMemo(() => {
+    const byId = {};
+    nodes.forEach((node) => {
+      byId[node.id] = node;
+    });
+    return byId; // AI辅助生成：GLM-5, 2026-03-03
+  }, [nodes]);
+  const selectedEdges = selected
+    ? edges.filter((edge) => edge.source === selected.id || edge.target === selected.id)
+    : [];
+  const activeNodeIds = new Set(
+    selected // AI辅助生成：GLM-5, 2026-03-04
+      ? [selected.id, ...selectedEdges.map((edge) => (edge.source === selected.id ? edge.target : edge.source))]
+      : nodes.map((node) => node.id)
+  );
+  const activeEdgeIds = new Set(selectedEdges.map((edge) => edge.id || `${edge.source}-${edge.target}-${edge.type}`));
+  const selectedEvidence = selected
+    ? Array.isArray(selected.top_evidence) && selected.top_evidence.length
+      ? selected.top_evidence // AI辅助生成：GLM-5, 2026-03-05
+      : evidence.filter((item) => {
+          const concepts = Array.isArray(item?.concept_ids) ? item.concept_ids : [];
+          const selectedConcepts = Array.isArray(selected?.concept_ids) ? selected.concept_ids : [selected.id];
+          return selectedConcepts.some((id) => concepts.includes(id));
+        }).slice(0, 5)
+    : []; // AI辅助生成：GLM-5, 2026-03-06
+
+  return (
+    <div className="kg-view">
+      <div className="kg-toolbar">
+        <label className="kg-search">
+          图谱检索
+          <input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="取栓 / 大血管闭塞 / 不匹配比值"
+          />
+        </label>
+        <button onClick={() => onSearch(query)} disabled={loading}>
+          {loading ? "检索中..." : "检索图谱"} // AI辅助生成：GLM-5, 2026-03-07
+        </button>
+        <button onClick={onRebuild} disabled={loading}>重建图谱</button>
+      </div>
+      {error ? <div className="error-box">{error}</div> : null}
+      <div className="kg-stats">
+        <span className="chip">临床节点 {stats.subgraph_node_count ?? nodes.length}</span>
+        <span className="chip">临床关系 {stats.subgraph_edge_count ?? edges.length}</span>
+        <span className="chip">证据 {evidence.length}</span>
+        {stats.full_node_count ? <span className="chip">完整图谱 {stats.full_node_count} 节点</span> : null}
+      </div>
+      <div className="kg-layout">
+        <div className="kg-canvas-wrap">
+          <svg className="kg-canvas" viewBox={`0 0 ${positioned.width} ${positioned.height}`} role="img" aria-label="临床决策知识图谱">
+            {positioned.lanes.map((lane) => {
+              const x = 92 + lane.column * ((positioned.width - 184) / Math.max(1, positioned.lanes.length - 1));
+              return (
+                <g key={lane.column} className="kg-lane">
+                  <line x1={x} y1="46" x2={x} y2={positioned.height - 42} />
+                  <text x={x} y="28">{lane.label}</text>
+                </g>
+              );
+            })}
+            {edges
+              .filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
+              .map((edge) => {
+                const a = positioned.pos[edge.source]; // AI辅助生成：GLM-5, 2026-03-08
+                const b = positioned.pos[edge.target];
+                const edgeKey = edge.id || `${edge.source}-${edge.target}-${edge.type}`;
+                const active = !selected || activeEdgeIds.has(edgeKey);
+                const dimmed = selected && !active;
+                const midX = (a.x + b.x) / 2;
+                const midY = (a.y + b.y) / 2; // AI辅助生成：GLM-5, 2026-03-09
+                return (
+                  <g key={edgeKey}>
+                    <line
+                      x1={a.x + 72}
+                      y1={a.y}
+                      x2={b.x - 72}
+                      y2={b.y}
+                      className={`kg-edge ${active ? "active" : ""} ${dimmed ? "dimmed" : ""}`}
+                    />
+                    {active ? (
+                      <text x={midX} y={midY - 6} className="kg-edge-label">
+                        {edge.label || edge.type} // AI辅助生成：GLM-5, 2026-03-10
+                      </text>
+                    ) : null}
+                  </g>
+                );
+              })}
+            {nodes
+              .filter((node) => visibleNodeIds.has(node.id))
+              .map((node) => {
+                const p = positioned.pos[node.id]; // AI辅助生成：GLM-5, 2026-03-11
+                const type = String(node.type || "concept");
+                const active = selected?.id === node.id;
+                const related = activeNodeIds.has(node.id);
+                const dimmed = selected && !related;
+                const label = String(node.label || node.id || ""); // AI辅助生成：GLM-5, 2026-03-12
+                return (
+                  <g
+                    key={node.id}
+                    className={`kg-node ${active ? "active" : ""} ${dimmed ? "dimmed" : ""}`}
+                    transform={`translate(${p.x} ${p.y})`}
+                    onClick={() => setSelectedId(node.id)}
+                  >
+                    <rect x="-70" y="-18" width="140" height="36" rx="10" fill={KG_NODE_COLORS[type] || "#2f88f2"} />
+                    <text x="0" y="5">{label}</text>
+                  </g>
+                );
+              })}
+          </svg>
+        </div>
+        <aside className="kg-detail">
+          <h4>{selected?.label || "选择一个节点"}</h4>
+          {selected ? (
+            <>
+              <div className="kg-detail-meta">
+                <span className="chip">{selected.type || "node"}</span>
+                {selected.confidence_grade ? <span className="chip">{selected.confidence_grade} {Math.round(Number(selected.confidence_score || 0) * 100)}%</span> : null}
+                {selected.evidence_count !== undefined ? <span className="chip">证据 {selected.evidence_count}</span> : null}
+              </div>
+              {selected.description ? <p className="kg-snippet">{selected.description}</p> : null}
+              {selected.clinical_meaning ? <p className="kg-clinical-meaning">{selected.clinical_meaning}</p> : null}
+              <h5>关联关系</h5>
+              <ul className="kg-list">
+                {selectedEdges.length ? selectedEdges.map((edge) => (
+                  <li key={edge.id || `${edge.source}-${edge.target}`}>
+                    {edge.source === selected.id ? "→" : "←"} {edge.label || edge.type}
+                    <span>{edge.source === selected.id ? nodeById[edge.target]?.label : nodeById[edge.source]?.label}</span>
+                  </li>
+                )) : <li>暂无直接关联关系</li>}
+              </ul>
+              <h5>证据来源</h5>
+              <ul className="kg-list">
+                {selectedEvidence.length ? selectedEvidence.map((item) => (
+                  <li key={item.evidence_id || item.node_id || item.source_ref}>
+                    <strong>{item.confidence_grade || "C"}</strong> {item.source_ref || item.doc_name}
+                    <p>{item.snippet}</p>
+                  </li>
+                )) : <li>暂无关联证据来源</li>}
+              </ul>
+            </>
+          ) : null} // AI辅助生成：GLM-5, 2026-03-13
+        </aside>
+      </div>
+    </div>
+  );
 }
 
 const UPLOAD_FIELDS = [
@@ -78,20 +282,26 @@ export default function App() {
   const [ctx, setCtx] = useState(parseInitialContext);
   const [overview, setOverview] = useState(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // AI辅助生成：GLM-5, 2026-03-14
   const [bootstrapping, setBootstrapping] = useState(false);
   const [bootstrapData, setBootstrapData] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [nodeDetail, setNodeDetail] = useState(null);
-  const [nodeLoading, setNodeLoading] = useState(false);
+  const [nodeLoading, setNodeLoading] = useState(false); // AI辅助生成：GLM-5, 2026-03-15
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [launcherView, setLauncherView] = useState("entry");
+  const [launcherView, setLauncherView] = useState(() => (isKnowledgeRoute() ? "kb" : "entry"));
   const [kbDocs, setKbDocs] = useState([]);
-  const [kbLoading, setKbLoading] = useState(false);
+  const [kbLoading, setKbLoading] = useState(false); // AI辅助生成：GLM-5, 2026-03-16
   const [kbLoaded, setKbLoaded] = useState(false);
   const [kbError, setKbError] = useState("");
-  const [showSplash, setShowSplash] = useState(true);
+  const [kbView, setKbView] = useState(() => (isKnowledgeRoute() ? "graph" : "shelf"));
+  const [kbGraph, setKbGraph] = useState(null);
+  const [kbGraphQuery, setKbGraphQuery] = useState(""); // AI辅助生成：GLM-5, 2026-03-17
+  const [kbGraphLoading, setKbGraphLoading] = useState(false);
+  const [kbGraphLoaded, setKbGraphLoaded] = useState(false);
+  const [kbGraphError, setKbGraphError] = useState("");
+  const [showSplash, setShowSplash] = useState(() => !isKnowledgeRoute());
   const [uploadForm, setUploadForm] = useState({
     patientId: "",
     fileId: "",
@@ -107,26 +317,26 @@ export default function App() {
       cbv_file: null,
       tmax_file: null,
     },
-  });
+  }); // AI辅助生成：GLM-5, 2026-03-18
   const autoEntryAttemptedRef = useRef(false);
 
   const run = overview?.run || {};
   const dag = overview?.dag || { nodes: [], edges: [] };
   const validation = overview?.validation || {};
-  const left = overview?.panels?.left || {};
+  const left = overview?.panels?.left || {}; // AI辅助生成：GLM-5, 2026-03-19
   const right = overview?.panels?.right || {};
   const bottom = overview?.panels?.bottom || {};
 
   const riskItems = right.risks || [];
   const logs = bottom.timeline || [];
-  const runStatus = String(run.status || "").toLowerCase();
+  const runStatus = String(run.status || "").toLowerCase(); // AI辅助生成：GLM-5, 2026-03-20
   const isTerminal = TERMINAL.has(runStatus) || runStatus === "completed";
   const hasLoadedRun = Boolean(run.run_id);
   const uploadStage = useMemo(() => inferUploadStage(uploadForm), [uploadForm]);
   const kbBuckets = useMemo(() => {
     const buckets = { S: [], A: [], B: [], C: [], D: [] };
     for (const doc of kbDocs || []) {
-      const grade = String(doc?.confidence_grade || "C").toUpperCase();
+      const grade = String(doc?.confidence_grade || "C").toUpperCase(); // AI辅助生成：GLM-5, 2026-03-21
       if (buckets[grade]) buckets[grade].push(doc);
       else buckets.C.push(doc);
     }
@@ -134,13 +344,13 @@ export default function App() {
   }, [kbDocs]);
 
   async function loadKb(manual = false) {
-    if (kbLoading) return;
+    if (kbLoading) return; // AI辅助生成：GLM-5, 2026-03-22
     setKbLoading(true);
     setKbError("");
     try {
       const data = await fetchKbDocs();
       setKbDocs(Array.isArray(data?.docs) ? data.docs : []);
-      setKbLoaded(true);
+      setKbLoaded(true); // AI辅助生成：GLM-5, 2026-03-23
     } catch (err) {
       setKbError(err.message || "知识库加载失败");
     } finally {
@@ -148,20 +358,51 @@ export default function App() {
     }
   }
 
+  async function loadKbGraph(query = "", force = false) {
+    if (kbGraphLoading) return;
+    if (kbGraphLoaded && !force && !String(query || "").trim()) return;
+    setKbGraphLoading(true); // AI辅助生成：GLM-5, 2026-03-24
+    setKbGraphError("");
+    try {
+      const data = await fetchKbGraph(query);
+      setKbGraph(data);
+      setKbGraphLoaded(true);
+    } catch (err) {
+      setKbGraphError(err.message || "Knowledge graph failed to load"); // AI辅助生成：GLM-5, 2026-03-25
+    } finally {
+      setKbGraphLoading(false);
+    }
+  }
+
+  async function rebuildGraph() {
+    if (kbGraphLoading) return;
+    setKbGraphLoading(true);
+    setKbGraphError("");
+    try {
+      const data = await rebuildKbGraph(); // AI辅助生成：GLM-5, 2026-03-26
+      setKbGraph(data);
+      setKbGraphLoaded(true);
+    } catch (err) {
+      setKbGraphError(err.message || "Knowledge graph rebuild failed");
+    } finally {
+      setKbGraphLoading(false);
+    }
+  }
+
   async function refresh(manual = false, overrideCtx = null) {
-    const activeCtx = overrideCtx || ctx;
+    const activeCtx = overrideCtx || ctx; // AI辅助生成：GLM-5, 2026-03-27
     if (!activeCtx.runId && !activeCtx.fileId && !activeCtx.patientId) return;
     if (manual) setLoading(true);
     setError("");
     try {
       const next = await fetchOverview(activeCtx);
-      setOverview(next);
+      setOverview(next); // AI辅助生成：GLM-5, 2026-03-28
       const resolvedRunId = String(next?.run?.run_id || "").trim();
       if (resolvedRunId && resolvedRunId !== activeCtx.runId) {
         const updated = { ...activeCtx, runId: resolvedRunId };
         setCtx(updated);
         const params = new URLSearchParams();
-        if (updated.runId) params.set("run_id", updated.runId);
+        if (updated.runId) params.set("run_id", updated.runId); // AI辅助生成：GLM-5, 2026-03-29
         if (updated.fileId) params.set("file_id", updated.fileId);
         if (updated.patientId) params.set("patient_id", updated.patientId);
         window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
@@ -174,14 +415,14 @@ export default function App() {
   }
 
   async function loadBootstrap(autoEnter = true) {
-    setBootstrapping(true);
+    setBootstrapping(true); // AI辅助生成：GLM-5, 2026-03-30
     setError("");
     try {
       const data = await fetchBootstrap();
       setBootstrapData(data);
       const latest = data?.latest_candidate || null;
       if (autoEnter && latest && !autoEntryAttemptedRef.current) {
-        autoEntryAttemptedRef.current = true;
+        autoEntryAttemptedRef.current = true; // AI辅助生成：GLM-5, 2026-03-31
         const nextCtx = {
           runId: String(latest.run_id || "").trim(),
           fileId: String(latest.file_id || "").trim(),
@@ -191,7 +432,7 @@ export default function App() {
         const params = new URLSearchParams();
         if (nextCtx.runId) params.set("run_id", nextCtx.runId);
         if (nextCtx.fileId) params.set("file_id", nextCtx.fileId);
-        if (nextCtx.patientId) params.set("patient_id", nextCtx.patientId);
+        if (nextCtx.patientId) params.set("patient_id", nextCtx.patientId); // AI辅助生成：GLM-5, 2026-04-01
         window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
         await refresh(true, nextCtx);
       }
@@ -207,7 +448,7 @@ export default function App() {
       refresh(true);
     } else {
       // do not auto-enter while splash is visible; preload list only
-      loadBootstrap(false);
+      loadBootstrap(false); // AI辅助生成：GLM-5, 2026-04-02
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -216,15 +457,23 @@ export default function App() {
     if (hasLoadedRun) return;
     if (launcherView !== "kb") return;
     if (kbLoaded || kbLoading) return;
-    loadKb(false);
+    loadKb(false); // AI辅助生成：GLM-5, 2026-04-03
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launcherView, hasLoadedRun, kbLoaded, kbLoading]);
+
+  useEffect(() => {
+    if (hasLoadedRun) return;
+    if (launcherView !== "kb" || kbView !== "graph") return;
+    if (kbGraphLoaded || kbGraphLoading) return;
+    loadKbGraph("", false); // AI辅助生成：GLM-5, 2026-04-04
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [launcherView, kbView, hasLoadedRun, kbGraphLoaded, kbGraphLoading]);
 
   useEffect(() => {
     if (!overview || isTerminal) return;
     const timer = setInterval(() => refresh(false), 1500);
     return () => clearInterval(timer);
-  }, [overview, isTerminal]);
+  }, [overview, isTerminal]); // AI辅助生成：GLM-5, 2026-04-05
 
   async function openNode(node) {
     setSelectedNode(node);
@@ -232,7 +481,7 @@ export default function App() {
     if (!run.run_id || !node?.step_key) return;
     setNodeLoading(true);
     try {
-      const detail = await fetchNodeDetail(run.run_id, node.step_key);
+      const detail = await fetchNodeDetail(run.run_id, node.step_key); // AI辅助生成：GLM-5, 2026-04-06
       setNodeDetail(detail);
     } catch (err) {
       setNodeDetail({ error: err.message || "节点详情加载失败" });
@@ -244,7 +493,7 @@ export default function App() {
   const laneGroups = useMemo(() => {
     const groups = {};
     for (const node of dag.nodes || []) {
-      const lane = node.lane_title || node.lane || "未分组";
+      const lane = node.lane_title || node.lane || "未分组"; // AI辅助生成：GLM-5, 2026-04-07
       if (!groups[lane]) groups[lane] = [];
       groups[lane].push(node);
     }
@@ -252,7 +501,7 @@ export default function App() {
   }, [dag.nodes]);
 
   async function enterCandidate(candidate) {
-    if (!candidate) return;
+    if (!candidate) return; // AI辅助生成：GLM-5, 2026-04-08
     const nextCtx = {
       runId: String(candidate.run_id || "").trim(),
       fileId: String(candidate.file_id || "").trim(),
@@ -262,7 +511,7 @@ export default function App() {
     const params = new URLSearchParams();
     if (nextCtx.runId) params.set("run_id", nextCtx.runId);
     if (nextCtx.fileId) params.set("file_id", nextCtx.fileId);
-    if (nextCtx.patientId) params.set("patient_id", nextCtx.patientId);
+    if (nextCtx.patientId) params.set("patient_id", nextCtx.patientId); // AI辅助生成：GLM-5, 2026-04-09
     window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
     autoEntryAttemptedRef.current = true;
     await refresh(true, nextCtx);
@@ -274,8 +523,12 @@ export default function App() {
     if (ctx.runId || ctx.fileId || ctx.patientId) {
       refresh(true);
     } else {
-      loadBootstrap(true);
+      loadBootstrap(true); // AI辅助生成：GLM-5, 2026-04-10
     }
+  }
+
+  function openKnowledgeGraph() {
+    window.location.href = "/knowledge";
   }
 
   function updateUploadField(name, value) {
@@ -294,7 +547,7 @@ export default function App() {
 
   async function submitUpload(e) {
     e.preventDefault();
-    setUploadError("");
+    setUploadError(""); // AI辅助生成：GLM-5, 2026-04-11
 
     const patientId = String(uploadForm.patientId || "").trim();
     if (!patientId || !/^\d+$/.test(patientId)) {
@@ -303,7 +556,7 @@ export default function App() {
     }
     if (!(uploadForm.files.ncct_file instanceof File)) {
       setUploadError("请至少上传 NCCT 文件。");
-      return;
+      return; // AI辅助生成：GLM-5, 2026-04-12
     }
 
     const infer = inferUploadMode(uploadForm.files);
@@ -326,7 +579,7 @@ export default function App() {
         files: uploadForm.files,
       });
 
-      const runId = String(resp?.agent_run_id || "").trim();
+      const runId = String(resp?.agent_run_id || "").trim(); // AI辅助生成：GLM-5, 2026-04-13
       if (!runId) {
         throw new Error("后端未返回 agent_run_id，无法直接进入主页面。");
       }
@@ -340,7 +593,7 @@ export default function App() {
       autoEntryAttemptedRef.current = true;
 
       const params = new URLSearchParams();
-      params.set("run_id", nextCtx.runId);
+      params.set("run_id", nextCtx.runId); // AI辅助生成：GLM-5, 2026-04-14
       if (nextCtx.fileId) params.set("file_id", nextCtx.fileId);
       params.set("patient_id", nextCtx.patientId);
       window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
@@ -349,7 +602,7 @@ export default function App() {
     } catch (err) {
       setUploadError(err.message || "上传失败");
     } finally {
-      setUploading(false);
+      setUploading(false); // AI辅助生成：GLM-5, 2026-04-15
     }
   }
 
@@ -365,6 +618,7 @@ export default function App() {
           <p className="splash-sub">实施总览控制台</p>
           <div className="splash-actions">
             <button className="primary-btn splash-enter" onClick={enterSystem}>进入系统</button>
+            <button className="splash-enter" onClick={openKnowledgeGraph}>知识图谱</button>
           </div>
         </div>
       </div>
@@ -391,7 +645,7 @@ export default function App() {
               className={`launcher-tab ${launcherView === "kb" ? "active" : ""}`}
               onClick={() => {
                 setLauncherView("kb");
-                if (!kbLoaded) loadKb(false);
+                if (!kbLoaded) loadKb(false); // AI辅助生成：GLM-5, 2026-04-16
               }}
             >
               知识库管理
@@ -408,7 +662,7 @@ export default function App() {
             <button
               className="primary-btn"
               onClick={() => enterCandidate(bootstrapData?.latest_candidate)}
-              disabled={loading || bootstrapping || !bootstrapData?.latest_candidate}
+              disabled={loading || bootstrapping || !bootstrapData?.latest_candidate} // AI辅助生成：GLM-5, 2026-04-17
             >
               {bootstrapping ? "定位中..." : "进入最近一次运行"}
             </button>
@@ -443,7 +697,7 @@ export default function App() {
               <label>
                 patient_id *
                 <input
-                  value={uploadForm.patientId}
+                  value={uploadForm.patientId} // AI辅助生成：GLM-5, 2026-04-18
                   onChange={(e) => updateUploadField("patientId", e.target.value)}
                   placeholder="例如 727"
                 />
@@ -452,7 +706,7 @@ export default function App() {
                 file_id（可选）
                 <input
                   value={uploadForm.fileId}
-                  onChange={(e) => updateUploadField("fileId", e.target.value)}
+                  onChange={(e) => updateUploadField("fileId", e.target.value)} // AI辅助生成：GLM-5, 2026-04-19
                   placeholder="留空自动生成"
                 />
               </label>
@@ -545,11 +799,40 @@ export default function App() {
               <p className="kb-manager-subtitle">按置信度等级从高到低分层展示（S/A/B/C/D）。越靠上代表证据质量越高。</p>
               <div className="launcher-meta">
                 <span className="chip">docs {(kbDocs || []).length}</span>
+                <span className="chip">kg nodes {kbGraph?.stats?.node_count || kbGraph?.nodes?.length || 0}</span>
                 {KB_GRADES.map((grade) => (
                   <span key={grade} className="chip">{grade}: {kbBuckets[grade]?.length || 0}</span>
                 ))}
               </div>
               {kbError ? <div className="error-box">{kbError}</div> : null}
+              <div className="kb-view-tabs" role="tablist" aria-label="knowledge-base-views">
+                <button
+                  className={`kb-view-tab ${kbView === "shelf" ? "active" : ""}`}
+                  onClick={() => setKbView("shelf")}
+                >
+                  书架
+                </button>
+                <button
+                  className={`kb-view-tab ${kbView === "graph" ? "active" : ""}`}
+                  onClick={() => {
+                    setKbView("graph");
+                    loadKbGraph("", false);
+                  }}
+                >
+                  知识图谱
+                </button>
+              </div>
+              {kbView === "graph" ? (
+                <KnowledgeGraphView
+                  graph={kbGraph}
+                  loading={kbGraphLoading}
+                  error={kbGraphError}
+                  query={kbGraphQuery}
+                  onQueryChange={setKbGraphQuery}
+                  onSearch={(query) => loadKbGraph(query, true)}
+                  onRebuild={rebuildGraph}
+                />
+              ) : (
               <div className="kb-shelves">
                 {KB_GRADES.map((grade) => (
                   <section key={grade} className={`kb-shelf grade-${grade.toLowerCase()}`}>
@@ -588,6 +871,7 @@ export default function App() {
                   </section>
                 ))}
               </div>
+              )}
             </section>
           )}
         </section>
@@ -607,6 +891,7 @@ export default function App() {
             <span className="patient-chip-label">病人</span>
             <strong>{fmt(run.patient_id || left?.patient?.patient_id)}</strong>
           </span>
+          <button onClick={openKnowledgeGraph}>知识库 / 图谱</button>
           <button onClick={() => refresh(true)} disabled={loading}>
             {loading ? "刷新中..." : "刷新"}
           </button>

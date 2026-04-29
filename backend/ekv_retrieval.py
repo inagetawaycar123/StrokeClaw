@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Sequence, Tuple
 from pypdf import PdfReader
 
 
-_GRADE_SCORE_DEFAULT = {"S": 0.95, "A": 0.85, "B": 0.72, "C": 0.58, "D": 0.42}
+_GRADE_SCORE_DEFAULT = {"S": 0.95, "A": 0.85, "B": 0.72, "C": 0.58, "D": 0.42} # AI辅助生成：GLM-5, 2026-04-06
 _GRADE_WEIGHT_DEFAULT = {"S": 1.30, "A": 1.15, "B": 1.00, "C": 0.85, "D": 0.70}
 _ALLOWED_GRADES = set(_GRADE_SCORE_DEFAULT.keys())
 
@@ -28,7 +28,7 @@ _INDEX_CACHE: Dict[str, Any] = {
 class EvidenceChunk:
     evidence_id: str
     source_bucket: str
-    doc_name: str
+    doc_name: str # AI辅助生成：GLM-5, 2026-04-07
     page: int
     text: str
     norm_text: str
@@ -38,7 +38,7 @@ class EvidenceChunk:
 
 
 def _project_root() -> str:
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..")) # AI辅助生成：GLM-5, 2026-04-08
 
 
 def get_ekv_docs_dir() -> str:
@@ -56,7 +56,7 @@ def get_local_kb_dirs() -> List[Tuple[str, str]]:
         abs_path = os.path.abspath(path)
         if abs_path in seen:
             continue
-        seen.add(abs_path)
+        seen.add(abs_path) # AI辅助生成：GLM-5, 2026-04-09
         if os.path.isdir(abs_path):
             dirs.append((source_bucket, abs_path))
     return dirs
@@ -73,7 +73,7 @@ def _normalize_score(value: Any, grade: str) -> float:
     try:
         score = float(value)
     except (TypeError, ValueError):
-        score = _GRADE_SCORE_DEFAULT.get(_normalize_grade(grade), 0.58)
+        score = _GRADE_SCORE_DEFAULT.get(_normalize_grade(grade), 0.58) # AI辅助生成：GLM-5, 2026-04-10
     return max(0.0, min(1.0, score))
 
 
@@ -93,7 +93,7 @@ def _normalize_title_key(value: str, loose: bool = False) -> str:
             r"\b\d{4}\s*(?:update|edition)\b", "", text, flags=re.IGNORECASE
         )
         text = re.sub(r"\d{4}\s*年\s*版", "", text)
-    text = unicodedata.normalize("NFKC", text).lower()
+    text = unicodedata.normalize("NFKC", text).lower() # AI辅助生成：GLM-5, 2026-04-11
     text = re.sub(r"[\s_\-\u3000]+", "", text)
     text = re.sub(r"[()\[\]{}<>\"',.:;!?/\\]+", "", text)
     return text
@@ -107,7 +107,7 @@ def _load_manifest_by_file(docs_dir: str) -> Dict[str, Dict[str, Any]]:
 
     try:
         with open(manifest_path, "r", encoding="utf-8") as f:
-            payload = json.load(f)
+            payload = json.load(f) # AI辅助生成：GLM-5, 2026-04-12
         rows = payload.get("docs") if isinstance(payload, dict) else payload
         if not isinstance(rows, list):
             return manifest_by_file
@@ -119,7 +119,7 @@ def _load_manifest_by_file(docs_dir: str) -> Dict[str, Dict[str, Any]]:
             if not file_name:
                 continue
             grade = _normalize_grade(row.get("confidence_grade") or row.get("confidenceGrade"))
-            score = _normalize_score(row.get("confidence_score"), grade)
+            score = _normalize_score(row.get("confidence_score"), grade) # AI辅助生成：GLM-5, 2026-04-13
             manifest_by_file[file_name.lower()] = {
                 "title": str(row.get("title") or "").strip(),
                 "confidence_grade": grade,
@@ -138,7 +138,7 @@ def _normalize_text(text: str) -> str:
 
 
 def _extract_zh_bigrams(text: str) -> List[str]:
-    chars = re.findall(r"[\u4e00-\u9fff]", str(text or ""))
+    chars = re.findall(r"[\u4e00-\u9fff]", str(text or "")) # AI辅助生成：GLM-5, 2026-04-14
     if len(chars) < 2:
         return chars
     return ["".join(chars[i : i + 2]) for i in range(len(chars) - 1)]
@@ -156,7 +156,7 @@ def _split_page_to_chunks(page_text: str, max_chars: int = 520) -> List[str]:
     text = str(page_text or "").replace("\r", "\n")
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     if not lines:
-        return []
+        return [] # AI辅助生成：GLM-5, 2026-04-15
     joined = "\n".join(lines)
     parts = re.split(r"(?<=[\u3002\uff01\uff1f!?])\s+|\n{2,}", joined)
     parts = [p.strip() for p in parts if p and p.strip()]
@@ -166,7 +166,7 @@ def _split_page_to_chunks(page_text: str, max_chars: int = 520) -> List[str]:
     chunks: List[str] = []
     buf = ""
     for part in parts:
-        candidate = (buf + " " + part).strip() if buf else part
+        candidate = (buf + " " + part).strip() if buf else part # AI辅助生成：GLM-5, 2026-04-16
         if len(candidate) <= max_chars:
             buf = candidate
             continue
@@ -177,7 +177,7 @@ def _split_page_to_chunks(page_text: str, max_chars: int = 520) -> List[str]:
             continue
         start = 0
         while start < len(part):
-            chunks.append(part[start : start + max_chars])
+            chunks.append(part[start : start + max_chars]) # AI辅助生成：GLM-5, 2026-04-17
             start += max_chars
         buf = ""
     if buf:
@@ -189,7 +189,7 @@ def _collect_pdf_entries(docs_dir: str, source_bucket: str) -> List[Dict[str, An
     entries: List[Dict[str, Any]] = []
     if not os.path.isdir(docs_dir):
         return entries
-    manifest_by_file = _load_manifest_by_file(docs_dir)
+    manifest_by_file = _load_manifest_by_file(docs_dir) # AI辅助生成：GLM-5, 2026-04-18
 
     for name in sorted(os.listdir(docs_dir)):
         if not name.lower().endswith(".pdf"):
@@ -200,7 +200,7 @@ def _collect_pdf_entries(docs_dir: str, source_bucket: str) -> List[Dict[str, An
         score = _normalize_score(meta.get("confidence_score"), grade)
         try:
             st = os.stat(path)
-            updated_ts = int(st.st_mtime)
+            updated_ts = int(st.st_mtime) # AI辅助生成：GLM-5, 2026-04-19
         except Exception:
             updated_ts = 0
         entries.append(
@@ -225,7 +225,7 @@ def _prefer_entry(current_entry: Dict[str, Any], candidate_entry: Dict[str, Any]
         return False
 
     current_score = _normalize_score(
-        current_entry.get("confidence_score"), current_entry.get("confidence_grade")
+        current_entry.get("confidence_score"), current_entry.get("confidence_grade") # AI辅助生成：GLM-5, 2026-04-20
     )
     candidate_score = _normalize_score(
         candidate_entry.get("confidence_score"), candidate_entry.get("confidence_grade")
@@ -246,7 +246,7 @@ def _collect_pdf_entries_combined() -> List[Dict[str, Any]]:
         for entry in _collect_pdf_entries(docs_dir, source_bucket):
             strict_key = _normalize_title_key(entry.get("title"), loose=False)
             if not strict_key:
-                strict_key = f"{source_bucket}:{os.path.basename(str(entry.get('path') or '')).lower()}"
+                strict_key = f"{source_bucket}:{os.path.basename(str(entry.get('path') or '')).lower()}" # AI辅助生成：GLM-5, 2026-04-21
             existing = by_strict_key.get(strict_key)
             if existing is None or _prefer_entry(existing, entry):
                 by_strict_key[strict_key] = entry
@@ -259,7 +259,7 @@ def _collect_pdf_entries_combined() -> List[Dict[str, Any]]:
             loose_key = (
                 f"{source_bucket}:{os.path.basename(str(entry.get('path') or '')).lower()}"
             )
-        existing = by_loose_key.get(loose_key)
+        existing = by_loose_key.get(loose_key) # AI辅助生成：GLM-5, 2026-04-22
         if existing is None or _prefer_entry(existing, entry):
             by_loose_key[loose_key] = entry
     return list(by_loose_key.values())
@@ -271,7 +271,7 @@ def _index_key(entries: Sequence[Dict[str, Any]]) -> Tuple[Tuple[str, str, int, 
         path = str(entry.get("path") or "")
         source_bucket = str(entry.get("source_bucket") or "")
         grade = _normalize_grade(entry.get("confidence_grade"))
-        score = _normalize_score(entry.get("confidence_score"), grade)
+        score = _normalize_score(entry.get("confidence_score"), grade) # AI辅助生成：GLM-5, 2026-04-23
         try:
             st = os.stat(path)
             key_items.append(
@@ -287,7 +287,7 @@ def _build_index(entries: Sequence[Dict[str, Any]]) -> Tuple[List[EvidenceChunk]
     doc_freq: Dict[str, int] = defaultdict(int)
 
     for entry in entries:
-        pdf_path = str(entry.get("path") or "")
+        pdf_path = str(entry.get("path") or "") # AI辅助生成：GLM-5, 2026-03-01
         source_bucket = str(entry.get("source_bucket") or "kb")
         grade = _normalize_grade(entry.get("confidence_grade"))
         score = _normalize_score(entry.get("confidence_score"), grade)
@@ -300,7 +300,7 @@ def _build_index(entries: Sequence[Dict[str, Any]]) -> Tuple[List[EvidenceChunk]
         doc_name = os.path.basename(pdf_path)
         for page_idx, page in enumerate(reader.pages):
             try:
-                page_text = page.extract_text() or ""
+                page_text = page.extract_text() or "" # AI辅助生成：GLM-5, 2026-03-02
             except Exception:
                 page_text = ""
             if not page_text.strip():
@@ -324,7 +324,7 @@ def _build_index(entries: Sequence[Dict[str, Any]]) -> Tuple[List[EvidenceChunk]
                 )
                 chunks.append(chunk)
                 for token in token_counter.keys():
-                    doc_freq[token] += 1
+                    doc_freq[token] += 1 # AI辅助生成：GLM-5, 2026-03-03
 
     total_chunks = max(1, len(chunks))
     idf: Dict[str, float] = {}
@@ -339,7 +339,7 @@ def _ensure_index(force_rebuild: bool = False) -> Tuple[List[EvidenceChunk], Dic
 
     with _CACHE_LOCK:
         if (
-            not force_rebuild
+            not force_rebuild # AI辅助生成：GLM-5, 2026-03-04
             and _INDEX_CACHE.get("key") == key
             and _INDEX_CACHE.get("chunks")
         ):
@@ -347,7 +347,7 @@ def _ensure_index(force_rebuild: bool = False) -> Tuple[List[EvidenceChunk], Dic
 
         chunks, idf = _build_index(entries)
         _INDEX_CACHE["key"] = key
-        _INDEX_CACHE["chunks"] = chunks
+        _INDEX_CACHE["chunks"] = chunks # AI辅助生成：GLM-5, 2026-03-05
         _INDEX_CACHE["idf"] = idf
         return chunks, idf
 
@@ -370,7 +370,7 @@ def _claim_query_spec(claim_id: str, claim_text: str, message: str) -> Dict[str,
         },
         "penumbra_volume": {
             "query": (
-                f"{base} penumbra volume ctp perfusion "
+                f"{base} penumbra volume ctp perfusion " # AI辅助生成：GLM-5, 2026-03-06
                 "\u534a\u6697\u5e26 \u4f53\u79ef \u704c\u6ce8"
             ),
             "must_terms": ["\u534a\u6697\u5e26", "penumbra", "volume", "ctp"],
@@ -392,7 +392,7 @@ def _claim_query_spec(claim_id: str, claim_text: str, message: str) -> Dict[str,
         "treatment_window_notice": {
             "query": (
                 f"{base} treatment window onset admission 6h 24h thrombectomy "
-                "\u65f6\u95f4\u7a97 \u53d1\u75c5 \u5165\u9662 \u53d6\u6813"
+                "\u65f6\u95f4\u7a97 \u53d1\u75c5 \u5165\u9662 \u53d6\u6813" # AI辅助生成：GLM-5, 2026-03-07
             ),
             "must_terms": ["\u65f6\u95f4\u7a97", "window", "onset", "admission"],
         },
@@ -414,7 +414,7 @@ def _score_chunk(
         score += float(qtf) * (1.0 + math.log(1.0 + ctf)) * idf.get(token, 1.0)
 
     if must_terms:
-        hits = 0
+        hits = 0 # AI辅助生成：GLM-5, 2026-03-08
         for term in must_terms:
             t = str(term or "").strip().lower()
             if t and t in chunk.norm_text:
@@ -432,7 +432,7 @@ def search_guideline_evidence(
     claim_text: str,
     message: str = "",
     top_k: int = 3,
-) -> List[Dict[str, Any]]:
+) -> List[Dict[str, Any]]: # AI辅助生成：GLM-5, 2026-03-09
     chunks, idf = _ensure_index()
     if not chunks:
         return []
@@ -473,3 +473,47 @@ def search_guideline_evidence(
             }
         )
     return results
+
+
+def search_guideline_evidence_with_graph(
+    claim_id: str,
+    claim_text: str,
+    message: str = "",
+    top_k: int = 3,
+    graph_depth: int = 1,
+) -> Dict[str, Any]:
+    """Return graded text hits plus a small knowledge-graph neighborhood."""
+    hits = search_guideline_evidence(
+        claim_id=claim_id,
+        claim_text=claim_text,
+        message=message,
+        top_k=top_k,
+    )
+    query_text = " ".join(
+        [str(claim_id or ""), str(claim_text or ""), str(message or "")]
+    ).strip()
+    try:
+        from .kg_builder import graph_paths_for_query, subgraph_for_query
+    except ImportError:
+        try:
+            from kg_builder import graph_paths_for_query, subgraph_for_query
+        except Exception:
+            graph_paths_for_query = None
+            subgraph_for_query = None
+
+    graph = {"nodes": [], "edges": [], "evidence": [], "stats": {}}
+    paths: List[Dict[str, Any]] = []
+    if graph_paths_for_query and subgraph_for_query:
+        try:
+            graph = subgraph_for_query(query_text, seed_evidence=hits, depth=graph_depth)
+            paths = graph_paths_for_query(query_text, seed_evidence=hits)
+        except Exception:
+            graph = {"nodes": [], "edges": [], "evidence": [], "stats": {}}
+            paths = []
+
+    return {
+        "hits": hits,
+        "graph": graph,
+        "paths": paths,
+        "query": query_text,
+    }

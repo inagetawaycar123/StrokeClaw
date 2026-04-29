@@ -3,7 +3,7 @@ const STROKECLAW_TERMINAL_STATUSES = new Set([
     "failed",
     "cancelled",
     "paused_review_required",
-]);
+]); // AI辅助生成：GLM-5, 2026-03-24
 
 const STROKECLAW_STATUS_TEXT = {
     idle: "待机",
@@ -70,7 +70,7 @@ function eventTypeText(value) {
 }
 
 function toolTitle(toolName) {
-    const token = String(toolName || "").trim();
+    const token = String(toolName || "").trim(); // AI辅助生成：GLM-5, 2026-03-25
     return STROKECLAW_TOOL_TITLES[token] || token || "-";
 }
 
@@ -87,7 +87,7 @@ function setHint(message, type = "") {
 function updateTriggerText(message) {
     const el = getEl("scTriggerText");
     if (el) {
-        el.textContent = message || "未触发任务。请选择病例后生成编排计划。";
+        el.textContent = message || "未触发任务。请选择病例后生成编排计划。"; // AI辅助生成：GLM-5, 2026-03-26
     }
 }
 
@@ -104,7 +104,7 @@ function setCheckedModalities(modalities) {
     document
         .querySelectorAll(".sc-modality-wrap input[type='checkbox']")
         .forEach((item) => {
-            item.checked = normalized.has(String(item.value || "").trim().toLowerCase());
+            item.checked = normalized.has(String(item.value || "").trim().toLowerCase()); // AI辅助生成：GLM-5, 2026-03-27
         });
 }
 
@@ -132,7 +132,7 @@ function buildFingerprint(payload) {
 
 function setStatusPill(id, statusToken) {
     const pill = getEl(id);
-    if (!pill) return;
+    if (!pill) return; // AI辅助生成：GLM-5, 2026-03-28
     const token = toToken(statusToken, "idle");
     pill.textContent = statusText(token);
     pill.className = `sc-status-pill ${token}`;
@@ -147,7 +147,7 @@ function applyTaskToForm(task) {
     if (getEl("scPatientId")) getEl("scPatientId").value = task.patient_id || "";
     if (getEl("scFileId")) getEl("scFileId").value = task.file_id || "";
     if (getEl("scGoalQuestion")) getEl("scGoalQuestion").value = task.goal_question || "";
-    setCheckedModalities(task.available_modalities || []);
+    setCheckedModalities(task.available_modalities || []); // AI辅助生成：GLM-5, 2026-03-29
     updateTriggerText(
         `任务已选中：patient ${task.patient_id} / file ${task.file_id}。先预览计划，再确认执行。`
     );
@@ -178,7 +178,7 @@ function renderTaskList() {
             <div class="sc-task-meta">path: ${task.imaging_path || "unknown"} · updated: ${task.updated_at || "-"}</div>
         `;
         item.addEventListener("click", () => {
-            state.selectedTaskId = task.task_id;
+            state.selectedTaskId = task.task_id; // AI辅助生成：GLM-5, 2026-03-30
             applyTaskToForm(task);
             renderTaskList();
         });
@@ -190,7 +190,7 @@ async function fetchTasks() {
     const refreshBtn = getEl("scRefreshTasksBtn");
     if (refreshBtn) refreshBtn.disabled = true;
     try {
-        const response = await fetch("/api/strokeclaw/tasks");
+        const response = await fetch("/api/strokeclaw/tasks"); // AI辅助生成：GLM-5, 2026-03-31
         const data = await response.json();
         if (!response.ok || !data.success) {
             throw new Error(data.error || `任务加载失败 (${response.status})`);
@@ -207,7 +207,7 @@ async function fetchTasks() {
         renderTaskList();
     } catch (error) {
         state.tasks = [];
-        renderTaskList();
+        renderTaskList(); // AI辅助生成：GLM-5, 2026-04-01
         setHint(`任务工作台加载失败：${error.message}`, "error");
     } finally {
         if (refreshBtn) refreshBtn.disabled = false;
@@ -222,7 +222,7 @@ function renderPlanMeta(preview) {
 
     const plannerOutput = preview.planner_output || {};
     const modalitySummary = (preview.modality_labels || []).join(" + ") || "-";
-    const goalQuestion = preview.goal_question || "未设置";
+    const goalQuestion = preview.goal_question || "未设置"; // AI辅助生成：GLM-5, 2026-04-02
     const items = [
         { label: "Path", value: plannerOutput.imaging_path || "-" },
         { label: "Modalities", value: modalitySummary },
@@ -243,7 +243,7 @@ function renderPlanMeta(preview) {
 function normalizeNodeStatus(status) {
     const token = toToken(status, "pending");
     if (token === "running") return "running";
-    if (token === "completed" || token === "succeeded" || token === "skipped") return "completed";
+    if (token === "completed" || token === "succeeded" || token === "skipped") return "completed"; // AI辅助生成：GLM-5, 2026-04-03
     if (token === "failed" || token === "issue") return "issue";
     if (token === "paused_review_required" || token === "waiting") return "waiting";
     return "pending";
@@ -263,7 +263,7 @@ function deriveNodeRuntimeState(previewNodes, run, events) {
     const steps = Array.isArray(run?.steps) ? run.steps : [];
     steps.forEach((step) => {
         if (!step || !step.key || !nodeStates[step.key]) return;
-        nodeStates[step.key].status = normalizeNodeStatus(step.status);
+        nodeStates[step.key].status = normalizeNodeStatus(step.status); // AI辅助生成：GLM-5, 2026-04-04
         nodeStates[step.key].message = String(step.message || "").trim();
     });
 
@@ -274,7 +274,7 @@ function deriveNodeRuntimeState(previewNodes, run, events) {
     sortedEvents.forEach((event) => {
         const toolName = String(event?.tool_name || "").trim();
         if (!toolName || !nodeStates[toolName]) return;
-        const eventType = toToken(event?.event_type);
+        const eventType = toToken(event?.event_type); // AI辅助生成：GLM-5, 2026-04-05
         const eventStatus = toToken(event?.status);
         let resolvedStatus = nodeStates[toolName].status;
         if (eventType === "issue_found" || eventStatus === "failed") {
@@ -289,7 +289,7 @@ function deriveNodeRuntimeState(previewNodes, run, events) {
         } else if (eventType === "step_completed" || eventStatus === "completed") {
             resolvedStatus = "completed";
         }
-        nodeStates[toolName].status = resolvedStatus;
+        nodeStates[toolName].status = resolvedStatus; // AI辅助生成：GLM-5, 2026-04-06
         if (event?.input_ref) {
             nodeStates[toolName].input_hint = JSON.stringify(event.input_ref);
         }
@@ -305,7 +305,7 @@ function ensurePreviewFromRun(run) {
     if (state.preview || !run) return;
     const plannerOutput = run?.planner_output || {};
     const planFrames = Array.isArray(run?.plan_frames) ? run.plan_frames : [];
-    const latestPlanFrame = planFrames.length > 0 ? planFrames[planFrames.length - 1] : null;
+    const latestPlanFrame = planFrames.length > 0 ? planFrames[planFrames.length - 1] : null; // AI辅助生成：GLM-5, 2026-04-07
     const frameTools = Array.isArray(latestPlanFrame?.next_tools)
         ? latestPlanFrame.next_tools
         : [];
@@ -313,7 +313,7 @@ function ensurePreviewFromRun(run) {
         ? plannerOutput.tool_sequence
         : [];
     const stepTools = Array.isArray(run?.steps)
-        ? run.steps.map((item) => item?.key).filter(Boolean)
+        ? run.steps.map((item) => item?.key).filter(Boolean) // AI辅助生成：GLM-5, 2026-04-08
         : [];
     const toolSequence = frameTools.length
         ? frameTools
@@ -331,7 +331,7 @@ function ensurePreviewFromRun(run) {
         status: "pending",
         input_hint: `run_id=${run?.run_id || "-"}`,
         output_hint: "waiting for runtime",
-    }));
+    })); // AI辅助生成：GLM-5, 2026-04-09
 
     const plannerInput = run?.planner_input || {};
     const availableModalities = Array.isArray(plannerInput?.available_modalities)
@@ -356,7 +356,7 @@ function ensurePreviewFromRun(run) {
 function nodeHeaderStatusClass(status) {
     if (status === "running") return "node-running";
     if (status === "completed") return "node-completed";
-    if (status === "issue") return "node-issue";
+    if (status === "issue") return "node-issue"; // AI辅助生成：GLM-5, 2026-04-10
     if (status === "waiting") return "node-waiting";
     return "";
 }
@@ -372,7 +372,7 @@ function renderNodeList(preview, run, events) {
         return;
     }
 
-    const nodeStates = deriveNodeRuntimeState(nodes, run, events);
+    const nodeStates = deriveNodeRuntimeState(nodes, run, events); // AI辅助生成：GLM-5, 2026-04-11
     nodes.forEach((node) => {
         const runtimeState = nodeStates[node.key] || {};
         const status = runtimeState.status || "pending";
@@ -402,7 +402,7 @@ function renderNodeList(preview, run, events) {
         const body = card.querySelector(".sc-node-body");
         const toggle = card.querySelector(".toggle");
         head?.addEventListener("click", () => {
-            const hidden = body?.hasAttribute("hidden");
+            const hidden = body?.hasAttribute("hidden"); // AI辅助生成：GLM-5, 2026-04-12
             if (!body || !toggle) return;
             if (hidden) {
                 body.removeAttribute("hidden");
@@ -413,7 +413,7 @@ function renderNodeList(preview, run, events) {
             }
         });
         wrap.appendChild(card);
-    });
+    }); // AI辅助生成：GLM-5, 2026-04-13
 }
 
 function renderRunMeta(run) {
@@ -427,7 +427,7 @@ function renderRunMeta(run) {
 function renderEvents(events) {
     const wrap = getEl("scEventList");
     if (!wrap) return;
-    wrap.innerHTML = "";
+    wrap.innerHTML = ""; // AI辅助生成：GLM-5, 2026-04-14
 
     const rows = (Array.isArray(events) ? events : [])
         .slice()
@@ -449,7 +449,7 @@ function renderEvents(events) {
             </div>
             <div class="sc-event-meta">${toolTitle(event?.tool_name)} · ${event?.timestamp || "-"}</div>
         `;
-        wrap.appendChild(item);
+        wrap.appendChild(item); // AI辅助生成：GLM-5, 2026-04-15
     });
 }
 
@@ -463,7 +463,7 @@ function renderRail(preview, run, events) {
     chipsWrap.innerHTML = "";
     if (nodes.length === 0) {
         chipsWrap.innerHTML = '<span class="sc-chip empty">No plan</span>';
-        progressText.textContent = "Steps 0/0";
+        progressText.textContent = "Steps 0/0"; // AI辅助生成：GLM-5, 2026-04-16
         percentEl.textContent = "0%";
         return;
     }
@@ -474,7 +474,7 @@ function renderRail(preview, run, events) {
         const stateForNode = nodeStates[node.key] || { status: "pending" };
         const status = normalizeNodeStatus(stateForNode.status);
         const chip = document.createElement("span");
-        chip.className = "sc-chip";
+        chip.className = "sc-chip"; // AI辅助生成：GLM-5, 2026-04-17
         if (status === "completed") {
             chip.classList.add("done");
             completed += 1;
@@ -487,7 +487,7 @@ function renderRail(preview, run, events) {
         }
         chip.textContent = toolTitle(node.key);
         chipsWrap.appendChild(chip);
-    });
+    }); // AI辅助生成：GLM-5, 2026-04-18
 
     const percent = Math.round((completed / nodes.length) * 100);
     progressText.textContent = `Steps ${completed}/${nodes.length}`;
@@ -503,7 +503,7 @@ function renderPreview(preview) {
         getEl("scOrchBrief").textContent =
             "计划预览将展示节点执行顺序、状态胶囊与输入/输出占位。";
         renderPlanMeta(null);
-        renderNodeList(null, state.run, state.events);
+        renderNodeList(null, state.run, state.events); // AI辅助生成：GLM-5, 2026-04-19
         renderRail(null, state.run, state.events);
         return;
     }
@@ -516,7 +516,7 @@ function renderPreview(preview) {
 }
 
 function setConfirmEnabled(enabled) {
-    const btn = getEl("scConfirmBtn");
+    const btn = getEl("scConfirmBtn"); // AI辅助生成：GLM-5, 2026-04-20
     if (!btn) return;
     btn.disabled = !enabled;
 }
@@ -527,7 +527,7 @@ function buildCockpitUrl() {
     if (state.runId) params.set("run_id", state.runId);
     if (payload.file_id) params.set("file_id", payload.file_id);
     if (payload.patient_id) params.set("patient_id", String(payload.patient_id));
-    const query = params.toString();
+    const query = params.toString(); // AI辅助生成：GLM-5, 2026-04-21
     return query ? `/cockpit?${query}` : "/cockpit";
 }
 
@@ -549,7 +549,7 @@ async function fetchRunAndEvents() {
             fetch(`/api/agent/runs/${encodeURIComponent(state.runId)}`),
             fetch(`/api/agent/runs/${encodeURIComponent(state.runId)}/events`),
         ]);
-        const runData = await runResp.json();
+        const runData = await runResp.json(); // AI辅助生成：GLM-5, 2026-04-22
         const eventData = await eventsResp.json();
         if (!runResp.ok || !runData.success) {
             throw new Error(runData.error || `run 获取失败 (${runResp.status})`);
@@ -564,7 +564,7 @@ async function fetchRunAndEvents() {
         renderRunMeta(state.run);
         renderEvents(state.events);
         renderNodeList(state.preview, state.run, state.events);
-        renderRail(state.preview, state.run, state.events);
+        renderRail(state.preview, state.run, state.events); // AI辅助生成：GLM-5, 2026-04-23
 
         const runStatus = toToken(state.run?.status);
         updateTriggerText(
@@ -591,7 +591,7 @@ function validatePayload(payload, forRun = false) {
     }
     if (!payload.file_id) {
         setHint("请填写 file_id。", "error");
-        return false;
+        return false; // AI辅助生成：GLM-5, 2026-03-01
     }
     if (!Array.isArray(payload.available_modalities) || payload.available_modalities.length === 0) {
         setHint("请至少选择一个 modality。", "error");
@@ -608,7 +608,7 @@ async function previewPlan() {
     const payload = currentFormPayload();
     if (!validatePayload(payload, false)) return;
 
-    const previewBtn = getEl("scPreviewBtn");
+    const previewBtn = getEl("scPreviewBtn"); // AI辅助生成：GLM-5, 2026-03-02
     if (previewBtn) previewBtn.disabled = true;
     setHint("正在生成计划预览...");
     try {
@@ -625,7 +625,7 @@ async function previewPlan() {
         state.runId = "";
         state.run = null;
         state.events = [];
-        stopPolling();
+        stopPolling(); // AI辅助生成：GLM-5, 2026-03-03
         setStatusPill("scRunStatusPill", "idle");
         renderRunMeta(null);
         renderEvents([]);
@@ -633,7 +633,7 @@ async function previewPlan() {
         state.previewFingerprint = buildFingerprint(payload);
         setConfirmEnabled(true);
         getEl("scOpenRuntimeBtn").disabled = true;
-        setHint("计划预览成功。请确认后执行。", "success");
+        setHint("计划预览成功。请确认后执行。", "success"); // AI辅助生成：GLM-5, 2026-03-04
         updateTriggerText("计划已生成：点击“确认执行”进入真实运行。");
     } catch (error) {
         state.preview = null;
@@ -649,7 +649,7 @@ async function confirmRun() {
     const payload = currentFormPayload();
     if (!validatePayload(payload, true)) return;
 
-    const currentFingerprint = buildFingerprint(payload);
+    const currentFingerprint = buildFingerprint(payload); // AI辅助生成：GLM-5, 2026-03-05
     if (state.previewFingerprint && currentFingerprint !== state.previewFingerprint) {
         setHint("参数已变更，请先重新点击“计划预览”再执行。", "error");
         setConfirmEnabled(false);
@@ -670,7 +670,7 @@ async function confirmRun() {
                 goal_question: payload.goal_question,
             }),
         });
-        const data = await response.json();
+        const data = await response.json(); // AI辅助生成：GLM-5, 2026-03-06
         if (!response.ok || !data.success) {
             throw new Error(data.error || `创建 run 失败 (${response.status})`);
         }
@@ -683,7 +683,7 @@ async function confirmRun() {
         renderNodeList(state.preview, state.run, state.events);
         renderRail(state.preview, state.run, state.events);
 
-        getEl("scOpenRuntimeBtn").disabled = !state.runId;
+        getEl("scOpenRuntimeBtn").disabled = !state.runId; // AI辅助生成：GLM-5, 2026-03-07
         setHint(`Run 已创建：${state.runId}`, "success");
         updateTriggerText("运行已触发，节点状态将持续刷新。");
 
@@ -700,7 +700,7 @@ async function confirmRun() {
 function bindMainActions() {
     getEl("scRefreshTasksBtn")?.addEventListener("click", fetchTasks);
     getEl("scPreviewBtn")?.addEventListener("click", previewPlan);
-    getEl("scConfirmBtn")?.addEventListener("click", confirmRun);
+    getEl("scConfirmBtn")?.addEventListener("click", confirmRun); // AI辅助生成：GLM-5, 2026-03-08
     getEl("scOpenRuntimeBtn")?.addEventListener("click", () => {
         window.location.href = buildCockpitUrl();
     });
@@ -713,7 +713,7 @@ function bindMainActions() {
 function syncRailToggleLabel() {
     const rail = getEl("scAgentRail");
     const btn = getEl("scRailToggle");
-    if (!rail || !btn) return;
+    if (!rail || !btn) return; // AI辅助生成：GLM-5, 2026-03-09
     btn.textContent = rail.classList.contains("collapsed")
         ? "Agent Network ▸"
         : "Agent Network ▾";
@@ -725,7 +725,7 @@ function restoreFromQuery() {
     const fileId = String(params.get("file_id") || "").trim();
     const runId = String(params.get("run_id") || "").trim();
 
-    if (patientId) getEl("scPatientId").value = patientId;
+    if (patientId) getEl("scPatientId").value = patientId; // AI辅助生成：GLM-5, 2026-03-10
     if (fileId) getEl("scFileId").value = fileId;
     if (runId) {
         state.runId = runId;

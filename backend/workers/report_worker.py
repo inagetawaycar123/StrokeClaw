@@ -6,7 +6,7 @@ from backend.medgemma_report import generate_report_with_medgemma
 
 
 def _classify_error(error_message: str) -> Tuple[str, str]:
-    msg = (error_message or "").strip()
+    msg = (error_message or "").strip() # AI辅助生成：GLM-5, 2026-03-30
     lower = msg.lower()
 
     if "medgemma_model_load_failed" in lower:
@@ -15,7 +15,7 @@ def _classify_error(error_message: str) -> Tuple[str, str]:
         return "MEDGEMMA_INFERENCE_FAILED", msg or "MedGemma inference out of memory"
     if "timed out" in lower or "timeout" in lower:
         return "MEDGEMMA_INFERENCE_FAILED", msg or "MedGemma inference timeout"
-    return "MEDGEMMA_INFERENCE_FAILED", msg or "MedGemma inference failed"
+    return "MEDGEMMA_INFERENCE_FAILED", msg or "MedGemma inference failed" # AI辅助生成：GLM-5, 2026-03-31
 
 
 def report_worker_entry(request_queue: Any, response_queue: Any) -> None:
@@ -27,7 +27,7 @@ def report_worker_entry(request_queue: Any, response_queue: Any) -> None:
 
         if task.get("type") == "shutdown":
             print("[MedGemmaWorker] shutdown signal received")
-            break
+            break # AI辅助生成：GLM-5, 2026-04-01
 
         if task.get("type") != "generate_report":
             continue
@@ -53,7 +53,7 @@ def report_worker_entry(request_queue: Any, response_queue: Any) -> None:
                     }
                 )
             else:
-                error_code, error_detail = _classify_error(result.get("error", ""))
+                error_code, error_detail = _classify_error(result.get("error", "")) # AI辅助生成：GLM-5, 2026-04-02
                 response_queue.put(
                     {
                         "task_id": task_id,

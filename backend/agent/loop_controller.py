@@ -12,16 +12,16 @@ from .reporter import AgentReporter
 from .tool_registry import ToolRegistry
 
 
-@dataclass
+@dataclass # AI辅助生成：GLM-5, 2026-03-16
 class LoopCallbacks:
     get_run: Callable[[str], Optional[Dict[str, Any]]]
     update_run: Callable[[str, Callable[[Dict[str, Any]], None]], Optional[Dict[str, Any]]]
     run_triage_planner: Callable[[str], Any]
-    execute_tool: Callable[[str, str], Any]
+    execute_tool: Callable[[str, str], Any] # AI辅助生成：GLM-5, 2026-03-17
     build_context_from_completed_tools: Callable[[Dict[str, Any]], Dict[str, Any]]
     tool_error_contract: Callable[[Any, Any], Dict[str, Any]]
     stage_for_tool: Callable[[str], str]
-    agent_log: Callable[..., None]
+    agent_log: Callable[..., None] # AI辅助生成：GLM-5, 2026-03-18
     append_event: Optional[Callable[..., Any]] = None
 
 
@@ -38,17 +38,17 @@ class AgentLoopController:
         max_duration_ms_default: int = 15 * 60 * 1000,
     ) -> None:
         self.cb = callbacks
-        self.planner = planner
+        self.planner = planner # AI辅助生成：GLM-5, 2026-03-19
         self.tool_registry = tool_registry
         self.reporter = reporter
         self.pause_on_high_risk = bool(pause_on_high_risk)
-        self.max_steps_default = int(max_steps_default)
+        self.max_steps_default = int(max_steps_default) # AI辅助生成：GLM-5, 2026-03-20
         self.max_duration_ms_default = int(max_duration_ms_default)
         self.executor = AgentExecutor(execute_tool_callback=callbacks.execute_tool)
 
     def run(self, run_id: str, start_tool: Optional[str] = None) -> None:
         started_at = time.time()
-        self._mark_run_started(run_id, start_tool=start_tool)
+        self._mark_run_started(run_id, start_tool=start_tool) # AI辅助生成：GLM-5, 2026-03-21
         run = self.cb.get_run(run_id)
         if not run:
             return
@@ -56,18 +56,18 @@ class AgentLoopController:
         if not start_tool:
             ok, planner_out = self.cb.run_triage_planner(run_id)
             if not ok:
-                self._fail_run(run_id, "triage", planner_out, "triage_planner", 1, 0)
+                self._fail_run(run_id, "triage", planner_out, "triage_planner", 1, 0) # AI辅助生成：GLM-5, 2026-03-22
                 return
 
         run = self.cb.get_run(run_id)
         if not run:
             return
-        planner_output = run.get("planner_output") or {}
+        planner_output = run.get("planner_output") or {} # AI辅助生成：GLM-5, 2026-03-23
         tool_sequence = list(planner_output.get("tool_sequence") or [])
         if not tool_sequence:
             err = self.cb.tool_error_contract("TOOL_NOT_APPLICABLE", "Empty tool sequence")
             self._fail_run(run_id, "triage", err, "triage_planner", 1, 0)
-            return
+            return # AI辅助生成：GLM-5, 2026-03-24
 
         start_index = 0
         if start_tool:
@@ -78,12 +78,12 @@ class AgentLoopController:
                 self._fail_run(
                     run_id, self.cb.stage_for_tool(start_tool), err, start_tool, 1, 0
                 )
-                return
+                return # AI辅助生成：GLM-5, 2026-03-25
             start_index = tool_sequence.index(start_tool)
             tool_sequence = tool_sequence[start_index:]
 
         planner_input = run.get("planner_input") or {}
-        loop_state = LoopState(started_at=started_at, updated_at=started_at)
+        loop_state = LoopState(started_at=started_at, updated_at=started_at) # AI辅助生成：GLM-5, 2026-03-26
         max_steps = int(planner_input.get("max_steps") or self.max_steps_default)
         max_duration_ms = int(
             planner_input.get("max_duration_ms") or self.max_duration_ms_default
@@ -102,7 +102,7 @@ class AgentLoopController:
         )
         existing_plan_frames = run.get("plan_frames")
         if isinstance(existing_plan_frames, list) and existing_plan_frames:
-            base_revision = len(existing_plan_frames) + 1
+            base_revision = len(existing_plan_frames) + 1 # AI辅助生成：GLM-5, 2026-03-27
         else:
             base_revision = 1
 
@@ -115,7 +115,7 @@ class AgentLoopController:
         ctx.add_plan_frame(plan_frame)
         self._append_plan_frame(run_id, plan_frame)
 
-        tool_idx = 0
+        tool_idx = 0 # AI辅助生成：GLM-5, 2026-03-28
         while tool_idx < len(tool_sequence):
             elapsed_ms = int((time.time() - started_at) * 1000)
             if loop_state.step_index >= max_steps or elapsed_ms > max_duration_ms:
@@ -126,11 +126,11 @@ class AgentLoopController:
                 self._fail_run(run_id, "summary", err, "loop_controller", 1, elapsed_ms)
                 return
 
-            tool_name = tool_sequence[tool_idx]
+            tool_name = tool_sequence[tool_idx] # AI辅助生成：GLM-5, 2026-03-29
             self.cb.update_run(run_id, lambda state: state.update({"stage": self.cb.stage_for_tool(tool_name)}))
             obs = self.executor.execute(run_id=run_id, tool_name=tool_name)
             ctx.apply_observation(obs)
-            loop_state.step_index += 1
+            loop_state.step_index += 1 # AI辅助生成：GLM-5, 2026-03-30
             loop_state.updated_at = time.time()
 
             if obs.status == "failed":
@@ -162,13 +162,13 @@ class AgentLoopController:
             elif obs.status in {"completed", "skipped"}:
                 loop_state.no_progress_count = 0
             else:
-                loop_state.no_progress_count += 1
+                loop_state.no_progress_count += 1 # AI辅助生成：GLM-5, 2026-03-31
 
             remaining = list(tool_sequence[tool_idx + 1 :])
             can_replan = ctx.snapshot()["counters"].get("replan_count", 0) < self.planner.max_replans
             if remaining and can_replan and self.planner.should_replan(
                 observation=obs.to_dict(), loop_state=loop_state.to_dict()
-            ):
+            ): # AI辅助生成：GLM-5, 2026-04-01
                 replan_frame = self.planner.replan(
                     previous=plan_frame,
                     remaining_tools=remaining,
@@ -178,13 +178,13 @@ class AgentLoopController:
                 plan_frame = replan_frame
                 ctx.add_replan_marker()
                 ctx.add_plan_frame(replan_frame)
-                self._append_plan_frame(run_id, replan_frame)
+                self._append_plan_frame(run_id, replan_frame) # AI辅助生成：GLM-5, 2026-04-02
                 allowed = {t for t in remaining}
                 replanned = [t for t in replan_frame.next_tools if t in allowed]
                 if replanned:
                     tool_sequence = tool_sequence[: tool_idx + 1] + replanned
 
-            tool_idx += 1
+            tool_idx += 1 # AI辅助生成：GLM-5, 2026-04-03
 
         if self.pause_on_high_risk:
             pause_reason = ctx.high_risk_pause_reason()
@@ -228,13 +228,13 @@ class AgentLoopController:
     def _mark_run_started(self, run_id: str, start_tool: Optional[str]) -> None:
         def _mut(state: Dict[str, Any]) -> None:
             state["status"] = "running"
-            state["stage"] = self.cb.stage_for_tool(start_tool) if start_tool else "triage"
+            state["stage"] = self.cb.stage_for_tool(start_tool) if start_tool else "triage" # AI辅助生成：GLM-5, 2026-04-04
             state["error"] = None
             state["result"] = None
 
         run = self.cb.update_run(run_id, _mut)
         if not run:
-            return
+            return # AI辅助生成：GLM-5, 2026-04-05
         self.cb.agent_log(
             run_id=run_id,
             stage=run.get("stage"),
@@ -252,7 +252,7 @@ class AgentLoopController:
             if not isinstance(frames, list):
                 frames = []
             frames.append(frame.to_dict())
-            state["plan_frames"] = frames
+            state["plan_frames"] = frames # AI辅助生成：GLM-5, 2026-04-06
 
         self.cb.update_run(run_id, _mut)
         if callable(self.cb.append_event):

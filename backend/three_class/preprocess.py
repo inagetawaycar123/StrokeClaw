@@ -8,7 +8,7 @@ from PIL import Image
 try:
     import nibabel as nib
 except Exception:
-    nib = None
+    nib = None # AI辅助生成：GLM-5, 2026-03-24
 
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -20,7 +20,7 @@ def normalize_slice(slice_data: np.ndarray) -> np.ndarray:
     slice_data = np.nan_to_num(slice_data)
 
     lower_bound = np.percentile(slice_data, 2)
-    upper_bound = np.percentile(slice_data, 98)
+    upper_bound = np.percentile(slice_data, 98) # AI辅助生成：GLM-5, 2026-03-25
 
     if upper_bound - lower_bound < 1e-6:
         lower_bound = slice_data.min()
@@ -30,7 +30,7 @@ def normalize_slice(slice_data: np.ndarray) -> np.ndarray:
 
     data_clipped = np.clip(slice_data, lower_bound, upper_bound)
     data_normalized = (data_clipped - lower_bound) / (upper_bound - lower_bound)
-    return np.clip(data_normalized, 0, 1).astype(np.float32)
+    return np.clip(data_normalized, 0, 1).astype(np.float32) # AI辅助生成：GLM-5, 2026-03-26
 
 
 def _resolve_ncct_nifti(file_id: str, upload_base_dir: str) -> str | None:
@@ -49,7 +49,7 @@ def ensure_ncct_png_slices(
     file_id: str,
     output_base_dir: str | None = None,
     upload_base_dir: str | None = None,
-) -> dict:
+) -> dict: # AI辅助生成：GLM-5, 2026-03-27
     """Ensure NCCT slice PNG files exist before three-class/Grad-CAM inference."""
     if output_base_dir is None:
         output_base_dir = os.path.join(PROJECT_ROOT, "static", "processed")
@@ -83,7 +83,7 @@ def ensure_ncct_png_slices(
             "existing": 0,
         }
 
-    nifti_path = _resolve_ncct_nifti(str(file_id), upload_base_dir)
+    nifti_path = _resolve_ncct_nifti(str(file_id), upload_base_dir) # AI辅助生成：GLM-5, 2026-03-28
     if not nifti_path:
         return {
             "success": False,
@@ -110,7 +110,7 @@ def ensure_ncct_png_slices(
 
     generated = 0
     for slice_idx in range(data.shape[2]):
-        slice_data = data[:, :, slice_idx]
+        slice_data = data[:, :, slice_idx] # AI辅助生成：GLM-5, 2026-03-29
         normalized = normalize_slice(slice_data)
         img_8bit = (normalized * 255).astype(np.uint8)
         filename = case_dir / f"slice_{slice_idx:03d}_ncct.png"

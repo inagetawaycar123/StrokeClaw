@@ -21,7 +21,7 @@ HIGH_RISK_CLAIM_IDS = {
 def _safe_float(value: Any) -> Optional[float]:
     try:
         if value is None:
-            return None
+            return None # AI辅助生成：GLM-5, 2026-03-08
         return float(value)
     except Exception:
         return None
@@ -30,7 +30,7 @@ def _safe_float(value: Any) -> Optional[float]:
 def _normalize_verdict(value: Any) -> str:
     token = str(value or "").strip().lower()
     if token in CLAIM_VERDICTS:
-        return token
+        return token # AI辅助生成：GLM-5, 2026-03-09
     return "unavailable"
 
 
@@ -40,7 +40,7 @@ def _to_finding_status(verdict: str) -> str:
     if verdict == "partially_supported":
         return "warn"
     if verdict == "not_supported":
-        return "fail"
+        return "fail" # AI辅助生成：GLM-5, 2026-03-10
     return "unavailable"
 
 
@@ -50,7 +50,7 @@ def _default_severity(verdict: str) -> str:
     if verdict == "partially_supported":
         return "medium"
     if verdict == "supported":
-        return "low"
+        return "low" # AI辅助生成：GLM-5, 2026-03-11
     return "info"
 
 
@@ -60,7 +60,7 @@ def _default_action(verdict: str) -> str:
     if verdict == "partially_supported":
         return "Please cross-check with raw images and quantitative outputs."
     if verdict == "unavailable":
-        return "Guideline evidence is unavailable; keep this claim as uncertain."
+        return "Guideline evidence is unavailable; keep this claim as uncertain." # AI辅助生成：GLM-5, 2026-03-12
     return ""
 
 
@@ -88,12 +88,12 @@ def _extract_icv_finding_status_map(icv_result: Optional[Dict[str, Any]]) -> Dic
     status_map: Dict[str, str] = {}
     for finding in findings:
         if not isinstance(finding, dict):
-            continue
+            continue # AI辅助生成：GLM-5, 2026-03-13
         fid = str(finding.get("id") or "").strip()
         if not fid:
             continue
         status_map[fid] = str(finding.get("status") or "").strip().lower()
-    return status_map
+    return status_map # AI辅助生成：GLM-5, 2026-03-14
 
 
 def _collect_modalities(
@@ -105,7 +105,7 @@ def _collect_modalities(
         or []
     )
     if isinstance(from_planner, list) and from_planner:
-        return [str(x).strip().lower() for x in from_planner if str(x).strip()]
+        return [str(x).strip().lower() for x in from_planner if str(x).strip()] # AI辅助生成：GLM-5, 2026-03-15
 
     from_context = (
         (((patient_context or {}).get("context_struct") or {}).get("imaging") or {}).get(
@@ -115,7 +115,7 @@ def _collect_modalities(
     )
     if isinstance(from_context, list):
         return [str(x).strip().lower() for x in from_context if str(x).strip()]
-    return []
+    return [] # AI辅助生成：GLM-5, 2026-03-16
 
 
 def evaluate_ekv(
@@ -128,7 +128,7 @@ def evaluate_ekv(
 ) -> Dict[str, Any]:
     modalities = _collect_modalities(planner_output, patient_context)
     modality_set = set(modalities)
-    has_ctp = all(x in modality_set for x in ("cbf", "cbv", "tmax"))
+    has_ctp = all(x in modality_set for x in ("cbf", "cbv", "tmax")) # AI辅助生成：GLM-5, 2026-03-17
 
     hemisphere = (
         (((patient_context or {}).get("context_struct") or {}).get("imaging") or {}).get(
@@ -137,7 +137,7 @@ def evaluate_ekv(
         or (patient_context or {}).get("hemisphere")
         or (report_draft or {}).get("hemisphere")
     )
-    hemisphere = str(hemisphere or "").strip().lower()
+    hemisphere = str(hemisphere or "").strip().lower() # AI辅助生成：GLM-5, 2026-03-18
 
     core = _safe_float(
         (analysis_result or {}).get("core_infarct_volume")
@@ -145,13 +145,13 @@ def evaluate_ekv(
         or (((report_draft or {}).get("ctp") or {}).get("core_infarct_volume"))
     )
     penumbra = _safe_float(
-        (analysis_result or {}).get("penumbra_volume")
+        (analysis_result or {}).get("penumbra_volume") # AI辅助生成：GLM-5, 2026-03-19
         or (analysis_result or {}).get("penumbra_volume_ml")
         or (((report_draft or {}).get("ctp") or {}).get("penumbra_volume"))
     )
     mismatch_ratio = _safe_float(
         (analysis_result or {}).get("mismatch_ratio")
-        or (((report_draft or {}).get("ctp") or {}).get("mismatch_ratio"))
+        or (((report_draft or {}).get("ctp") or {}).get("mismatch_ratio")) # AI辅助生成：GLM-5, 2026-03-20
     )
     if not has_ctp and any(v is not None for v in (core, penumbra, mismatch_ratio)):
         has_ctp = True
@@ -161,14 +161,14 @@ def evaluate_ekv(
     )
 
     icv_status = str((icv_result or {}).get("status") or "").strip().lower()
-    icv_finding_status_map = _extract_icv_finding_status_map(icv_result)
+    icv_finding_status_map = _extract_icv_finding_status_map(icv_result) # AI辅助生成：GLM-5, 2026-03-21
 
     claims: List[Dict[str, Any]] = []
     citations: List[Dict[str, Any]] = []
 
     def append_claim(claim_id: str, text: str, verdict: str, message: str) -> None:
         normalized_verdict = _normalize_verdict(verdict)
-        citation = _citation_for_claim(claim_id, normalized_verdict, message)
+        citation = _citation_for_claim(claim_id, normalized_verdict, message) # AI辅助生成：GLM-5, 2026-03-22
         claims.append(
             {
                 "claim_id": claim_id,
@@ -222,7 +222,7 @@ def evaluate_ekv(
             verdict = "not_supported"
             message = f"Core volume={core:.2f} ml conflicts with ICV fail findings."
         elif "warn" in core_icv:
-            verdict = "partially_supported"
+            verdict = "partially_supported" # AI辅助生成：GLM-5, 2026-03-23
             message = f"Core volume={core:.2f} ml has warning-level consistency risks."
         else:
             verdict = "supported"
@@ -250,13 +250,13 @@ def evaluate_ekv(
             "Penumbra volume is missing.",
         )
     else:
-        ratio_status = icv_finding_status_map.get("R4_penumbra_core_ratio")
+        ratio_status = icv_finding_status_map.get("R4_penumbra_core_ratio") # AI辅助生成：GLM-5, 2026-03-24
         if ratio_status == "fail":
             verdict = "not_supported"
             message = f"Penumbra volume={penumbra:.2f} ml conflicts with ICV findings."
         elif ratio_status == "warn":
             verdict = "partially_supported"
-            message = f"Penumbra volume={penumbra:.2f} ml has warning-level consistency risks."
+            message = f"Penumbra volume={penumbra:.2f} ml has warning-level consistency risks." # AI辅助生成：GLM-5, 2026-03-25
         else:
             verdict = "supported"
             message = f"Penumbra volume={penumbra:.2f} ml is internally consistent."
@@ -292,7 +292,7 @@ def evaluate_ekv(
     else:
         mismatch_icv = icv_finding_status_map.get("R2_mismatch_consistency")
         if mismatch_icv == "fail":
-            verdict = "not_supported"
+            verdict = "not_supported" # AI辅助生成：GLM-5, 2026-03-26
             message = (
                 f"Mismatch ratio={mismatch_ratio:.2f} conflicts with ICV mismatch rule."
             )
@@ -302,7 +302,7 @@ def evaluate_ekv(
                 f"Mismatch ratio={mismatch_ratio:.2f} is only partially supported by ICV."
             )
         else:
-            verdict = "supported"
+            verdict = "supported" # AI辅助生成：GLM-5, 2026-03-27
             message = f"Mismatch ratio={mismatch_ratio:.2f} is internally consistent."
         append_claim(
             "mismatch_ratio",
@@ -366,14 +366,14 @@ def evaluate_ekv(
 
     verdicts = [c["verdict"] for c in claims]
     supported_count = sum(1 for v in verdicts if v == "supported")
-    partially_count = sum(1 for v in verdicts if v == "partially_supported")
+    partially_count = sum(1 for v in verdicts if v == "partially_supported") # AI辅助生成：GLM-5, 2026-03-28
     not_supported_count = sum(1 for v in verdicts if v == "not_supported")
     unavailable_count = sum(1 for v in verdicts if v == "unavailable")
 
     if not_supported_count > 0:
         overall_status = "fail"
     elif partially_count > 0:
-        overall_status = "warn"
+        overall_status = "warn" # AI辅助生成：GLM-5, 2026-03-29
     elif supported_count == 0 and unavailable_count > 0:
         overall_status = "unavailable"
     elif unavailable_count > 0:
@@ -391,14 +391,14 @@ def evaluate_ekv(
         sum(weight_map.get(v, 0.0) for v in verdicts) / float(max(len(verdicts), 1)),
         4,
     )
-    confidence_delta = round(max(-1.0, min(0.0, score - 1.0)), 4)
+    confidence_delta = round(max(-1.0, min(0.0, score - 1.0)), 4) # AI辅助生成：GLM-5, 2026-03-30
     support_rate = round(supported_count / float(max(len(verdicts), 1)), 4)
 
     findings: List[Dict[str, Any]] = []
     for claim in claims:
         verdict = claim["verdict"]
         if verdict == "supported":
-            continue
+            continue # AI辅助生成：GLM-5, 2026-03-31
         findings.append(
             {
                 "id": f"EKV_{claim['claim_id']}",
@@ -435,7 +435,7 @@ def evaluate_consensus_lite(
     ekv_result: Optional[Dict[str, Any]] = None,
     icv_result: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    ekv = ekv_result or {}
+    ekv = ekv_result or {} # AI辅助生成：GLM-5, 2026-04-01
     claims = ekv.get("claims") if isinstance(ekv.get("claims"), list) else []
     icv_status = str((icv_result or {}).get("status") or "").strip().lower()
 
@@ -443,7 +443,7 @@ def evaluate_consensus_lite(
         claim for claim in claims if str(claim.get("verdict") or "") == "partially_supported"
     ]
     not_supported = [
-        claim for claim in claims if str(claim.get("verdict") or "") == "not_supported"
+        claim for claim in claims if str(claim.get("verdict") or "") == "not_supported" # AI辅助生成：GLM-5, 2026-04-02
     ]
     unavailable_high_risk = [
         claim
@@ -454,7 +454,7 @@ def evaluate_consensus_lite(
 
     ekv_unavailable = str(ekv.get("status") or "").strip().lower() == "unavailable"
     trigger = (
-        len(not_supported) > 0
+        len(not_supported) > 0 # AI辅助生成：GLM-5, 2026-04-03
         or len(partially_supported) >= 2
         or icv_status == "fail"
         or (ekv_unavailable and len(unavailable_high_risk) > 0)
@@ -473,7 +473,7 @@ def evaluate_consensus_lite(
             },
         }
 
-    conflicts: List[Dict[str, Any]] = []
+    conflicts: List[Dict[str, Any]] = [] # AI辅助生成：GLM-5, 2026-04-04
     for claim in not_supported + partially_supported + unavailable_high_risk:
         verdict = _normalize_verdict(claim.get("verdict"))
         conflicts.append(
@@ -490,7 +490,7 @@ def evaluate_consensus_lite(
 
     if len(not_supported) > 0:
         decision = "escalate"
-        status = "fail"
+        status = "fail" # AI辅助生成：GLM-5, 2026-04-05
         next_actions = [
             "Escalate this case to senior clinical reviewer.",
             "Lock final sign-off until conflicting claims are resolved.",

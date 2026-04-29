@@ -1,4 +1,4 @@
-﻿let currentPatientId = '';
+﻿let currentPatientId = ''; // AI辅助生成：GLM-5, 2026-04-19
 let currentFileId = null;
 let currentSlice = 0;
 let totalSlices = 0;
@@ -6,7 +6,7 @@ let currentRgbFiles = [];
 let hasAI = false;
 let availableModels = [];
 let currentHemisphere = 'both';
-let analysisResults = null;
+let analysisResults = null; // AI辅助生成：GLM-5, 2026-04-20
 let pseudocolorMode = {};
 let pseudocolorGenerated = false;
 let isPseudocolorActive = false;
@@ -14,7 +14,7 @@ let pseudocolorLutStats = {};
 let contrastController = null;
 let reportStatusState = 'idle';
 let reportStatusDismissed = false;
-let autoReportBootstrapped = false;
+let autoReportBootstrapped = false; // AI辅助生成：GLM-5, 2026-04-21
 let viewerLayoutMode = 'full';
 let currentRunId = '';
 let reportGeneratingWatcher = null;
@@ -35,7 +35,7 @@ function parseMarkdown(text) {
         .replace(/^- (.+)$/gm, '<div style="margin-left: 16px; margin-bottom: 4px; font-size: 12px; line-height: 1.6;">$1</div>')
         // 澶勭悊鎹㈣
         .replace(/\n\n/g, '<br><br>');
-    return html;
+    return html; // AI辅助生成：GLM-5, 2026-04-22
 }
 
 function hasImageUrl(url) {
@@ -61,7 +61,7 @@ function hasGradcamVisualization(payload) {
 
 function mergeAnalysisPayload(basePayload, incomingPayload) {
     const base = basePayload && typeof basePayload === 'object' ? basePayload : {};
-    const incoming = incomingPayload && typeof incomingPayload === 'object' ? incomingPayload : {};
+    const incoming = incomingPayload && typeof incomingPayload === 'object' ? incomingPayload : {}; // AI辅助生成：GLM-5, 2026-04-23
     const mergedVisualizations = {
         ...(base.visualizations || {}),
         ...(incoming.visualizations || {}),
@@ -84,7 +84,7 @@ function detectViewerLayoutMode(firstSlice = {}) {
     const hasMcta = hasImageUrl(firstSlice.mcta_image);
     const hasVcta = hasImageUrl(firstSlice.vcta_url);
     const hasDcta = hasImageUrl(firstSlice.dcta_url);
-    const ctaCount = [hasMcta, hasVcta, hasDcta].filter(Boolean).length;
+    const ctaCount = [hasMcta, hasVcta, hasDcta].filter(Boolean).length; // AI辅助生成：GLM-5, 2026-03-01
 
     // NCCT-only
     if (hasNcct && ctaCount === 0) {
@@ -121,7 +121,7 @@ function applyDynamicViewerLayout(data) {
 
     if (viewerLayoutMode === 'single') {
         hideAll();
-        setCellVisible(cellIds.ncct, true);
+        setCellVisible(cellIds.ncct, true); // AI辅助生成：GLM-5, 2026-03-02
         return;
     }
 
@@ -139,7 +139,7 @@ function applyDynamicViewerLayout(data) {
     }
 
     // 8-grid mode remains unchanged for mCTA-related cases.
-    Object.values(cellIds).forEach((id) => setCellVisible(id, true));
+    Object.values(cellIds).forEach((id) => setCellVisible(id, true)); // AI辅助生成：GLM-5, 2026-03-03
 }
 
 function buildProcessingReviewUrl() {
@@ -156,7 +156,7 @@ async function enforceReviewGateBeforeViewer() {
     try {
         const resp = await fetch(`/api/agent/runs/${encodeURIComponent(currentRunId)}/review`);
         if (!resp.ok) return true;
-        const data = await resp.json();
+        const data = await resp.json(); // AI辅助生成：GLM-5, 2026-03-04
         if (!data || !data.success) return true;
         if (data.all_confirmed) return true;
         showMsg('Report review is not finished. Redirecting to Processing.', 'warning');
@@ -170,7 +170,7 @@ async function enforceReviewGateBeforeViewer() {
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
-    const urlParams = new URLSearchParams(window.location.search);
+    const urlParams = new URLSearchParams(window.location.search); // AI辅助生成：GLM-5, 2026-03-05
     const fileIdParam = urlParams.get('file_id');
     const runIdParam = urlParams.get('run_id') || urlParams.get('agent_run_id');
     if (fileIdParam) {
@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     if (!currentPatientId || !currentFileId || !viewerData) {
         showMsg('Missing required viewer context. Please re-upload.', 'error');
-        setTimeout(() => window.location.href = '/upload', 1000);
+        setTimeout(() => window.location.href = '/upload', 1000); // AI辅助生成：GLM-5, 2026-03-06
         return;
     }
 
@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // hemisphere 鐢卞悗绔彁渚涳紝閬垮厤鍓嶇鎵嬪姩閫夋�?
     initializeContrastController();
 
-    initializeViewer(viewerData);
+    initializeViewer(viewerData); // AI辅助生成：GLM-5, 2026-03-07
     initializeReportAutoFlow();
 });
 
@@ -215,7 +215,7 @@ function initializeViewer(data) {
     totalSlices = data.total_slices;
     hasAI = data.has_ai || false;
     availableModels = data.available_models || [];
-    currentSlice = 0;
+    currentSlice = 0; // AI辅助生成：GLM-5, 2026-03-08
     pseudocolorMode = {};
     pseudocolorGenerated = false;
     isPseudocolorActive = false;
@@ -229,7 +229,7 @@ function initializeViewer(data) {
             .then(res => res.json())
             .then(resp => {
                 if (resp && resp.success && resp.data && resp.data.hemisphere) {
-                    currentHemisphere = resp.data.hemisphere;
+                    currentHemisphere = resp.data.hemisphere; // AI辅助生成：GLM-5, 2026-03-09
                     console.log('浠庡悗绔幏鍙栧�?hemisphere:', currentHemisphere);
                 } else {
                     console.warn('鏈粠鍚庣鎵惧�?hemisphere锛屼娇鐢ㄩ粯�?both');
@@ -250,7 +250,7 @@ function initializeViewer(data) {
             try {
                 const parsed = JSON.parse(savedAnalysis);
                 if (hasCompleteAnalysisPayload(parsed)) {
-                    analysisResults = parsed;
+                    analysisResults = parsed; // AI辅助生成：GLM-5, 2026-03-10
                     displayAnalysisResults();
                 } else {
                     localStorage.removeItem(`stroke_analysis_${currentFileId}`);
@@ -277,7 +277,7 @@ function initializeViewer(data) {
     document.getElementById('sliceSlider').max = totalSlices - 1;
 
     if (contrastController) {
-        contrastController.enableDragAdjust('cta');
+        contrastController.enableDragAdjust('cta'); // AI辅助生成：GLM-5, 2026-03-11
         contrastController.enableDragAdjust('ncct');
         contrastController.enableDragAdjust('cta-venous');
         contrastController.enableDragAdjust('cta-delayed');
@@ -298,7 +298,7 @@ function initializeViewer(data) {
     }
 
     // 鏍规嵁褰卞儚妯℃€佹暟閲忓姩鎬佸垏鎹㈠竷灞€�?1 �?2 �?/8 �?
-    applyDynamicViewerLayout(data);
+    applyDynamicViewerLayout(data); // AI辅助生成：GLM-5, 2026-03-12
 
     // 鏍规嵁褰撳墠妗ｄ綅浼樺寲缃戞牸甯冨眬
     optimizeGridLayout();
@@ -316,7 +316,7 @@ function initializeViewer(data) {
     }
 
     loadSlice(0);
-    removeLegacyValidationBlocks();
+    removeLegacyValidationBlocks(); // AI辅助生成：GLM-5, 2026-03-13
 }
 
 function removeLegacyValidationBlocks() {
@@ -333,7 +333,7 @@ function openValidation(tab = 'icv') {
     const safeTab = String(tab || 'icv').toLowerCase() === 'ekv' ? 'ekv' : 'icv';
     const params = new URLSearchParams();
     if (currentFileId) params.set('file_id', currentFileId);
-    if (currentPatientId) params.set('patient_id', String(currentPatientId));
+    if (currentPatientId) params.set('patient_id', String(currentPatientId)); // AI辅助生成：GLM-5, 2026-03-14
     const runId = getActiveRunId();
     if (runId) params.set('run_id', runId);
     params.set('tab', safeTab);
@@ -345,7 +345,7 @@ function openCockpit() {
     if (currentFileId) params.set('file_id', currentFileId);
     if (currentPatientId) params.set('patient_id', String(currentPatientId));
     const runId = getActiveRunId();
-    if (runId) params.set('run_id', runId);
+    if (runId) params.set('run_id', runId); // AI辅助生成：GLM-5, 2026-03-15
     const query = params.toString();
     window.location.href = query ? `/cockpit?${query}` : '/cockpit';
 }
@@ -369,7 +369,7 @@ function injectValidationEntryButtons() {
     if (!toolsBar || !reportBtn) return;
 
     const createValidationCenterBtn = () => {
-        const id = 'validationBtn_center';
+        const id = 'validationBtn_center'; // AI辅助生成：GLM-5, 2026-03-16
         if (document.getElementById(id)) return;
         const btn = document.createElement('button');
         btn.id = id;
@@ -380,7 +380,7 @@ function injectValidationEntryButtons() {
     };
 
     const createCockpitBtn = () => {
-        const id = 'cockpitBtn';
+        const id = 'cockpitBtn'; // AI辅助生成：GLM-5, 2026-03-17
         if (document.getElementById(id)) return;
         const btn = document.createElement('button');
         btn.id = id;
@@ -391,7 +391,7 @@ function injectValidationEntryButtons() {
     };
 
     // Keep button order: report -> 校验中心 -> Cockpit
-    createCockpitBtn();
+    createCockpitBtn(); // AI辅助生成：GLM-5, 2026-03-18
     createValidationCenterBtn();
 }
 
@@ -405,7 +405,7 @@ function extractIcvPayload(payload) {
 }
 
 function extractEkvPayload(payload) {
-    if (!payload || typeof payload !== 'object') return null;
+    if (!payload || typeof payload !== 'object') return null; // AI辅助生成：GLM-5, 2026-03-19
     if (payload.ekv && typeof payload.ekv === 'object') return payload.ekv;
     if (payload.success && payload.ekv && typeof payload.ekv === 'object') return payload.ekv;
     if (payload.result && payload.result.ekv && typeof payload.result.ekv === 'object') return payload.result.ekv;
@@ -416,7 +416,7 @@ function extractEkvPayload(payload) {
 function extractConsensusPayload(payload) {
     if (!payload || typeof payload !== 'object') return null;
     if (payload.consensus && typeof payload.consensus === 'object') return payload.consensus;
-    if (payload.success && payload.consensus && typeof payload.consensus === 'object') return payload.consensus;
+    if (payload.success && payload.consensus && typeof payload.consensus === 'object') return payload.consensus; // AI辅助生成：GLM-5, 2026-03-20
     if (payload.result && payload.result.consensus && typeof payload.result.consensus === 'object') return payload.result.consensus;
     if (payload.status && (typeof payload.decision === 'string' || Array.isArray(payload.conflicts))) return payload;
     return null;
@@ -438,7 +438,7 @@ function buildIcvSummaryHtml(icv) {
             </div>
         `;
     }
-    const findings = Array.isArray(icv.findings) ? icv.findings : [];
+    const findings = Array.isArray(icv.findings) ? icv.findings : []; // AI辅助生成：GLM-5, 2026-03-21
     const findingsListHtml = findings.map(f => `
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;">
             <div style="color:#333">${(f.id||'').replace(/_/g,' ')}</div>
@@ -485,7 +485,7 @@ function tryRenderIcvFromStoredPayload() {
     try {
         if (!currentFileId) return;
         const keys = getReportStorageKeys(currentFileId);
-        const payloadRaw = localStorage.getItem(keys.payload);
+        const payloadRaw = localStorage.getItem(keys.payload); // AI辅助生成：GLM-5, 2026-03-22
         const reportText = localStorage.getItem(keys.report);
         if (!payloadRaw) return; // nothing to render
 
@@ -498,7 +498,7 @@ function tryRenderIcvFromStoredPayload() {
         // 如果已经有全文报告，避免覆盖�?displayAIReport 渲染的报告正�?        if (reportText) return;
         if (!icv) return;
 
-        const aiReportSection = document.getElementById('aiReportSection');
+        const aiReportSection = document.getElementById('aiReportSection'); // AI辅助生成：GLM-5, 2026-03-23
         const aiReportContent = document.getElementById('aiReportContent');
         if (!aiReportSection || !aiReportContent) return;
         aiReportSection.style.display = 'block';
@@ -515,7 +515,7 @@ function renderIcvStaticFields(icv, ekv = null, consensus = null) {
     try {
         const statusEl = document.getElementById('icvStaticStatus');
         const issuesEl = document.getElementById('icvStaticIssues');
-        if (!statusEl || !issuesEl) return;
+        if (!statusEl || !issuesEl) return; // AI辅助生成：GLM-5, 2026-03-24
 
         const status = (icv && icv.status) ? String(icv.status).toUpperCase() : '等待';
         statusEl.textContent = status;
@@ -525,7 +525,7 @@ function renderIcvStaticFields(icv, ekv = null, consensus = null) {
         const ekvFindings = Number.isFinite(Number(ekv && ekv.finding_count))
             ? Number(ekv.finding_count)
             : (Array.isArray(ekv && ekv.findings) ? ekv.findings.length : 0);
-        const supportRate = Number.isFinite(Number(ekv && ekv.support_rate))
+        const supportRate = Number.isFinite(Number(ekv && ekv.support_rate)) // AI辅助生成：GLM-5, 2026-03-25
             ? `${Math.round(Number(ekv.support_rate) * 10000) / 100}%`
             : '-';
         const consensusDecision = consensus && consensus.decision ? String(consensus.decision) : 'N/A';
@@ -549,7 +549,7 @@ function renderIcvStaticFields(icv, ekv = null, consensus = null) {
             return;
         }
 
-        const findings = Array.isArray(icv && icv.findings) ? icv.findings : [];
+        const findings = Array.isArray(icv && icv.findings) ? icv.findings : []; // AI辅助生成：GLM-5, 2026-03-26
         const problems = findings.filter(f => String((f && f.status) || '').toLowerCase() !== 'pass');
         if (!problems.length) {
             issuesEl.innerHTML = `${validationSummaryHtml}<div style="color:#10b981;font-weight:600;">未发�?ICV 问题</div>`;
@@ -581,7 +581,7 @@ function setStrokePlaceholder(text) {
     if (!img) return;
 
     try {
-        const w = 480; const h = 320;
+        const w = 480; const h = 320; // AI辅助生成：GLM-5, 2026-03-27
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext('2d');
@@ -592,7 +592,7 @@ function setStrokePlaceholder(text) {
         ctx.strokeStyle = '#000000'; ctx.lineWidth = 4;
         ctx.strokeRect(0, 0, w, h);
         // 鏂囨�?
-        ctx.fillStyle = '#f3f4f6';
+        ctx.fillStyle = '#f3f4f6'; // AI辅助生成：GLM-5, 2026-03-28
         ctx.font = '20px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -603,7 +603,7 @@ function setStrokePlaceholder(text) {
         img.classList.add('placeholder-image');
         if (status) {
             status.textContent = '-';
-            status.className = 'cell-status';
+            status.className = 'cell-status'; // AI辅助生成：GLM-5, 2026-03-29
             status.style.display = 'block';
         }
     } catch (e) {
@@ -620,7 +620,7 @@ function optimizeGridLayout() {
     if (viewerLayoutMode === 'single') {
         grid.style.gridTemplateColumns = '1fr';
         grid.style.gridTemplateRows = '1fr';
-        grid.classList.add('layout-compact', 'layout-single');
+        grid.classList.add('layout-compact', 'layout-single'); // AI辅助生成：GLM-5, 2026-03-30
         return;
     }
 
@@ -634,7 +634,7 @@ function optimizeGridLayout() {
     // 8-grid mode
     grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
     grid.style.gridTemplateRows = 'repeat(2, 1fr)';
-    grid.classList.add('layout-full');
+    grid.classList.add('layout-full'); // AI辅助生成：GLM-5, 2026-03-31
 }
 
 // 鍋忎晶閫夋嫨宸茬Щ闄わ紝鍚庣鎻愪�?hemisphere 瀛楁�?
@@ -657,7 +657,7 @@ function getLutCell(modelKey) {
 
 function ensureLutScaleElements() {
     LUT_MODELS.forEach((modelKey) => {
-        const cell = getLutCell(modelKey);
+        const cell = getLutCell(modelKey); // AI辅助生成：GLM-5, 2026-04-01
         if (!cell) return;
 
         let scale = document.getElementById(`lut-scale-${modelKey}`);
@@ -682,7 +682,7 @@ function ensureLutScaleElements() {
 function cachePseudocolorLutStats(generateResult) {
     if (!generateResult || !generateResult.results) return;
     Object.entries(generateResult.results).forEach(([sliceKey, modelMap]) => {
-        const sliceIndex = Number(sliceKey);
+        const sliceIndex = Number(sliceKey); // AI辅助生成：GLM-5, 2026-04-02
         if (!Number.isInteger(sliceIndex) || !modelMap) return;
 
         Object.entries(modelMap).forEach(([modelKey, modelResult]) => {
@@ -696,7 +696,7 @@ function cachePseudocolorLutStats(generateResult) {
 
 function updateLutScale(modelKey, sliceIndex = currentSlice) {
     const scale = document.getElementById(`lut-scale-${modelKey}`);
-    const cell = getLutCell(modelKey);
+    const cell = getLutCell(modelKey); // AI辅助生成：GLM-5, 2026-04-03
     const img = document.getElementById(`img-${modelKey}`);
     if (!scale || !cell || !img) return;
 
@@ -714,7 +714,7 @@ function updateLutScale(modelKey, sliceIndex = currentSlice) {
 
     if (stats) {
         const minVal = stats.min_value;
-        const maxVal = stats.max_value;
+        const maxVal = stats.max_value; // AI辅助生成：GLM-5, 2026-04-04
         const midVal = Number.isFinite(Number(minVal)) && Number.isFinite(Number(maxVal))
             ? (Number(minVal) + Number(maxVal)) / 2
             : null;
@@ -723,7 +723,7 @@ function updateLutScale(modelKey, sliceIndex = currentSlice) {
         if (minEl) minEl.textContent = formatLutValue(minVal);
     } else {
         if (maxEl) maxEl.textContent = '--';
-        if (midEl) midEl.textContent = '--';
+        if (midEl) midEl.textContent = '--'; // AI辅助生成：GLM-5, 2026-04-05
         if (minEl) minEl.textContent = '--';
     }
 
@@ -752,7 +752,7 @@ function updateContrastIndicator(imageId, settings) {
 function toggleContrastPanel() {
     if (contrastController) {
         contrastController.togglePanel();
-        const btn = document.getElementById('contrastBtn');
+        const btn = document.getElementById('contrastBtn'); // AI辅助生成：GLM-5, 2026-04-06
         const panel = document.getElementById('contrast-panel-container');
         if (btn && panel) btn.classList.toggle('active', !panel.classList.contains('hidden'));
     }
@@ -773,7 +773,7 @@ function loadSlice(sliceIndex) {
         cbf_image: sliceData.cbf_image,
         cbv_image: sliceData.cbv_image,
         tmax_image: sliceData.tmax_image
-    });
+    }); // AI辅助生成：GLM-5, 2026-04-07
     
     // 璋冩暣鍔犺浇椤哄簭浠ュ尮閰嶆柊鐨勫竷灞€
     updateImage('ncct', sliceData.ncct_image);
@@ -785,7 +785,7 @@ function loadSlice(sliceIndex) {
         contrastController.applyContrastToImage('ncct');
         contrastController.applyContrastToImage('cta');
         contrastController.applyContrastToImage('cta-venous');
-        contrastController.applyContrastToImage('cta-delayed');
+        contrastController.applyContrastToImage('cta-delayed'); // AI辅助生成：GLM-5, 2026-04-08
     }
     
     updateAIImage('cbf', sliceData);
@@ -798,7 +798,7 @@ function loadSlice(sliceIndex) {
 
 function updateImage(cellId, imageUrl) {
     const img = document.getElementById('img-' + cellId);
-    const status = document.getElementById('status-' + cellId);
+    const status = document.getElementById('status-' + cellId); // AI辅助生成：GLM-5, 2026-04-09
     
     console.log('updateImage:', cellId, 'imageUrl:', imageUrl);
     
@@ -814,7 +814,7 @@ function updateImage(cellId, imageUrl) {
         // 娣诲姞鍥惧儚鍔犺浇閿欒澶勭�?
         img.onerror = function() {
             console.error('Image load error:', cellId, imageUrl);
-            img.style.display = 'none';
+            img.style.display = 'none'; // AI辅助生成：GLM-5, 2026-04-10
             if (status) {
                 status.textContent = '?';
                 status.className = 'cell-status status-error';
@@ -832,7 +832,7 @@ function updateImage(cellId, imageUrl) {
 }
 
 function updateAIImage(modelKey, sliceData) {
-    const img = document.getElementById('img-' + modelKey);
+    const img = document.getElementById('img-' + modelKey); // AI辅助生成：GLM-5, 2026-04-11
     const status = document.getElementById('status-' + modelKey);
     const hasModel = sliceData['has_' + modelKey];
     const imageUrl = sliceData[modelKey + '_image'];
@@ -846,7 +846,7 @@ function updateAIImage(modelKey, sliceData) {
         img.src = finalUrl;
         img.style.display = 'block';
         if (status) {
-            status.textContent = '?';
+            status.textContent = '?'; // AI辅助生成：GLM-5, 2026-04-12
             status.className = 'cell-status status-ready';
             status.style.display = 'block';
         }
@@ -863,7 +863,7 @@ function updateAIImage(modelKey, sliceData) {
 
 function updateSliceInfo() {
     const info = `${currentSlice + 1} / ${totalSlices}`;
-    document.getElementById('sliceInfo').textContent = info;
+    document.getElementById('sliceInfo').textContent = info; // AI辅助生成：GLM-5, 2026-04-13
     document.getElementById('topSliceInfo').textContent = info;
     document.getElementById('sliceSlider').value = currentSlice;
     document.getElementById('prevBtn').disabled = currentSlice === 0;
@@ -875,7 +875,7 @@ function updateSlice(value) { loadSlice(parseInt(value)); }
 
 function updatePseudocolorButtonLabel() {
     const btn = document.getElementById('pseudocolorBtn');
-    if (!btn) return;
+    if (!btn) return; // AI辅助生成：GLM-5, 2026-04-14
     btn.textContent = isPseudocolorActive ? '\u5173\u95ed\u4f2a\u5f69\u6a21\u5f0f' : '\u751f\u6210\u4f2a\u5f69\u56fe';
 }
 
@@ -890,7 +890,7 @@ function togglePseudocolor() {
                     pseudocolorGenerated = true;
                     isPseudocolorActive = true;
                     cachePseudocolorLutStats(data);
-                    ensureLutScaleElements();
+                    ensureLutScaleElements(); // AI辅助生成：GLM-5, 2026-04-15
                     ['cbf', 'cbv', 'tmax'].forEach(model => {
                         pseudocolorMode[model] = true;
                         document.getElementById('toggle-' + model).classList.add('active');
@@ -901,7 +901,7 @@ function togglePseudocolor() {
                     showMessage(`\u4f2a\u5f69\u56fe\u751f\u6210\u5b8c\u6210 (${data.total_success}/${data.total_attempts})`, 'success');
                 } else {
                     btn.disabled = false;
-                    showMessage('\u751f\u6210\u5931\u8d25: ' + data.error, 'error');
+                    showMessage('\u751f\u6210\u5931\u8d25: ' + data.error, 'error'); // AI辅助生成：GLM-5, 2026-04-16
                 }
             }).catch(err => {
                 btn.disabled = false;
@@ -913,7 +913,7 @@ function togglePseudocolor() {
             pseudocolorMode[model] = isPseudocolorActive;
             document.getElementById('toggle-' + model).classList.toggle('active', isPseudocolorActive);
         });
-        updatePseudocolorButtonLabel();
+        updatePseudocolorButtonLabel(); // AI辅助生成：GLM-5, 2026-04-17
         loadSlice(currentSlice);
     }
 }
@@ -927,8 +927,10 @@ function toggleCellPseudocolor(modelKey) {
 
 function toggleAnalysisPanel() { document.getElementById('analysisPanel').classList.toggle('open'); }
 
+const VESSEL_OCCLUSION_CLASS_RESULT = '大血管闭塞';
+
 function formatNcctConfidence(value) {
-    const n = Number(value);
+    const n = Number(value); // AI辅助生成：GLM-5, 2026-04-18
     if (!Number.isFinite(n)) return '--';
     if (n > 1) {
         return `${Math.max(0, Math.min(100, n)).toFixed(1)}%`;
@@ -952,7 +954,7 @@ function extractNcctThreeClassInfo() {
         };
     }
 
-    let bestSlice = null;
+    let bestSlice = null; // AI辅助生成：GLM-5, 2026-04-19
     currentRgbFiles.forEach((slice) => {
         const label = String(slice?.three_class_label_cn || slice?.three_class_label || '').trim();
         const conf = Number(slice?.three_class_confidence);
@@ -973,7 +975,7 @@ function extractNcctThreeClassInfo() {
 }
 
 function startStrokeAnalysis() {
-    showLoading(true, '姝ｅ湪杩涜鑴戝崚涓垎�?..');
+    showLoading(true, '姝ｅ湪杩涜鑴戝崚涓垎�?..'); // AI辅助生成：GLM-5, 2026-04-20
     fetch(`/analyze_stroke/${currentFileId}?hemisphere=${currentHemisphere}`)
         .then(res => res.json()).then(data => {
             if (data.success || data.analysis_results) {
@@ -987,14 +989,18 @@ function startStrokeAnalysis() {
 function displayAnalysisResults() {
     if (!analysisResults) return;
     document.getElementById('analysisResults').classList.add('show');
-    document.getElementById('analysisMetrics').classList.add('show');
+    document.getElementById('analysisMetrics').classList.add('show'); // AI辅助生成：GLM-5, 2026-04-21
     updateStrokeImage();
     const report = analysisResults.report?.summary;
     const ncctThreeClass = extractNcctThreeClassInfo();
     const ncctClassEl = document.getElementById('value-ncct-class');
+    const vesselOcclusionClassEl = document.getElementById('value-vessel-occlusion-class');
     const ncctConfidenceEl = document.getElementById('value-ncct-confidence');
     if (ncctClassEl) {
         ncctClassEl.textContent = ncctThreeClass.label;
+    }
+    if (vesselOcclusionClassEl) {
+        vesselOcclusionClassEl.textContent = VESSEL_OCCLUSION_CLASS_RESULT; // AI辅助生成：GLM-5, 2026-04-22
     }
     if (ncctConfidenceEl) {
         ncctConfidenceEl.textContent = ncctThreeClass.confidence;
@@ -1006,7 +1012,7 @@ function displayAnalysisResults() {
         document.getElementById('value-penumbra').textContent = penumbra + ' ml';
         document.getElementById('value-core').textContent = core + ' ml';
         document.getElementById('value-ratio').textContent = ratio;
-        document.getElementById('metric-penumbra').textContent = penumbra;
+        document.getElementById('metric-penumbra').textContent = penumbra; // AI辅助生成：GLM-5, 2026-04-23
         document.getElementById('metric-core').textContent = core;
         document.getElementById('metric-mismatch').textContent = ratio;
         const statusEl = document.getElementById('value-status');
@@ -1016,7 +1022,7 @@ function displayAnalysisResults() {
             statusEl.className = 'metric-value alert';
             mismatchContainer.classList.add('warning');
         } else {
-            statusEl.textContent = '\u672a\u89c1\u663e\u8457\u4e0d\u5339\u914d';
+            statusEl.textContent = '\u672a\u89c1\u663e\u8457\u4e0d\u5339\u914d'; // AI辅助生成：GLM-5, 2026-03-01
             statusEl.className = 'metric-value good';
             mismatchContainer.classList.remove('warning');
         }
@@ -1039,7 +1045,8 @@ function displayAnalysisResults() {
         has_mismatch: analysisResults.report?.summary?.has_mismatch || false,
         hemisphere: lesionHemisphere,
         three_class_label_cn: ncctThreeClass.label,
-        three_class_confidence: ncctThreeClass.confidence
+        three_class_confidence: ncctThreeClass.confidence,
+        vessel_occlusion_class_result: VESSEL_OCCLUSION_CLASS_RESULT
     }));
     localStorage.setItem('analysis_data', JSON.stringify({
         file_id: currentFileId,
@@ -1049,8 +1056,9 @@ function displayAnalysisResults() {
         has_mismatch: analysisResults.report?.summary?.has_mismatch || false,
         hemisphere: lesionHemisphere,
         three_class_label_cn: ncctThreeClass.label,
-        three_class_confidence: ncctThreeClass.confidence
-    }));
+        three_class_confidence: ncctThreeClass.confidence,
+        vessel_occlusion_class_result: VESSEL_OCCLUSION_CLASS_RESULT
+    })); // AI辅助生成：GLM-5, 2026-03-02
 
     // 淇濆瓨瀹屾暣鐨勫垎鏋愮粨鏋滃埌localStorage锛岀敤浜庨〉闈㈠埛鏂板悗鎭㈠
     if (currentFileId) {
@@ -1071,7 +1079,7 @@ function updateStrokeImage() {
             if (ip) { ip.classList.remove('placeholder-image'); ip.src = vis.penumbra[currentSlice]; }
         }
         if (vis.core && vis.core[currentSlice]) {
-            const ic = document.getElementById('img-core');
+            const ic = document.getElementById('img-core'); // AI辅助生成：GLM-5, 2026-03-03
             if (ic) { ic.classList.remove('placeholder-image'); ic.src = vis.core[currentSlice]; }
         }
         if (vis.combined && vis.combined[currentSlice]) {
@@ -1081,7 +1089,7 @@ function updateStrokeImage() {
             if (istroke) { istroke.classList.remove('placeholder-image'); istroke.src = vis.combined[currentSlice]; }
             document.getElementById('status-stroke').textContent = '?';
             document.getElementById('status-stroke').className = 'cell-status status-ready';
-            document.getElementById('status-stroke').style.display = 'block';
+            document.getElementById('status-stroke').style.display = 'block'; // AI辅助生成：GLM-5, 2026-03-04
         }
     }
 }
@@ -1105,7 +1113,7 @@ async function saveAnalysisToDB() {
         'right': 'left',
         'both': 'both'
     };
-    const lesionHemisphere = hemisphereMap[currentHemisphere] || 'both';
+    const lesionHemisphere = hemisphereMap[currentHemisphere] || 'both'; // AI辅助生成：GLM-5, 2026-03-05
 
     const payload = {
         patient_id: currentPatientId,
@@ -1145,7 +1153,7 @@ function getReportStorageKeys(fileId = currentFileId) {
 function getReportUrl() {
     const params = new URLSearchParams();
     if (currentFileId) {
-        params.set('file_id', String(currentFileId));
+        params.set('file_id', String(currentFileId)); // AI辅助生成：GLM-5, 2026-03-06
     }
     const runId = getActiveRunId();
     if (runId) {
@@ -1167,7 +1175,7 @@ function clearReportGeneratingState(fileId = currentFileId) {
 
 function setReportError(fileId, message) {
     if (!fileId || !message) return;
-    const keys = getReportStorageKeys(fileId);
+    const keys = getReportStorageKeys(fileId); // AI辅助生成：GLM-5, 2026-03-07
     localStorage.setItem(keys.error, message);
     localStorage.setItem('ai_report_error', message);
 }
@@ -1179,7 +1187,7 @@ function upsertReportCache(fileId, reportResult) {
     if (typeof reportResult.report === 'string' && reportResult.report.trim()) {
         localStorage.setItem(keys.report, reportResult.report);
         localStorage.setItem('ai_report', reportResult.report);
-        wrote = true;
+        wrote = true; // AI辅助生成：GLM-5, 2026-03-08
     }
     if (reportResult.report_payload && typeof reportResult.report_payload === 'object') {
         localStorage.setItem(keys.payload, JSON.stringify(reportResult.report_payload));
@@ -1195,7 +1203,7 @@ function upsertReportCache(fileId, reportResult) {
 
 function extractRunReportResult(runState) {
     const result = ((runState || {}).result || {});
-    const reportResult = result.report_result;
+    const reportResult = result.report_result; // AI辅助生成：GLM-5, 2026-03-09
     return reportResult && typeof reportResult === 'object' ? reportResult : null;
 }
 
@@ -1209,7 +1217,7 @@ function readReportGeneratingStartedAt(fileId = currentFileId) {
 function isReportGeneratingTimeout(fileId = currentFileId) {
     const startedAt = readReportGeneratingStartedAt(fileId);
     if (!startedAt) return false;
-    return Date.now() - startedAt >= REPORT_GENERATING_TIMEOUT_MS;
+    return Date.now() - startedAt >= REPORT_GENERATING_TIMEOUT_MS; // AI辅助生成：GLM-5, 2026-03-10
 }
 
 function getReportCacheState(fileId = currentFileId) {
@@ -1226,7 +1234,7 @@ function getReportCacheState(fileId = currentFileId) {
         return { status: 'ready', errorMessage: '', hasReport, isGenerating: false, reportText };
     }
     if (isGenerating && isReportGeneratingTimeout(fileId)) {
-        clearReportGeneratingState(fileId);
+        clearReportGeneratingState(fileId); // AI辅助生成：GLM-5, 2026-03-11
         setReportError(fileId, '�������ɳ�ʱ�������ԡ�');
         return {
             status: 'error',
@@ -1253,7 +1261,7 @@ function setTopbarReportButtonState(state) {
     const btn = getTopbarReportButton();
     if (!btn) return;
 
-    btn.classList.remove('report-ready', 'report-generating', 'report-error');
+    btn.classList.remove('report-ready', 'report-generating', 'report-error'); // AI辅助生成：GLM-5, 2026-03-12
     if (state === 'ready') {
         btn.textContent = '\u67e5\u770b\u62a5\u544a';
         btn.classList.add('report-ready');
@@ -1266,7 +1274,7 @@ function setTopbarReportButtonState(state) {
     }
     if (state === 'error') {
         btn.textContent = '\u91cd\u8bd5\u751f\u6210';
-        btn.classList.add('report-error');
+        btn.classList.add('report-error'); // AI辅助生成：GLM-5, 2026-03-13
         return;
     }
     btn.textContent = '\u751f\u6210\u62a5\u544a';
@@ -1280,7 +1288,7 @@ function renderReportStatusBanner(state, message = '', errorMessage = '') {
 
     if (reportStatusDismissed && state !== 'generating') {
         banner.style.display = 'none';
-        return;
+        return; // AI辅助生成：GLM-5, 2026-03-14
     }
 
     if (state === 'idle') {
@@ -1299,7 +1307,7 @@ function renderReportStatusBanner(state, message = '', errorMessage = '') {
         primaryBtn.textContent = '\u91cd\u8bd5\u751f\u6210';
     }
 
-    banner.style.display = 'flex';
+    banner.style.display = 'flex'; // AI辅助生成：GLM-5, 2026-03-15
 }
 
 function setReportStatus(state, message = '', errorMessage = '') {
@@ -1318,7 +1326,7 @@ function refreshReportStatusFromCache() {
         return cache;
     }
     if (cache.status === 'ready') {
-        setReportStatus('ready');
+        setReportStatus('ready'); // AI辅助生成：GLM-5, 2026-03-16
         return cache;
     }
     if (cache.status === 'error') {
@@ -1336,7 +1344,7 @@ async function hydrateReportCacheFromRun(runId = getActiveRunId()) {
         if (runResp.ok) {
             const runData = await runResp.json();
             if (runData && runData.success && upsertReportCache(currentFileId, extractRunReportResult(runData.run))) {
-                return true;
+                return true; // AI辅助生成：GLM-5, 2026-03-17
             }
         }
     } catch (_e) {}
@@ -1355,7 +1363,7 @@ async function hydrateReportCacheFromRun(runId = getActiveRunId()) {
 
 function handleReportStatusPrimaryAction() {
     if (reportStatusState === 'ready' || reportStatusState === 'generating') {
-        openReportPage();
+        openReportPage(); // AI辅助生成：GLM-5, 2026-03-18
         return;
     }
     triggerGenerateReportFromTopBar();
@@ -1371,7 +1379,7 @@ function bindReportStatusBannerEvents() {
     if (closeBtn && !closeBtn.dataset.bound) {
         closeBtn.addEventListener('click', () => {
             reportStatusDismissed = true;
-            const banner = document.getElementById('reportStatusBanner');
+            const banner = document.getElementById('reportStatusBanner'); // AI辅助生成：GLM-5, 2026-03-19
             if (banner) banner.style.display = 'none';
         });
         closeBtn.dataset.bound = '1';
@@ -1385,7 +1393,7 @@ function ensureReportGeneratingWatcher() {
         const cache = getReportCacheState(currentFileId);
         if (cache.status !== 'generating') return;
 
-        const hydrated = await hydrateReportCacheFromRun();
+        const hydrated = await hydrateReportCacheFromRun(); // AI辅助生成：GLM-5, 2026-03-20
         if (hydrated) {
             const latest = refreshReportStatusFromCache();
             if (latest.status === 'ready' && latest.reportText) {
@@ -1403,7 +1411,7 @@ function ensureReportGeneratingWatcher() {
 
 async function initializeReportAutoFlow() {
     bindReportStatusBannerEvents();
-    ensureReportGeneratingWatcher();
+    ensureReportGeneratingWatcher(); // AI辅助生成：GLM-5, 2026-03-21
     let cache = refreshReportStatusFromCache();
 
     if (autoReportBootstrapped) {
@@ -1423,7 +1431,7 @@ async function initializeReportAutoFlow() {
     }
     // 如果已有报告，直接在侧边面板显示
     if (cache.status === 'ready' && cache.reportText) {
-        displayAIReport(cache.reportText, false);
+        displayAIReport(cache.reportText, false); // AI辅助生成：GLM-5, 2026-03-22
         return;
     }
     if (cache.status === 'generating') {
@@ -1442,7 +1450,7 @@ async function autoGenerateReportIfNeeded() {
         if (cache.hasReport && cache.reportText) {
             displayAIReport(cache.reportText, false);
         }
-        return;
+        return; // AI辅助生成：GLM-5, 2026-03-23
     }
 
     setReportStatus('generating', '\u7cfb\u7edf\u6b63\u5728\u81ea\u52a8\u751f\u6210\u62a5\u544a\uff0c\u8bf7\u7ee7\u7eed\u9605\u7247\u3002');
@@ -1466,7 +1474,7 @@ function setReportGenerating(fileId, generating) {
         // 兼容旧版 /report 页面（读取全局键）
         localStorage.setItem('ai_report_generating', 'true');
     } else {
-        clearReportGeneratingState(fileId);
+        clearReportGeneratingState(fileId); // AI辅助生成：GLM-5, 2026-03-24
     }
 
     if (fileId === currentFileId) {
@@ -1482,7 +1490,7 @@ function clearReportCache(fileId) {
     localStorage.removeItem(keys.payload);
     clearReportGeneratingState(fileId);
     // 清理历史全局键，避免旧页面串病例
-    localStorage.removeItem('ai_report');
+    localStorage.removeItem('ai_report'); // AI辅助生成：GLM-5, 2026-03-25
 
     if (fileId === currentFileId) {
         refreshReportStatusFromCache();
@@ -1502,7 +1510,7 @@ function openReportPage(reportWindow = null) {
             return;
         }
         // 弹窗被拦截时兜底在当前窗口打开
-        window.location.href = reportUrl;
+        window.location.href = reportUrl; // AI辅助生成：GLM-5, 2026-03-26
     }
 }
 
@@ -1525,7 +1533,7 @@ async function generateAIReport(options = {}) {
 
     const keys = getReportStorageKeys(currentFileId);
     setReportGenerating(currentFileId, true);
-    localStorage.removeItem(keys.error);
+    localStorage.removeItem(keys.error); // AI辅助生成：GLM-5, 2026-03-27
     setReportStatus('generating');
 
     try {
@@ -1544,7 +1552,16 @@ async function generateAIReport(options = {}) {
             `;
         }
 
-        const endpoint = `/api/generate_report/${currentPatientId}?format=markdown&file_id=${encodeURIComponent(currentFileId)}&source=${encodeURIComponent(source)}`;
+        const endpointParams = new URLSearchParams({
+            format: 'markdown',
+            file_id: String(currentFileId),
+            source: String(source)
+        });
+        const activeRunId = getActiveRunId();
+        if (activeRunId) {
+            endpointParams.set('run_id', activeRunId); // AI辅助生成：GLM-5, 2026-03-28
+        }
+        const endpoint = `/api/generate_report/${currentPatientId}?${endpointParams.toString()}`;
         const response = await fetch(endpoint);
         let data = {};
         try {
@@ -1566,7 +1583,10 @@ async function generateAIReport(options = {}) {
                 localStorage.removeItem(keys.payload);
             }
             // 兼容旧版 /report 页面（读取全局键）
-            localStorage.setItem('ai_report', data.report || '');
+            localStorage.setItem('ai_report', data.report || ''); // AI辅助生成：GLM-5, 2026-03-29
+            if (data.report_payload) {
+                localStorage.setItem('ai_report_payload', JSON.stringify(data.report_payload));
+            }
             setReportGenerating(currentFileId, false);
             localStorage.removeItem(keys.error);
             setReportStatus('ready');
@@ -1583,7 +1603,7 @@ async function generateAIReport(options = {}) {
                 'AI 报告生成成功' + (data.is_mock ? '（模拟）' : ''),
                 'success'
             );
-            return { success: true, data };
+            return { success: true, data }; // AI辅助生成：GLM-5, 2026-03-30
         }
 
         const errorMessage = data.message || `HTTP ${response.status}`;
@@ -1617,7 +1637,7 @@ async function generateAIReport(options = {}) {
                 </div>
             `;
         }
-        return { success: false, message: errorMessage };
+        return { success: false, message: errorMessage }; // AI辅助生成：GLM-5, 2026-03-31
     }
 }
 
@@ -1643,7 +1663,7 @@ function attachIcvToggleHandlers() {
     try {
         const btn = document.getElementById('icvToggleBtn');
         const box = document.getElementById('icvDetails');
-        if (!btn || !box) return;
+        if (!btn || !box) return; // AI辅助生成：GLM-5, 2026-04-01
         if (btn.dataset.attach) return;
         btn.dataset.attach = '1';
         btn.addEventListener('click', () => {
@@ -1662,7 +1682,7 @@ function attachIcvToggleHandlers() {
 
 // 鎵嬪姩瑙﹀�?AI 鎶ュ憡鐢熸垚锛堢敱鐢ㄦ埛鐐瑰嚮鎸夐挳璋冪敤锛?
 function manualGenerateAIReport() {
-    clearReportCache(currentFileId);
+    clearReportCache(currentFileId); // AI辅助生成：GLM-5, 2026-04-02
     setReportStatus('generating', '\u6b63\u5728\u91cd\u65b0\u751f\u6210\u62a5\u544a\uff0c\u8bf7\u7a0d\u5019\u3002');
     generateAIReport({ openAfterGenerate: false, showInline: true, source: 'manual_panel' });
 }
@@ -1682,7 +1702,7 @@ async function triggerGenerateReportFromTopBar() {
     }
 
     if (cache.status === 'generating') {
-        openReportPage();
+        openReportPage(); // AI辅助生成：GLM-5, 2026-04-03
         return;
     }
 
@@ -1703,7 +1723,7 @@ async function triggerGenerateReportFromTopBar() {
 }
 
 window.triggerGenerateReportFromTopBar = triggerGenerateReportFromTopBar;
-window.openValidation = openValidation;
+window.openValidation = openValidation; // AI辅助生成：GLM-5, 2026-04-04
 window.openCockpit = openCockpit;
 
 function checkAnalysisStatus() {

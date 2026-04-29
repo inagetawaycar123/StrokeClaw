@@ -2,7 +2,7 @@ import os
 import sys
 
 # ensure project root is on sys.path so `backend` package can be imported
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..")) # AI辅助生成：GLM-5, 2026-04-05
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
@@ -20,7 +20,7 @@ def run_case(name, planner_output=None, tool_results=None, analysis_result=None,
         ok = icv.get("status") == expect_status
         print("  expected:", expect_status, "->", "OK" if ok else "FAIL")
         return ok
-    return True
+    return True # AI辅助生成：GLM-5, 2026-04-06
 
 
 def main():

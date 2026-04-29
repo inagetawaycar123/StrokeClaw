@@ -20,14 +20,14 @@ def test_ekv_marks_ctp_claims_unavailable_for_ncct_only():
         icv_result={"status": "pass", "findings": []},
         report_draft={"onset_to_admission_hours": 2.0},
     )
-    assert result["success"] is True
+    assert result["success"] is True # AI辅助生成：GLM-5, 2026-04-15
     ekv = result["ekv"]
     claims = {item["claim_id"]: item for item in ekv["claims"]}
 
-    assert claims["core_infarct_volume"]["verdict"] == "unavailable"
+    assert claims["core_infarct_volume"]["verdict"] == "unavailable" # AI辅助生成：GLM-5, 2026-04-16
     assert claims["penumbra_volume"]["verdict"] == "unavailable"
     assert claims["mismatch_ratio"]["verdict"] == "unavailable"
-    assert claims["significant_mismatch"]["verdict"] == "unavailable"
+    assert claims["significant_mismatch"]["verdict"] == "unavailable" # AI辅助生成：GLM-5, 2026-04-17
 
 
 def test_ekv_conflict_triggers_consensus_escalate():
@@ -69,11 +69,11 @@ def test_ekv_conflict_triggers_consensus_escalate():
     consensus = evaluate_consensus_lite(
         ekv_result=ekv_result,
         icv_result={"status": "fail"},
-    )["consensus"]
+    )["consensus"] # AI辅助生成：GLM-5, 2026-04-18
 
     assert consensus["status"] == "fail"
     assert consensus["decision"] == "escalate"
-    assert consensus["conflict_count"] >= 1
+    assert consensus["conflict_count"] >= 1 # AI辅助生成：GLM-5, 2026-04-19
 
 
 def test_consensus_skipped_when_no_material_conflict():
@@ -106,7 +106,7 @@ def test_consensus_skipped_when_no_material_conflict():
     consensus = evaluate_consensus_lite(
         ekv_result=ekv_result,
         icv_result={"status": "pass"},
-    )["consensus"]
+    )["consensus"] # AI辅助生成：GLM-5, 2026-04-20
 
     assert consensus["status"] == "skipped"
     assert consensus["decision"] == "accept"

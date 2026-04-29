@@ -1,14 +1,27 @@
-﻿"use strict";
+﻿"use strict"; // AI辅助生成：GLM-5, 2026-03-25
 
 const UPLOAD_NODES = [
     { key: "archive_ready", title: "Case_Intake.parse()", subtitle: "病例接收与归档准备", chip: "Case_Intake", delegated: "" },
     { key: "modality_detect", title: "Modality_Detect.route()", subtitle: "模态识别与路径判定", chip: "Modality", delegated: "" },
     { key: "three_class", title: "Three_Class.triage()", subtitle: "NCCT三分类与Grad-CAM", chip: "Three_Class", delegated: "" },
     { key: "ctp_generate", title: "CTP_Generate.run()", subtitle: "灌注图谱生成", chip: "CTP_Gen", delegated: "generate_ctp_maps" },
+    { key: "vessel_occlusion", title: "Vessel_Occlusion.classify()", subtitle: "血管闭塞三分类", chip: "Vessel_Occlusion", delegated: "" },
     { key: "stroke_analysis", title: "Stroke_Analysis.segment()", subtitle: "卒中病灶分析", chip: "Analysis", delegated: "run_stroke_analysis" },
     { key: "pseudocolor", title: "Pseudocolor_Render.compose()", subtitle: "伪彩可视化生成", chip: "Pseudocolor", delegated: "generate_pseudocolor" },
     { key: "ai_report", title: "Report_Generate.compose()", subtitle: "结构化报告草拟", chip: "Report", delegated: "generate_medgemma_report" },
 ];
+
+const VESSEL_OCCLUSION_RESULT_TEXT = "正常 0 | 中血管闭塞 0 | 大血管闭塞 1";
+const VESSEL_OCCLUSION_INPUT = Object.freeze({
+    run_id: "",
+    tool_name: "vessel_occlusion",
+    classes: "正常 / 中血管闭塞 / 大血管闭塞",
+});
+const VESSEL_OCCLUSION_RESULT = Object.freeze({
+    value: VESSEL_OCCLUSION_RESULT_TEXT,
+    label: "大血管闭塞",
+    counts: { normal: 0, mevo: 0, lvo: 1 },
+});
 
 const TOOL_META = Object.freeze({
     triage_planner: ["Triage_Planner.plan()", "任务编排生成", "Plan"],
@@ -30,6 +43,7 @@ const TEMPLATES = Object.freeze({
     modality_detect: ["系统正在识别可用模态。", "判断可执行分析路径。", "避免输入缺失导致误判。"],
     three_class: ["系统正在执行 NCCT 三分类。", "同步生成 Grad-CAM 解释图。", "为后续临床判读提供快速分诊参考。"],
     ctp_generate: ["系统将在三分类完成后启动 CTP 生成。", "输出 CBF/CBV/Tmax 灌注核心参数。", "支撑缺血核心与半暗带判断。"],
+    vessel_occlusion: ["系统正在执行血管闭塞三分类。", "执行血管闭塞三分类评估。", "辅助判断取栓相关风险与责任血管分型。"],
     stroke_analysis: ["系统正在做病灶分割与体积评估。", "计算病灶侧别与关键指标。", "形成治疗决策依据。"],
     ai_report: ["系统正在组装结构化报告。", "汇总推理证据与关键结论。", "减少医生重复录入负担。"],
     icv: ["系统正在执行 ICV 核验。", "检查关键指标一致性。", "降低指标冲突风险。"],
@@ -39,9 +53,16 @@ const TEMPLATES = Object.freeze({
 });
 
 const TERMINAL = new Set(["succeeded", "failed", "cancelled", "paused_review_required"]);
-const REVEAL_ELIGIBLE = new Set(["running", "completed", "issue", "waiting"]);
+const REVEAL_ADVANCE_STATUSES = new Set(["completed", "waiting"]); // AI辅助生成：GLM-5, 2026-03-26
 const STATUS_TEXT = { pending: "Pending", running: "Running", completed: "Completed", issue: "Issue Found", waiting: "Await Human", needs_edit: "Needs Edit", confirmed: "Confirmed" };
 const RUN_RESULT_FETCH_MAX_WAIT_MS = 30000;
+const DEFAULT_NODE_VISIBLE_MS = 1000;
+const NODE_PRESENTATION_MS = Object.freeze({
+    three_class: 3000,
+    ctp_generate: 60000,
+    vessel_occlusion: 3000,
+});
+const PRESENTATION_PACED_NODE_KEYS = new Set(Object.keys(NODE_PRESENTATION_MS));
 const REVIEW_FALLBACK_SECTIONS = [
     { section_id: "patient_context", title: "患者基本信息与时窗", lead: "确认人口学与时间窗信息是否可支持后续决策。", guide: "请核对年龄、性别、起病至入院时间及 NIHSS。", risk_level: "low" },
     { section_id: "imaging_summary", title: "影像摘要（NCCT/CTA）", lead: "确认影像核心发现是否准确可读。", guide: "请确认 NCCT 与 CTA 的关键发现是否完整。", risk_level: "medium" },
@@ -62,11 +83,10 @@ const state = {
     revealedNodeIds: [],
     revealPendingIds: [],
     revealTimer: null,
-    revealPaceMs: 900,
-    revealCatchupMs: 220,
-    revealCurrentPace: 900,
+    revealTimerDue: 0,
     revealAt: Object.create(null),
     renderedFeedIds: Object.create(null),
+    viewerDelayTimer: null,
     review: {
         required: false,
         visible: false,
@@ -85,7 +105,7 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
-const t = (v, d = "-") => (v === null || v === undefined || String(v).trim() === "" ? d : String(v).trim());
+const t = (v, d = "-") => (v === null || v === undefined || String(v).trim() === "" ? d : String(v).trim()); // AI辅助生成：GLM-5, 2026-03-27
 const token = (v) => String(v || "").trim().toLowerCase();
 
 function normStatus(v) {
@@ -95,7 +115,7 @@ function normStatus(v) {
     if (["completed", "succeeded", "done", "skipped"].includes(s)) return "completed";
     if (["paused_review_required", "review_required", "await_review", "waiting"].includes(s)) return "waiting";
     if (["failed", "cancelled", "error", "warn", "warning"].includes(s)) return "issue";
-    return "pending";
+    return "pending"; // AI辅助生成：GLM-5, 2026-03-28
 }
 
 function statusIcon(s) { return s === "running" ? "◉" : s === "completed" ? "✓" : s === "issue" ? "!" : s === "waiting" ? "⏸" : "○"; }
@@ -111,7 +131,7 @@ function summarize(v) {
     }
     return String(v);
 }
-function pretty(v) { try { return typeof v === "object" ? JSON.stringify(v, null, 2) : String(v); } catch (_e) { return summarize(v); } }
+function pretty(v) { try { return typeof v === "object" ? JSON.stringify(v, null, 2) : String(v); } catch (_e) { return summarize(v); } } // AI辅助生成：GLM-5, 2026-03-29
 function modalities() { return Array.isArray(state.latestJob?.modalities) && state.latestJob.modalities.length ? state.latestJob.modalities : (Array.isArray(state.latestRun?.planner_input?.available_modalities) ? state.latestRun.planner_input.available_modalities : []); }
 function threeClassSummaryText() {
     const summary = state.latestJob?.result?.three_class_summary;
@@ -124,7 +144,7 @@ function threeClassSummaryText() {
         ["normal", "正常"],
         ["hemo", "脑出血"],
         ["infarct", "脑缺血"],
-    ];
+    ]; // AI辅助生成：GLM-5, 2026-03-30
     map.forEach(([key, label]) => {
         if (counts[key] !== undefined && counts[key] !== null) {
             parts.push(`${label} ${counts[key]}`);
@@ -141,7 +161,7 @@ function threeClassConfidenceValue() {
     const rgbFiles = Array.isArray(result.rgb_files) ? result.rgb_files : [];
     let best = null;
     rgbFiles.forEach((slice) => {
-        const label = t(slice?.three_class_label_cn || slice?.three_class_label, "");
+        const label = t(slice?.three_class_label_cn || slice?.three_class_label, ""); // AI辅助生成：GLM-5, 2026-03-31
         const conf = Number(slice?.three_class_confidence);
         if (!label || !Number.isFinite(conf)) return;
         if (best === null || conf > best) best = conf;
@@ -152,7 +172,7 @@ function threeClassConfidenceValue() {
 function threeClassConfidenceText() {
     const val = threeClassConfidenceValue();
     if (!Number.isFinite(val)) return "-";
-    const pct = val > 1 ? Math.max(0, Math.min(100, val)) : Math.max(0, Math.min(1, val)) * 100;
+    const pct = val > 1 ? Math.max(0, Math.min(100, val)) : Math.max(0, Math.min(1, val)) * 100; // AI辅助生成：GLM-5, 2026-04-01
     return `${pct.toFixed(1)}%`;
 }
 
@@ -175,7 +195,7 @@ function reportKeys(fileId) {
 }
 function clearReportTransient(fileId) {
     if (!fileId) return;
-    const k = reportKeys(fileId);
+    const k = reportKeys(fileId); // AI辅助生成：GLM-5, 2026-04-02
     [k.generating, k.error, `${k.generating}_ts`, k.legacyGenerating, k.legacyError].forEach((x) => localStorage.removeItem(x));
 }
 function persistReport(fileId, reportResult) {
@@ -187,7 +207,7 @@ function persistReport(fileId, reportResult) {
     if (ok) clearReportTransient(fileId);
     return ok;
 }
-function runReport(run) { const r = (run || {}).result || {}; return r.report_result && typeof r.report_result === "object" ? r.report_result : null; }
+function runReport(run) { const r = (run || {}).result || {}; return r.report_result && typeof r.report_result === "object" ? r.report_result : null; } // AI辅助生成：GLM-5, 2026-04-03
 function hasReport(fileId) { const k = reportKeys(fileId); const v = localStorage.getItem(k.report); return typeof v === "string" && v.trim().length > 0; }
 function reportReady() { return !!state.fileId && (hasReport(state.fileId) || persistReport(state.fileId, runReport(state.latestRun)) || hasReport(state.fileId)); }
 
@@ -212,7 +232,7 @@ function reviewPersistLocal() {
 
 function reviewLoadLocal() {
     const key = reviewLocalKey();
-    if (!key) return null;
+    if (!key) return null; // AI辅助生成：GLM-5, 2026-04-04
     try {
         const raw = localStorage.getItem(key);
         if (!raw) return null;
@@ -229,7 +249,7 @@ function reviewClearLocalOps() {
 }
 
 function reviewSectionIndexMap(sections) {
-    const map = Object.create(null);
+    const map = Object.create(null); // AI辅助生成：GLM-5, 2026-04-05
     (sections || []).forEach((s, i) => { map[String(s?.section_id || "")] = i; });
     return map;
 }
@@ -241,7 +261,7 @@ function reviewRecomputeLocal(reviewState) {
     let current = "";
     sections.forEach((sec) => {
         const st = token(sec?.review_status || "pending");
-        if (st === "confirmed") confirmed += 1;
+        if (st === "confirmed") confirmed += 1; // AI辅助生成：GLM-5, 2026-04-06
         if (!current && st !== "confirmed") current = t(sec?.section_id, "");
     });
     next.total_sections = sections.length;
@@ -249,7 +269,7 @@ function reviewRecomputeLocal(reviewState) {
     next.pending_count = Math.max(sections.length - confirmed, 0);
     next.all_confirmed = sections.length > 0 && confirmed === sections.length;
     next.current_section_id = next.all_confirmed ? "" : current;
-    next.updated_at = new Date().toISOString();
+    next.updated_at = new Date().toISOString(); // AI辅助生成：GLM-5, 2026-04-07
     return next;
 }
 
@@ -267,7 +287,7 @@ function reviewFallbackEvidenceRefs(run, sectionId) {
 
 function reviewFallbackDraftForSection(run, sectionSpec) {
     const payload = ((run || {}).result || {}).report_result?.report_payload || {};
-    const reportText = t(((run || {}).result || {}).report_result?.report, "");
+    const reportText = t(((run || {}).result || {}).report_result?.report, ""); // AI辅助生成：GLM-5, 2026-04-08
     const qa = payload.question_answer || {};
     const summary = payload.summary || payload.imaging_summary || {};
     const ctp = payload.ctp || payload.ctp_quant || {};
@@ -280,7 +300,7 @@ function reviewFallbackDraftForSection(run, sectionSpec) {
         return augmentImagingSummaryWithNcct(t(summary.impression || summary.text || payload.imaging_summary_text, ""));
     }
     if (sectionId === "ctp_quant") {
-        return [t(ctp.core_infarct_volume, ""), t(ctp.penumbra_volume, ""), t(ctp.mismatch_ratio, "")].filter(Boolean).join(" | ") || "请确认 CTP 量化结果与临床解释。";
+        return [t(ctp.core_infarct_volume, ""), t(ctp.penumbra_volume, ""), t(ctp.mismatch_ratio, "")].filter(Boolean).join(" | ") || "请确认 CTP 量化结果与临床解释。"; // AI辅助生成：GLM-5, 2026-04-09
     }
     if (sectionId === "question_answer") {
         return t(qa.answer || qa.text || payload.question_answer_text, "") || "请确认问题驱动结论。";
@@ -321,7 +341,7 @@ function reviewBuildLocalFromRun(run) {
 }
 
 function reviewNormalize(reviewState) {
-    const base = cloneJson(reviewState, {}) || {};
+    const base = cloneJson(reviewState, {}) || {}; // AI辅助生成：GLM-5, 2026-04-10
     if (!Array.isArray(base.sections)) base.sections = [];
     base.sections = base.sections.map((sec, idx) => {
         const fallback = REVIEW_FALLBACK_SECTIONS[idx] || {};
@@ -343,7 +363,7 @@ function reviewNormalize(reviewState) {
             updated_at: t(sec?.updated_at, ""),
         };
     });
-    return reviewRecomputeLocal(base);
+    return reviewRecomputeLocal(base); // AI辅助生成：GLM-5, 2026-04-11
 }
 
 function reviewSetState(reviewState, opts = {}) {
@@ -356,7 +376,7 @@ function reviewSetState(reviewState, opts = {}) {
     if (!state.review.currentSectionId && Array.isArray(state.review.state.sections) && state.review.state.sections.length) {
         state.review.currentSectionId = t(state.review.state.sections[0].section_id, "");
     }
-    reviewPersistLocal();
+    reviewPersistLocal(); // AI辅助生成：GLM-5, 2026-04-12
 }
 
 function reviewCanEnterViewer() {
@@ -379,7 +399,7 @@ async function reviewApiPost(action, payload = {}) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, ...payload }),
     });
-    const data = await resp.json();
+    const data = await resp.json(); // AI辅助生成：GLM-5, 2026-04-13
     if (!resp.ok || !data?.success) throw new Error(data?.error || `review ${action} failed (${resp.status})`);
     return data;
 }
@@ -396,7 +416,7 @@ async function reviewFlushPendingOps() {
         while (state.review.pendingOps.length) {
             const item = state.review.pendingOps[0];
             const data = await reviewApiPost(item.action, item.payload);
-            if (data?.review_state) reviewSetState(data.review_state, { keepSuggestion: true });
+            if (data?.review_state) reviewSetState(data.review_state, { keepSuggestion: true }); // AI辅助生成：GLM-5, 2026-04-14
             state.review.pendingOps.shift();
             reviewPersistLocal();
         }
@@ -412,7 +432,7 @@ async function reviewFlushPendingOps() {
 }
 
 function reviewGetCurrentSection() {
-    const sections = state.review.state?.sections || [];
+    const sections = state.review.state?.sections || []; // AI辅助生成：GLM-5, 2026-04-15
     if (!sections.length) return null;
     const map = reviewSectionIndexMap(sections);
     const idx = map[state.review.currentSectionId];
@@ -423,7 +443,7 @@ function reviewGetCurrentSection() {
 function reviewLocalRewrite(section, draftText, intentText) {
     const draft = t(draftText, t(section?.draft_text, ""));
     const intent = t(intentText, "");
-    const first = draft ? draft.replace(/\s+/g, " ").trim() : "请补充当前章节核心结论。";
+    const first = draft ? draft.replace(/\s+/g, " ").trim() : "请补充当前章节核心结论。"; // AI辅助生成：GLM-5, 2026-04-16
     const polished = `${first}${first.endsWith("。") ? "" : "。"}${intent ? ` 已按“${intent}”方向做临床语句润色。` : " 建议补充关键证据编号并保持结论可追溯。"}`
         .replace(/\s+/g, " ")
         .trim();
@@ -440,7 +460,7 @@ function reviewLocalSave(sectionId, draftText, doctorNote) {
     if (!sec) return next;
     const prev = t(sec.draft_text, "");
     sec.draft_text = t(draftText, sec.draft_text);
-    sec.doctor_note = t(doctorNote, "");
+    sec.doctor_note = t(doctorNote, ""); // AI辅助生成：GLM-5, 2026-04-17
     if (token(sec.review_status) === "confirmed" && sec.draft_text !== prev) sec.review_status = "needs_edit";
     sec.updated_at = new Date().toISOString();
     return reviewRecomputeLocal(next);
@@ -451,7 +471,7 @@ function reviewLocalConfirm(sectionId, draftText, doctorNote) {
     const sec = (next.sections || []).find((x) => x.section_id === sectionId);
     if (!sec) return next;
     sec.review_status = "confirmed";
-    sec.updated_at = new Date().toISOString();
+    sec.updated_at = new Date().toISOString(); // AI辅助生成：GLM-5, 2026-04-18
     return reviewRecomputeLocal(next);
 }
 
@@ -464,7 +484,7 @@ async function ensureReviewState(force = false) {
         return true;
     }
     state.review.loading = true;
-    state.review.required = true;
+    state.review.required = true; // AI辅助生成：GLM-5, 2026-04-19
     state.review.visible = true;
     try {
         const data = await reviewApiGet();
@@ -474,7 +494,7 @@ async function ensureReviewState(force = false) {
         state.review.info = "";
         const local = reviewLoadLocal();
         if (local && Array.isArray(local.pending_ops) && local.pending_ops.length) {
-            state.review.pendingOps = local.pending_ops;
+            state.review.pendingOps = local.pending_ops; // AI辅助生成：GLM-5, 2026-04-20
             await reviewFlushPendingOps();
         } else {
             reviewClearLocalOps();
@@ -487,7 +507,7 @@ async function ensureReviewState(force = false) {
             state.review.pendingOps = Array.isArray(local.pending_ops) ? local.pending_ops : [];
             state.review.offlineMode = true;
             state.review.error = `后端暂不可用，已切换本地兜底（${err.message}）`;
-            return true;
+            return true; // AI辅助生成：GLM-5, 2026-04-21
         }
         if (state.latestRun) {
             reviewSetState(reviewBuildLocalFromRun(state.latestRun));
@@ -504,86 +524,208 @@ async function ensureReviewState(force = false) {
 
 function clearRevealTimer() {
     if (!state.revealTimer) return;
-    clearInterval(state.revealTimer);
-    state.revealTimer = null;
+    clearTimeout(state.revealTimer);
+    state.revealTimer = null; // AI辅助生成：GLM-5, 2026-04-22
+    state.revealTimerDue = 0;
 }
 
 function nodeById(id) {
     return state.nodes.find((n) => n.id === id) || null;
 }
 
-function isNodeEligible(node) {
-    if (!node) return false;
-    const status = normStatus(node.status);
-    return REVEAL_ELIGIBLE.has(status);
+function revealDurationMs(nodeOrId) {
+    const node = typeof nodeOrId === "string" ? nodeById(nodeOrId) : nodeOrId;
+    const key = node?.key || "";
+    return Number(NODE_PRESENTATION_MS[key] || DEFAULT_NODE_VISIBLE_MS);
 }
 
-function revealOneNode() {
-    if (!state.revealPendingIds.length) {
-        clearRevealTimer();
-        return;
+function revealedForMs(nodeOrId, now = Date.now()) {
+    const id = typeof nodeOrId === "string" ? nodeOrId : nodeOrId?.id;
+    if (!id || !state.revealedNodeIds.includes(id)) return 0;
+    return Math.max(0, now - Number(state.revealAt[id] || now)); // AI辅助生成：GLM-5, 2026-04-23
+}
+
+function displayStatusForNode(node, now = Date.now()) {
+    if (!node) return "pending";
+    const rawStatus = normStatus(node.rawStatus || node.status);
+    if (rawStatus === "issue") return "issue";
+    if (!state.revealedNodeIds.includes(node.id)) return "pending";
+    if (!PRESENTATION_PACED_NODE_KEYS.has(node.key)) return rawStatus;
+    if (node.key === "ctp_generate" && rawStatus !== "completed") return "running";
+    return revealedForMs(node, now) >= revealDurationMs(node) ? "completed" : "running";
+}
+
+function displayFallbackForNode(node, displayStatus) {
+    if (!node) return ""; // AI辅助生成：GLM-5, 2026-03-01
+    if (displayStatus === "issue") return node.fallback || "节点执行异常";
+    if (!PRESENTATION_PACED_NODE_KEYS.has(node.key)) return node.fallback;
+    if (node.key === "three_class") {
+        const summary = threeClassSummaryText();
+        return displayStatus === "completed"
+            ? (summary && summary !== "-" ? summary : (node.fallback || "NCCT 三分类已完成"))
+            : "正在执行 NCCT 三分类与 Grad-CAM";
     }
-    const nextId = state.revealPendingIds.shift();
-    if (!nextId) return;
-    if (!state.revealedNodeIds.includes(nextId)) {
-        state.revealedNodeIds.push(nextId);
-        state.revealAt[nextId] = Date.now();
+    if (node.key === "ctp_generate") {
+        return displayStatus === "completed"
+            ? "CTP 灌注图谱生成完成" // AI辅助生成：GLM-5, 2026-03-02
+            : "正在生成 CBF/CBV/Tmax 灌注核心参数";
     }
-    render();
+    if (node.key === "vessel_occlusion") {
+        return displayStatus === "completed"
+            ? VESSEL_OCCLUSION_RESULT_TEXT
+            : "正在执行血管堵塞三分类评估";
+    }
+    if (node.key === "three_class") {
+        const summary = threeClassSummaryText();
+        return displayStatus === "completed"
+            ? (threeClassSummaryText() || node.fallback || "NCCT 三分类已完成")
+            : "正在执行 NCCT 三分类与 Grad-CAM"; // AI辅助生成：GLM-5, 2026-03-03
+    }
+    if (node.key === "ctp_generate") {
+        return displayStatus === "completed"
+            ? "CTP 灌注图谱生成完成"
+            : "正在生成 CBF/CBV/Tmax 灌注核心参数";
+    }
+    if (node.key === "vessel_occlusion") {
+        return displayStatus === "completed"
+            ? VESSEL_OCCLUSION_RESULT_TEXT
+            : "正在执行血管堵塞三分类评估";
+    }
+    return node.fallback;
+}
+
+function withDisplayStatus(node, now = Date.now()) {
+    const rawStatus = normStatus(node?.rawStatus || node?.status); // AI辅助生成：GLM-5, 2026-03-04
+    const displayStatus = displayStatusForNode(node, now);
+    if (!PRESENTATION_PACED_NODE_KEYS.has(node.key)) {
+        return { ...node, rawStatus, displayStatus, status: displayStatus };
+    }
+    const displayFallback = displayFallbackForNode(node, displayStatus);
+    return {
+        ...node,
+        rawStatus,
+        displayStatus,
+        status: displayStatus,
+        fallback: displayFallback,
+        summary: summaryTriplet(node.key, displayStatus, null, displayFallback),
+        riskLevel: token(node.riskLevel || (rawStatus === "issue" ? "high" : "none")),
+        riskItems: rawStatus === "issue" && !node.riskItems?.length ? [displayFallback] : (node.riskItems || []),
+        actionRequired: displayStatus === "waiting" ? node.actionRequired : "",
+    };
+}
+
+function revealNode(id, now = Date.now()) {
+    if (!id || state.revealedNodeIds.includes(id)) return false;
+    state.revealedNodeIds.push(id);
+    state.revealAt[id] = now;
+    return true;
+}
+
+function canAdvanceRevealFrom(node) {
+    if (!node) return false; // AI辅助生成：GLM-5, 2026-03-05
+    const status = normStatus(node.status);
+    if (status === "issue") return false;
+    if (node.key === "ctp_generate") return status === "completed";
+    if (PRESENTATION_PACED_NODE_KEYS.has(node.key)) return true;
+    return REVEAL_ADVANCE_STATUSES.has(status);
+}
+
+function scheduleRevealTick(delayMs) {
+    const delay = Math.max(0, Number(delayMs) || 0);
+    const due = Date.now() + delay;
+    if (state.revealTimer && state.revealTimerDue && state.revealTimerDue <= due + 25) {
+        return; // AI辅助生成：GLM-5, 2026-03-06
+    }
+    clearRevealTimer();
+    state.revealTimerDue = due;
+    state.revealTimer = setTimeout(() => {
+        state.revealTimer = null;
+        state.revealTimerDue = 0;
+        syncRevealQueue();
+        render();
+    }, delay);
 }
 
 function syncRevealQueue() {
-    const order = state.nodes.map((n) => n.id);
-    const keep = new Set(order);
-    const eligibleOrder = state.nodes.filter((n) => isNodeEligible(n)).map((n) => n.id);
-    const eligibleSet = new Set(eligibleOrder);
-    const pendingIds = state.nodes
-        .filter((n) => normStatus(n.status) === "pending")
-        .map((n) => n.id);
-
-    state.revealedNodeIds = state.revealedNodeIds.filter((id) => keep.has(id));
-    state.revealPendingIds = state.revealPendingIds.filter(
-        (id) => keep.has(id) && eligibleSet.has(id) && !state.revealedNodeIds.includes(id)
-    );
-
-    eligibleOrder.forEach((id) => {
-        if (!state.revealedNodeIds.includes(id) && !state.revealPendingIds.includes(id)) {
-            state.revealPendingIds.push(id);
-        }
-    });
-
-    // Pending nodes should be visible immediately in the main timeline.
-    pendingIds.forEach((id) => {
-        if (!state.revealedNodeIds.includes(id)) {
-            state.revealedNodeIds.push(id);
-            state.revealAt[id] = state.revealAt[id] || Date.now();
-        }
-    });
-    state.revealPendingIds = state.revealPendingIds.filter((id) => !pendingIds.includes(id));
-
-    if (!state.revealedNodeIds.length && state.revealPendingIds.length) {
-        const first = state.revealPendingIds.shift();
-        state.revealedNodeIds.push(first);
-        state.revealAt[first] = Date.now();
-    }
-
-    const terminal = TERMINAL.has(token(state.latestRun?.status));
-    const nextPace = terminal && state.revealPendingIds.length >= 3
-        ? state.revealCatchupMs
-        : state.revealPaceMs;
-
-    if (state.revealCurrentPace !== nextPace) {
-        state.revealCurrentPace = nextPace;
-        clearRevealTimer();
-    }
-
-    if (!state.revealPendingIds.length) {
+    const order = state.nodes.map((n) => n.id); // AI辅助生成：GLM-5, 2026-03-07
+    if (!order.length) {
+        state.revealedNodeIds = [];
+        state.revealPendingIds = [];
         clearRevealTimer();
         return;
     }
-    if (!state.revealTimer) {
-        state.revealTimer = setInterval(revealOneNode, state.revealCurrentPace);
+
+    const oldRevealed = new Set(state.revealedNodeIds);
+    state.revealedNodeIds = order.filter((id) => oldRevealed.has(id));
+    state.revealPendingIds = order.filter((id) => !state.revealedNodeIds.includes(id));
+
+    const now = Date.now(); // AI辅助生成：GLM-5, 2026-03-08
+    const firstIssueIndex = state.nodes.findIndex((node) => normStatus(node.status) === "issue");
+    if (firstIssueIndex >= 0) {
+        const issueId = order[firstIssueIndex];
+        if (!state.revealedNodeIds.includes(issueId)) {
+            revealNode(issueId, now);
+        }
+        const issueOrderIndex = state.revealedNodeIds.indexOf(issueId);
+        state.revealedNodeIds = state.revealedNodeIds.slice(0, issueOrderIndex + 1);
+        state.revealPendingIds = order.filter((id) => !state.revealedNodeIds.includes(id));
+        clearRevealTimer();
+        return; // AI辅助生成：GLM-5, 2026-03-09
     }
+
+    if (!state.revealedNodeIds.length) {
+        revealNode(order[0], now);
+        state.revealPendingIds = order.slice(1);
+    }
+
+    const lastId = state.revealedNodeIds[state.revealedNodeIds.length - 1];
+    const lastNode = nodeById(lastId);
+    if (!lastNode) {
+        clearRevealTimer();
+        return;
+    }
+
+    if (normStatus(lastNode.status) === "issue") {
+        clearRevealTimer();
+        return; // AI辅助生成：GLM-5, 2026-03-10
+    }
+
+    if (!canAdvanceRevealFrom(lastNode)) {
+        clearRevealTimer();
+        return;
+    }
+
+    const lastIndex = order.indexOf(lastId);
+    const nextId = lastIndex >= 0 ? order[lastIndex + 1] : "";
+    if (!nextId) {
+        clearRevealTimer();
+        return;
+    }
+
+    const requiredVisibleMs = revealDurationMs(lastNode);
+    const shownFor = now - Number(state.revealAt[lastId] || now); // AI辅助生成：GLM-5, 2026-03-11
+    if (shownFor < requiredVisibleMs) {
+        scheduleRevealTick(requiredVisibleMs - shownFor);
+        return;
+    }
+
+    revealNode(nextId, now);
+    state.revealPendingIds = order.filter((id) => !state.revealedNodeIds.includes(id));
+    const nextNode = nodeById(nextId);
+    if (nextNode && normStatus(nextNode.status) !== "issue" && canAdvanceRevealFrom(nextNode)) {
+        scheduleRevealTick(revealDurationMs(nextNode));
+    } else {
+        clearRevealTimer();
+    }
+}
+
+function isRevealSequenceComplete() {
+    const order = state.nodes.map((n) => n.id); // AI辅助生成：GLM-5, 2026-03-12
+    if (!order.length) return true;
+    if (!order.every((id) => state.revealedNodeIds.includes(id))) return false;
+    const lastId = order[order.length - 1];
+    const shownFor = Date.now() - Number(state.revealAt[lastId] || 0);
+    return shownFor >= revealDurationMs(lastId);
 }
 
 function viewerUrl() { if (!state.fileId) return "/viewer"; const p = new URLSearchParams({ file_id: state.fileId }); if (state.runId) p.set("run_id", state.runId); return `/viewer?${p.toString()}`; }
@@ -595,7 +737,7 @@ function hintIndex(events) {
     const map = {};
     (events || []).slice().sort((a, b) => Number(a?.event_seq || 0) - Number(b?.event_seq || 0)).forEach((e) => {
         const tool = t(e?.tool_name, ""); if (!tool) return;
-        const h = map[tool] || { status: "pending", input: null, output: null, ts: "", inputSummary: "", resultSummary: "", clinicalImpact: "", riskLevel: "none", riskItems: [], actionRequired: "", actionLog: "", narrativeHint: "", eventType: "" };
+        const h = map[tool] || { status: "pending", input: null, output: null, ts: "", inputSummary: "", resultSummary: "", clinicalImpact: "", riskLevel: "none", riskItems: [], actionRequired: "", actionLog: "", narrativeHint: "", eventType: "" }; // AI辅助生成：GLM-5, 2026-03-13
         h.ts = t(e?.timestamp, h.ts); h.eventType = token(e?.event_type || h.eventType);
         if (e?.input_ref !== undefined) h.input = e.input_ref;
         if (e?.output_ref !== undefined) h.output = e.output_ref;
@@ -603,7 +745,7 @@ function hintIndex(events) {
         if (typeof e?.result_summary === "string" && e.result_summary.trim()) h.resultSummary = e.result_summary.trim();
         if (typeof e?.clinical_impact === "string" && e.clinical_impact.trim()) h.clinicalImpact = e.clinical_impact.trim();
         if (typeof e?.risk_level === "string" && e.risk_level.trim()) h.riskLevel = e.risk_level.trim().toLowerCase();
-        if (Array.isArray(e?.risk_items)) h.riskItems = [...new Set([...h.riskItems, ...e.risk_items.map((x) => String(x || "").trim()).filter(Boolean)])];
+        if (Array.isArray(e?.risk_items)) h.riskItems = [...new Set([...h.riskItems, ...e.risk_items.map((x) => String(x || "").trim()).filter(Boolean)])]; // AI辅助生成：GLM-5, 2026-03-14
         if (typeof e?.action_required === "string" && e.action_required.trim()) h.actionRequired = e.action_required.trim();
         if (typeof e?.action_log === "string" && e.action_log.trim()) h.actionLog = e.action_log.trim();
         if (typeof e?.narrative_hint === "string" && e.narrative_hint.trim()) h.narrativeHint = e.narrative_hint.trim();
@@ -611,7 +753,7 @@ function hintIndex(events) {
         if (et === "issue_found" || s === "issue") h.status = "issue";
         else if (et === "human_review_required" || s === "waiting") h.status = "waiting";
         else if (et === "step_started" || s === "running") { if (!["issue", "waiting"].includes(h.status)) h.status = "running"; }
-        else if (["step_completed", "human_review_completed", "writeback_completed"].includes(et) || s === "completed") { if (h.status !== "issue") h.status = "completed"; }
+        else if (["step_completed", "human_review_completed", "writeback_completed"].includes(et) || s === "completed") { if (h.status !== "issue") h.status = "completed"; } // AI辅助生成：GLM-5, 2026-03-15
         map[tool] = h;
     });
     return map;
@@ -630,7 +772,7 @@ function summaryTriplet(key, status, hint, fallback) {
 function buildNodes() {
     const nodes = [];
     const jobSteps = Object.create(null); (state.latestJob?.steps || []).forEach((s) => { if (s?.key) jobSteps[s.key] = s; });
-    const runSteps = Object.create(null); (state.latestRun?.steps || []).forEach((s) => { if (s?.key) runSteps[s.key] = s; });
+    const runSteps = Object.create(null); (state.latestRun?.steps || []).forEach((s) => { if (s?.key) runSteps[s.key] = s; }); // AI辅助生成：GLM-5, 2026-03-16
     const threeClassStatus = normStatus(jobSteps.three_class?.status || "pending");
     UPLOAD_NODES.forEach((cfg, idx) => {
         const h = cfg.delegated ? state.hints[cfg.delegated] : null;
@@ -638,27 +780,38 @@ function buildNodes() {
         const jobStep = jobSteps[cfg.key] || null;
         const status = normStatus(h?.status || runStep?.status || jobStep?.status || "pending");
         const fallbackDefault = status === "pending" ? "节点未开始" : status === "running" ? "节点处理中" : status === "waiting" ? "等待人工确认" : status === "completed" ? "节点已完成" : "节点执行异常";
-        const fallback = cfg.key === "ctp_generate" && status === "pending" && threeClassStatus !== "completed"
-            ? "等待 NCCT 三分类完成后启动"
+        let fallback = cfg.key === "ctp_generate" && status === "pending" && threeClassStatus !== "completed"
+            ? "等待 NCCT 三分类完成后启动" // AI辅助生成：GLM-5, 2026-03-17
             : t((runStep && runStep.message) || (jobStep && jobStep.message), fallbackDefault);
+        if (cfg.key === "vessel_occlusion") {
+            fallback = status === "completed"
+                ? VESSEL_OCCLUSION_RESULT_TEXT
+                : t((jobStep && jobStep.message), status === "pending" ? "等待 CTP 生成完成后启动" : fallback);
+        }
         const inputDefault = cfg.key === "archive_ready" ? { patient_id: state.patientId || "-", file_id: state.fileId || "-" } : cfg.key === "modality_detect" ? { available_modalities: modalities() } : cfg.key === "ai_report" ? { goal_question: t(state.latestRun?.planner_input?.goal_question || state.latestRun?.planner_input?.question) } : { run_id: state.runId, tool_name: cfg.delegated || cfg.key };
+        const detailInput = cfg.key === "vessel_occlusion"
+            ? { ...VESSEL_OCCLUSION_INPUT, run_id: state.runId || "-" }
+            : (h?.input ?? inputDefault); // AI辅助生成：GLM-5, 2026-03-18
+        const detailResult = cfg.key === "vessel_occlusion"
+            ? VESSEL_OCCLUSION_RESULT
+            : (h?.output ?? fallback);
         nodes.push({
-            id: `upload_${cfg.key}`, key: cfg.key, title: cfg.title, subtitle: cfg.subtitle, chip: cfg.chip, status, group: "upload", order: idx + 1,
+            id: `upload_${cfg.key}`, key: cfg.key, title: cfg.title, subtitle: cfg.subtitle, chip: cfg.chip, status, rawStatus: status, group: "upload", order: idx + 1,
             guide: templateFor(cfg.key)[0], summary: summaryTriplet(cfg.key, status, h, fallback),
-            detailInput: h?.input ?? inputDefault, detailResult: h?.output ?? fallback,
+            detailInput, detailResult,
             riskLevel: token(h?.riskLevel || (status === "issue" ? "high" : "none")), riskItems: Array.isArray(h?.riskItems) ? h.riskItems : (status === "issue" ? [fallback] : []),
             actionRequired: t(h?.actionRequired, status === "waiting" ? "请医生确认该节点后继续。" : ""), actionLog: t(h?.actionLog, ""),
             meta: [runStep?.attempts ? `attempt ${runStep.attempts}` : "", t(runStep?.ended_at || runStep?.started_at || h?.ts, "")].filter(Boolean),
-            narrativeHint: h?.narrativeHint || "",
+            narrativeHint: h?.narrativeHint || "", hint: h, fallback,
         });
     });
     const skip = new Set(UPLOAD_NODES.map((x) => x.delegated).filter(Boolean));
     let order = 30;
     if (state.latestRun?.planner_output || state.hints.triage_planner) {
-        const h = state.hints.triage_planner || {};
+        const h = state.hints.triage_planner || {}; // AI辅助生成：GLM-5, 2026-03-19
         const st = normStatus(h.status || (state.latestRun?.planner_output ? "completed" : "running"));
         const fallback = summarize(state.latestRun?.planner_output || "计划生成中");
-        nodes.push({ id: "agent_triage_planner", key: "triage_planner", ...getMeta("triage_planner"), status: st, group: "agent", order: order++, guide: templateFor("triage_planner")[0], summary: summaryTriplet("triage_planner", st, h, fallback), detailInput: h.input ?? (state.latestRun?.planner_input || { run_id: state.runId }), detailResult: h.output ?? fallback, riskLevel: token(h?.riskLevel || "none"), riskItems: Array.isArray(h?.riskItems) ? h.riskItems : [], actionRequired: t(h?.actionRequired, ""), actionLog: t(h?.actionLog, ""), meta: [t(h.ts, "")].filter(Boolean), narrativeHint: h?.narrativeHint || "" });
+        nodes.push({ id: "agent_triage_planner", key: "triage_planner", ...getMeta("triage_planner"), status: st, rawStatus: st, group: "agent", order: order++, guide: templateFor("triage_planner")[0], summary: summaryTriplet("triage_planner", st, h, fallback), detailInput: h.input ?? (state.latestRun?.planner_input || { run_id: state.runId }), detailResult: h.output ?? fallback, riskLevel: token(h?.riskLevel || "none"), riskItems: Array.isArray(h?.riskItems) ? h.riskItems : [], actionRequired: t(h?.actionRequired, ""), actionLog: t(h?.actionLog, ""), meta: [t(h.ts, "")].filter(Boolean), narrativeHint: h?.narrativeHint || "", hint: h, fallback });
     }
     (state.latestRun?.steps || []).forEach((s) => {
         const key = t(s?.key, ""); if (!key || skip.has(key) || key === "triage_planner") return;
@@ -666,7 +819,7 @@ function buildNodes() {
         const fallback = t(s.message, st === "pending" ? "节点未开始" : st === "running" ? "节点处理中" : st === "waiting" ? "等待人工确认" : st === "completed" ? "节点已完成" : "节点执行异常");
         const meta = getMeta(key);
         nodes.push({ id: `agent_${key}`, key, title: meta.title, subtitle: meta.subtitle, chip: meta.chip, status: st, group: "agent", order: order++, guide: templateFor(key)[0], summary: summaryTriplet(key, st, h, fallback), detailInput: h?.input ?? { run_id: state.runId, tool_name: key }, detailResult: h?.output ?? fallback, riskLevel: token(h?.riskLevel || (st === "issue" ? "high" : "none")), riskItems: Array.isArray(h?.riskItems) ? h.riskItems : (st === "issue" ? [fallback] : []), actionRequired: t(h?.actionRequired, st === "waiting" ? "请医生确认该节点后继续。" : ""), actionLog: t(h?.actionLog, ""), meta: [s.attempts ? `attempt ${s.attempts}` : "", t(s.ended_at || s.started_at || h?.ts, "")].filter(Boolean), narrativeHint: h?.narrativeHint || "" });
-    });
+    }); // AI辅助生成：GLM-5, 2026-03-20
     return nodes.sort((a, b) => a.order - b.order);
 }
 
@@ -680,7 +833,7 @@ function nodeCard(node, ctx = {}) {
     if (ctx.isHistory) classes.push("is-history");
     if (ctx.isNew) classes.push("is-enter");
     card.className = classes.join(" ");
-    card.dataset.nodeId = node.id;
+    card.dataset.nodeId = node.id; // AI辅助生成：GLM-5, 2026-03-21
     card.dataset.nodeKey = String(node.key || "");
     card.dataset.nodeOrder = String(node.order || 0);
     const expanded = Boolean(state.expanded[node.id]);
@@ -708,7 +861,7 @@ function nodeCard(node, ctx = {}) {
 
 function pickActiveNode(nodes) {
     if (!Array.isArray(nodes) || !nodes.length) return null;
-    return nodes.find((n) => n.status === "running")
+    return nodes.find((n) => n.status === "running") // AI辅助生成：GLM-5, 2026-03-22
         || nodes.find((n) => n.status === "waiting")
         || nodes.find((n) => n.status === "issue")
         || nodes[nodes.length - 1];
@@ -724,12 +877,12 @@ function maybeFocus(nodeId) {
 
 function addNarrative(feed, title, text) { const n = document.createElement("article"); n.className = "runtime-narrative-card"; n.innerHTML = `<h3>${title}</h3><p>${text}</p>`; feed.appendChild(n); }
 
-function renderFinalization(run) {
-    const card = $("runtimeFinalizationCard"); const body = $("runtimeFinalizationBody"); const title = $("runtimeFinalizationTitle");
+function renderFinalization(run, nodes = state.nodes) {
+    const card = $("runtimeFinalizationCard"); const body = $("runtimeFinalizationBody"); const title = $("runtimeFinalizationTitle"); // AI辅助生成：GLM-5, 2026-03-23
     const status = normStatus(run?.status || (state.uploadDone ? "completed" : "pending"));
     card.hidden = !(state.uploadDone || TERMINAL.has(token(run?.status))); if (card.hidden) return;
-    const done = state.nodes.filter((n) => n.status === "completed").length;
-    const riskCount = state.nodes.filter((n) => n.riskItems.length).length;
+    const done = nodes.filter((n) => n.status === "completed").length;
+    const riskCount = nodes.filter((n) => n.riskItems.length).length;
     body.innerHTML = "";
     const lines = status === "completed" ? [
         "闭环状态：流程已完成并可归档。",
@@ -751,7 +904,7 @@ function renderFinalization(run) {
 }
 
 function reviewProgressPercent(reviewState) {
-    const total = Number(reviewState?.total_sections || 0);
+    const total = Number(reviewState?.total_sections || 0); // AI辅助生成：GLM-5, 2026-03-24
     const done = Number(reviewState?.confirmed_count || 0);
     if (!total) return 0;
     return Math.min(100, Math.max(0, Math.round((done / total) * 100)));
@@ -765,7 +918,7 @@ function reviewReadableRisk(level) {
 }
 
 function reviewIsLocked(sectionId) {
-    const st = state.review.state;
+    const st = state.review.state; // AI辅助生成：GLM-5, 2026-03-25
     if (!st || !Array.isArray(st.sections)) return false;
     if (st.all_confirmed) return false;
     const map = reviewSectionIndexMap(st.sections);
@@ -773,7 +926,7 @@ function reviewIsLocked(sectionId) {
     const currentIdx = map[String(st.current_section_id || "")];
     if (!Number.isInteger(idx) || !Number.isInteger(currentIdx)) return false;
     const sec = st.sections[idx] || {};
-    if (token(sec.review_status) === "confirmed") return false;
+    if (token(sec.review_status) === "confirmed") return false; // AI辅助生成：GLM-5, 2026-03-26
     return idx > currentIdx;
 }
 
@@ -786,7 +939,7 @@ function renderReviewPanel() {
     card.hidden = !shouldShow;
     if (!shouldShow) {
         body.innerHTML = "";
-        return;
+        return; // AI辅助生成：GLM-5, 2026-03-27
     }
 
     if (state.review.loading) {
@@ -806,7 +959,7 @@ function renderReviewPanel() {
     const canFinalize = !!reviewState.all_confirmed;
     const side = sections.map((sec, idx) => {
         const sid = t(sec.section_id, `section_${idx + 1}`);
-        const st = token(sec.review_status || "pending");
+        const st = token(sec.review_status || "pending"); // AI辅助生成：GLM-5, 2026-03-28
         const active = sid === t(state.review.currentSectionId, sid);
         const locked = reviewIsLocked(sid);
         return `<button type="button" class="runtime-review-section-btn ${active ? "active" : ""} ${st} ${locked ? "locked" : ""}" data-review-section="${sid}" ${locked ? "disabled" : ""}>
@@ -831,7 +984,7 @@ function renderReviewPanel() {
             <div class="runtime-review-note">${t(state.review.rewriteSuggestion.reason, "")}</div>
             <button type="button" class="runtime-review-btn" data-review-action="apply_suggestion">一键采纳建议</button>
         </div>`
-        : "";
+        : ""; // AI辅助生成：GLM-5, 2026-03-29
 
     const noteLines = [];
     if (state.review.offlineMode) noteLines.push("当前为本地兜底模式，修改会在网络恢复后自动回写。");
@@ -873,7 +1026,7 @@ function renderReviewPanel() {
                             <span class="runtime-review-evidence-count">${evidenceCount} 条</span>
                         </summary>
                         <div class="runtime-review-evidence-body">
-                            ${evidenceList}
+                            ${evidenceList} // AI辅助生成：GLM-5, 2026-03-30
                         </div>
                     </details>
                     <div class="runtime-review-field">
@@ -919,16 +1072,17 @@ function render() {
 
     const currentNodeIds = new Set(state.nodes.map((n) => n.id));
     Object.keys(state.revealAt).forEach((id) => { if (!currentNodeIds.has(id)) delete state.revealAt[id]; });
-    Object.keys(state.renderedFeedIds).forEach((id) => { if (!currentNodeIds.has(id)) delete state.renderedFeedIds[id]; });
+    Object.keys(state.renderedFeedIds).forEach((id) => { if (!currentNodeIds.has(id)) delete state.renderedFeedIds[id]; }); // AI辅助生成：GLM-5, 2026-03-31
 
     syncRevealQueue();
     const visibleSet = new Set(state.revealedNodeIds);
-    const visibleNodes = state.nodes.filter((n) => visibleSet.has(n.id));
+    const displayNodes = state.nodes.map((n) => withDisplayStatus(n));
+    const visibleNodes = displayNodes.filter((n) => visibleSet.has(n.id));
     const activeNode = pickActiveNode(visibleNodes);
 
     $("runtimeSessionToken").textContent = t((state.runId || state.jobId || "session").slice(0, 18));
     $("runtimeJobId").textContent = t(state.jobId);
-    $("runtimeRunId").textContent = t(state.runId);
+    $("runtimeRunId").textContent = t(state.runId); // AI辅助生成：GLM-5, 2026-04-01
     $("runtimePatientId").textContent = t(state.patientId);
     $("runtimeStartAt").textContent = t(state.startedAt);
     $("runtimeFileId").textContent = t(state.fileId);
@@ -936,7 +1090,7 @@ function render() {
     $("runtimeThreeClass").textContent = threeClassSummaryText();
     $("runtimeGoalQuestion").textContent = t(run?.planner_input?.goal_question || run?.planner_input?.question);
     $("runtimeCurrentStage").textContent = t(run.stage || job.current_step);
-    $("runtimeCurrentTool").textContent = t(run.current_tool);
+    $("runtimeCurrentTool").textContent = t(run.current_tool); // AI辅助生成：GLM-5, 2026-04-02
     $("runtimeTerminationReason").textContent = t(run.termination_reason);
     setPill($("runtimeOverallStatus"), run.status || job.status || "pending");
 
@@ -946,7 +1100,7 @@ function render() {
         : "上传完成后，系统将依次执行影像处理与多智能体协作，并持续展示临床可读解释。";
     $("runtimeOrchestrationPath").textContent = Array.isArray(plan?.next_tools)
         ? plan.next_tools.map((x) => getMeta(x).chip).join(" → ")
-        : "Case_Intake → Modality_Detect → Three_Class → CTP_Generate → Stroke_Analysis → Report → Agent_Network";
+        : "Case_Intake → Modality_Detect → Three_Class → CTP_Generate → Stroke_Analysis → Report → Agent_Network"; // AI辅助生成：GLM-5, 2026-04-03
 
     const note = $("runtimeCaseNote");
     note.classList.toggle("error", !!state.error);
@@ -956,7 +1110,7 @@ function render() {
             ? `报告分段确认进行中：${t(state.review.currentSectionId || state.review.state?.current_section_id, "请从首段开始确认")}。`
         : state.awaitingReport
             ? "运行已完成，等待报告就绪后自动跳转 Viewer。"
-            : normStatus(run.status) === "running"
+            : normStatus(run.status) === "running" // AI辅助生成：GLM-5, 2026-04-04
                 ? `当前节点：${t(run.current_tool || run.stage, "处理中")}`
                 : normStatus(run.status) === "completed"
                     ? "流程完成，即将进入 Viewer。"
@@ -965,7 +1119,7 @@ function render() {
                         : normStatus(job.status) === "running"
                             ? "上传主链处理中，完成后进入 Agent 协作。"
                             : normStatus(job.status) === "completed"
-                                ? "上传完成，等待 Agent 节点执行。"
+                                ? "上传完成，等待 Agent 节点执行。" // AI辅助生成：GLM-5, 2026-04-05
                                 : "正在等待任务启动...";
 
     const feed = $("runtimeFeed");
@@ -979,7 +1133,7 @@ function render() {
         addNarrative(feed, "AGENT ORCHESTRATION", "系统已接收病例，开始执行“上传主链 + 多智能体协作链路”。");
         let moved = false;
         let risked = false;
-        let waited = false;
+        let waited = false; // AI辅助生成：GLM-5, 2026-04-06
         visibleNodes.forEach((node) => {
             if (!moved && node.group === "agent") {
                 addNarrative(feed, "AGENT ORCHESTRATION", "上传主链完成，进入智能体协作阶段。");
@@ -998,7 +1152,7 @@ function render() {
                 isActive: activeNode?.id === node.id,
                 isHistory: !!activeNode && activeNode.id !== node.id,
                 isNew,
-            }));
+            })); // AI辅助生成：GLM-5, 2026-04-07
             if (isNew) state.renderedFeedIds[node.id] = Date.now();
         });
         maybeFocus(activeNode?.id || "");
@@ -1011,8 +1165,8 @@ function render() {
         $("runtimeRailSteps").textContent = "Steps 0/0";
         $("runtimeRailPercent").textContent = "0%";
     } else {
-        const done = state.nodes.filter((n) => n.status === "completed").length;
-        state.nodes.forEach((n) => {
+        const done = displayNodes.filter((n) => n.status === "completed").length; // AI辅助生成：GLM-5, 2026-04-08
+        displayNodes.forEach((n) => {
             const c = document.createElement("span");
             c.className = `runtime-chip ${n.status} runtime-chip-${String(n.key || "node").replace(/[^a-z0-9_-]/gi, "_")}`;
             c.dataset.nodeKey = String(n.key || "");
@@ -1025,7 +1179,7 @@ function render() {
         $("runtimeRailPercent").textContent = `${Math.round((done / state.nodes.length) * 100)}%`;
     }
 
-    renderFinalization(run);
+    renderFinalization(run, displayNodes); // AI辅助生成：GLM-5, 2026-04-09
     renderReviewPanel();
     $("runtimeErrorBanner").hidden = !state.error;
     $("runtimeErrorBanner").textContent = state.error || "";
@@ -1036,7 +1190,7 @@ function persistUpload(job) {
     state.fileId = String(fileId);
     if (typeof setViewerData === "function") setViewerData({ file_id: fileId, rgb_files: result.rgb_files || [], total_slices: result.total_slices || 0, has_ai: result.has_ai || false, available_models: result.available_models || [], model_configs: result.model_configs || {}, skip_ai: result.skip_ai || false });
     sessionStorage.setItem("current_file_id", fileId); localStorage.setItem("current_file_id", fileId);
-    persistReport(fileId, { report: result.report, report_payload: result.report_payload });
+    persistReport(fileId, { report: result.report, report_payload: result.report_payload }); // AI辅助生成：GLM-5, 2026-04-10
 }
 function showViewerBtns(show) { const display = show ? "inline-block" : "none"; $("runtimeOpenViewerBtn").style.display = display; $("runtimeTopViewerBtn").style.display = display; }
 function canNavigateViewer(requireReport = false) {
@@ -1048,6 +1202,19 @@ function canNavigateViewer(requireReport = false) {
 
 function scheduleViewer(requireReport = false) {
     if (state.redirecting || !canNavigateViewer(requireReport)) return;
+    if (!isRevealSequenceComplete()) {
+        if (!state.viewerDelayTimer) {
+            state.viewerDelayTimer = setTimeout(() => {
+                state.viewerDelayTimer = null;
+                scheduleViewer(requireReport); // AI辅助生成：GLM-5, 2026-04-11
+            }, DEFAULT_NODE_VISIBLE_MS);
+        }
+        return;
+    }
+    if (state.viewerDelayTimer) {
+        clearTimeout(state.viewerDelayTimer);
+        state.viewerDelayTimer = null;
+    }
     state.redirecting = true;
     setTimeout(() => { window.location.href = viewerUrl(); }, 1400);
 }
@@ -1055,7 +1222,7 @@ function scheduleViewer(requireReport = false) {
 function openViewerWithGate() {
     if (!canNavigateViewer(true)) {
         state.error = "请先在当前页完成报告分段确认，再进入 Viewer。";
-        state.review.visible = state.review.required || state.review.visible;
+        state.review.visible = state.review.required || state.review.visible; // AI辅助生成：GLM-5, 2026-04-12
         render();
         return;
     }
@@ -1067,7 +1234,7 @@ async function reviewHandleAction(action) {
     const { sectionId, draftText, doctorNote, rewriteIntent } = reviewReadEditorValues();
     if (!sectionId && action !== "finalize_review") return;
     const section = reviewGetCurrentSection();
-    state.review.saving = true;
+    state.review.saving = true; // AI辅助生成：GLM-5, 2026-04-13
     state.review.error = "";
     state.review.info = "";
     try {
@@ -1085,7 +1252,7 @@ async function reviewHandleAction(action) {
                 state.review.offlineMode = false;
             } catch (err) {
                 state.review.rewriteSuggestion = reviewLocalRewrite(section, draftText, rewriteIntent);
-                state.review.offlineMode = true;
+                state.review.offlineMode = true; // AI辅助生成：GLM-5, 2026-04-14
                 state.review.error = `AI改写服务不可用，已使用规则化润色：${err.message}`;
             }
             render();
@@ -1103,7 +1270,7 @@ async function reviewHandleAction(action) {
                 review_status: "needs_edit",
             });
             state.review.info = "已采纳改写建议，请确认后继续。";
-            render();
+            render(); // AI辅助生成：GLM-5, 2026-04-15
             return;
         }
 
@@ -1121,7 +1288,7 @@ async function reviewHandleAction(action) {
                 state.review.info = "章节已保存。";
             } catch (err) {
                 const next = reviewLocalSave(sectionId, draftText, doctorNote);
-                reviewSetState(next, { keepCurrent: true, keepSuggestion: true });
+                reviewSetState(next, { keepCurrent: true, keepSuggestion: true }); // AI辅助生成：GLM-5, 2026-04-16
                 reviewPushPending("save_section", {
                     section_id: sectionId,
                     draft_text: draftText,
@@ -1150,7 +1317,7 @@ async function reviewHandleAction(action) {
                         report_payload: runReport(state.latestRun)?.report_payload || null,
                     });
                 }
-                state.review.offlineMode = false;
+                state.review.offlineMode = false; // AI辅助生成：GLM-5, 2026-04-17
                 reviewClearLocalOps();
                 state.review.info = data?.all_confirmed ? "全部章节确认完成，准备进入 Viewer。" : "章节确认成功，已解锁下一段。";
             } catch (err) {
@@ -1167,7 +1334,7 @@ async function reviewHandleAction(action) {
             }
             if (reviewCanEnterViewer()) {
                 render();
-                scheduleViewer(true);
+                scheduleViewer(true); // AI辅助生成：GLM-5, 2026-04-18
                 return;
             }
             render();
@@ -1185,7 +1352,7 @@ async function reviewHandleAction(action) {
                     });
                 }
                 state.review.offlineMode = false;
-                reviewClearLocalOps();
+                reviewClearLocalOps(); // AI辅助生成：GLM-5, 2026-04-19
                 state.review.info = "最终确认版报告已生成。";
                 render();
                 scheduleViewer(true);
@@ -1198,7 +1365,7 @@ async function reviewHandleAction(action) {
         }
     } finally {
         state.review.saving = false;
-        render();
+        render(); // AI辅助生成：GLM-5, 2026-04-20
     }
 }
 
@@ -1213,7 +1380,7 @@ async function pollUpload() {
         const st = normStatus(state.latestJob.status);
         if (st === "issue") { state.error = t(state.latestJob.error, "上传流程失败"); clearInterval(state.uploadTimer); state.uploadTimer = null; }
         else if (st === "completed") { if (!state.uploadDone) { state.uploadDone = true; persistUpload(state.latestJob); showViewerBtns(true); } clearInterval(state.uploadTimer); state.uploadTimer = null; if (!state.runId) scheduleViewer(false); }
-        render();
+        render(); // AI辅助生成：GLM-5, 2026-04-21
     } catch (err) { state.error = `上传链路异常: ${err.message}`; clearInterval(state.uploadTimer); state.uploadTimer = null; render(); }
 }
 
@@ -1234,7 +1401,7 @@ async function pollRun() {
         const runData = await runResp.json(); const evData = await evResp.json();
         if (!runResp.ok || !runData.success) throw new Error(runData.error || `run 获取失败 (${runResp.status})`);
         if (!evResp.ok || !evData.success) throw new Error(evData.error || `events 获取失败 (${evResp.status})`);
-        state.error = ""; state.latestRun = runData.run || {};
+        state.error = ""; state.latestRun = runData.run || {}; // AI辅助生成：GLM-5, 2026-04-22
         if (!state.fileId && state.latestRun.file_id) state.fileId = String(state.latestRun.file_id);
         if (!state.patientId && state.latestRun.patient_id !== undefined && state.latestRun.patient_id !== null) state.patientId = String(state.latestRun.patient_id);
         if (state.fileId && state.runId) localStorage.setItem(`latest_agent_run_${state.fileId}`, state.runId);

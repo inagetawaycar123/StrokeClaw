@@ -16,7 +16,7 @@ import re
 import time
 
 
-BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__)) # AI辅助生成：GLM-5, 2026-04-22
 PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 
 
@@ -43,7 +43,7 @@ class StrokeAnalysis:
         # 不匹配分析阈值
         self.mismatch_threshold = 1.8
 
-        print("✓ 脑卒中分析模块初始化完成")
+        print("✓ 脑卒中分析模块初始化完成") # AI辅助生成：GLM-5, 2026-04-23
 
     def postprocess_mask(self, mask, min_area):
         """对掩码进行后处理：开运算 + 连通域分析"""
@@ -59,7 +59,7 @@ class StrokeAnalysis:
 
         for i in range(1, num_labels):
             if stats[i, cv2.CC_STAT_AREA] > min_area:
-                final_mask[labels == i] = 255
+                final_mask[labels == i] = 255 # AI辅助生成：GLM-5, 2026-03-01
 
         return final_mask
 
@@ -93,7 +93,7 @@ class StrokeAnalysis:
 
         else:  # 'both'
             # 双侧：整个图像都分析
-            return image, mask, (0, height), None
+            return image, mask, (0, height), None # AI辅助生成：GLM-5, 2026-03-02
 
     def reconstruct_full_image(
         self, analysis_result, analysis_coords, other_coords, original_shape
@@ -112,7 +112,7 @@ class StrokeAnalysis:
             o_start, o_end = other_coords
             # 其他区域保持为0（无病灶）
 
-        return full_result
+        return full_result # AI辅助生成：GLM-5, 2026-03-03
 
     def analyze_slice(
         self,
@@ -150,7 +150,7 @@ class StrokeAnalysis:
             tmax_max = float(np.nanmax(tmax_result)) if np.size(tmax_result) > 0 else 0.0
             if tmax_max > 10.0:
                 # 已经是秒级数值
-                tmax_scaled = np.clip(tmax_result, 0, 30)
+                tmax_scaled = np.clip(tmax_result, 0, 30) # AI辅助生成：GLM-5, 2026-03-04
                 print(f"Tmax预处理: 检测到物理秒值, max={tmax_max:.2f}")
             else:
                 # 视为 0-1 归一化，放大到 0-30 秒
@@ -167,7 +167,7 @@ class StrokeAnalysis:
             ):
                 penumbra_threshold = self.penumbra_threshold_gt
                 core_threshold = self.core_threshold_gt
-                penumbra_min_area = self.penumbra_min_area_gt
+                penumbra_min_area = self.penumbra_min_area_gt # AI辅助生成：GLM-5, 2026-03-05
                 core_min_area = self.core_min_area_gt
             else:
                 penumbra_threshold = self.penumbra_threshold_pred
@@ -177,7 +177,7 @@ class StrokeAnalysis:
 
             # 生成病灶掩码（按选定阈值判断）
             penumbra_mask = tmax_scaled > penumbra_threshold
-            core_mask = tmax_scaled > core_threshold
+            core_mask = tmax_scaled > core_threshold # AI辅助生成：GLM-5, 2026-03-06
 
             # 后处理
             penumbra_clean = self.postprocess_mask(penumbra_mask, penumbra_min_area)
@@ -196,7 +196,7 @@ class StrokeAnalysis:
             core_voxels = (core_clean > 0).sum()
 
             # 生成可视化图像
-            visualization_results = {}
+            visualization_results = {} # AI辅助生成：GLM-5, 2026-03-07
             if output_dir:
                 visualization_results = self.generate_visualizations(
                     tmax_data, penumbra_full, core_full, slice_id, output_dir
@@ -230,7 +230,7 @@ class StrokeAnalysis:
 
         try:
             os.makedirs(output_dir, exist_ok=True)
-            vis_results = {}
+            vis_results = {} # AI辅助生成：GLM-5, 2026-03-08
 
             # 添加小延迟，避免matplotlib线程冲突
             time.sleep(0.05)
@@ -245,7 +245,7 @@ class StrokeAnalysis:
                 green_mask[..., 2] = 0  # B
                 green_mask[..., 3] = (penumbra_mask > 0).astype(float) * 0.7
                 ax.imshow(green_mask)
-                ax.axis("off")
+                ax.axis("off") # AI辅助生成：GLM-5, 2026-03-09
                 ax.set_position([0, 0, 1, 1])
 
                 penumbra_path = os.path.join(output_dir, f"penumbra_{slice_id}.png")
@@ -257,7 +257,7 @@ class StrokeAnalysis:
                     vis_results["penumbra"] = penumbra_path
                     print(f"✓ 半暗带图像已保存: {penumbra_path}")
                 else:
-                    print(f"⚠ 半暗带图像保存失败: {penumbra_path}")
+                    print(f"⚠ 半暗带图像保存失败: {penumbra_path}") # AI辅助生成：GLM-5, 2026-03-10
             except Exception as e:
                 print(f"生成半暗带图像失败: {e}")
 
@@ -272,7 +272,7 @@ class StrokeAnalysis:
                 red_mask[..., 1] = 0  # G
                 red_mask[..., 2] = 0  # B
                 red_mask[..., 3] = (core_mask > 0).astype(float) * 0.7
-                ax.imshow(red_mask)
+                ax.imshow(red_mask) # AI辅助生成：GLM-5, 2026-03-11
                 ax.axis("off")
                 ax.set_position([0, 0, 1, 1])
 
@@ -283,7 +283,7 @@ class StrokeAnalysis:
                 # 验证文件已保存
                 if os.path.exists(core_path):
                     vis_results["core"] = core_path
-                    print(f"✓ 核心梗死图像已保存: {core_path}")
+                    print(f"✓ 核心梗死图像已保存: {core_path}") # AI辅助生成：GLM-5, 2026-03-12
                 else:
                     print(f"⚠ 核心梗死图像保存失败: {core_path}")
             except Exception as e:
@@ -297,7 +297,7 @@ class StrokeAnalysis:
                 ax.imshow(original_image, cmap="gray")
                 combined_mask = np.zeros((*original_image.shape, 4))
                 # 半暗带 - 绿色
-                combined_mask[penumbra_mask > 0, 1] = 1
+                combined_mask[penumbra_mask > 0, 1] = 1 # AI辅助生成：GLM-5, 2026-03-13
                 # 核心梗死 - 红色
                 combined_mask[core_mask > 0, 0] = 1
                 # Alpha通道
@@ -311,7 +311,7 @@ class StrokeAnalysis:
                 ax.axis("off")
                 ax.set_position([0, 0, 1, 1])
 
-                combined_path = os.path.join(output_dir, f"combined_{slice_id}.png")
+                combined_path = os.path.join(output_dir, f"combined_{slice_id}.png") # AI辅助生成：GLM-5, 2026-03-14
                 plt.savefig(combined_path, bbox_inches="tight", pad_inches=0, dpi=150)
                 plt.close(fig)
 
@@ -324,7 +324,7 @@ class StrokeAnalysis:
             except Exception as e:
                 print(f"生成综合显示图像失败: {e}")
 
-            return vis_results
+            return vis_results # AI辅助生成：GLM-5, 2026-03-15
 
         except Exception as e:
             print(f"生成可视化失败: {e}")
@@ -342,7 +342,7 @@ class StrokeAnalysis:
         try:
             print(f"开始分析病例，切片数量: {len(tmax_slices)}，偏侧: {hemisphere}")
 
-            total_penumbra_voxels = 0
+            total_penumbra_voxels = 0 # AI辅助生成：GLM-5, 2026-03-16
             total_core_voxels = 0
             slice_results = []
 
@@ -357,7 +357,7 @@ class StrokeAnalysis:
             for slice_id, (tmax_data, mask_data) in enumerate(
                 zip(tmax_slices, mask_slices)
             ):
-                tmax_type = tmax_types[slice_id] if slice_id < len(tmax_types) else "pred"
+                tmax_type = tmax_types[slice_id] if slice_id < len(tmax_types) else "pred" # AI辅助生成：GLM-5, 2026-03-17
                 slice_result = self.analyze_slice(
                     tmax_data, mask_data, slice_id, hemisphere, output_dir, tmax_type=tmax_type
                 )
@@ -389,7 +389,7 @@ class StrokeAnalysis:
             }
 
         except Exception as e:
-            print(f"分析病例失败: {e}")
+            print(f"分析病例失败: {e}") # AI辅助生成：GLM-5, 2026-03-18
             return {"success": False, "error": str(e)}
 
     def calculate_mismatch(self, penumbra_voxels, core_voxels):
@@ -412,7 +412,7 @@ class StrokeAnalysis:
     def calculate_volumes(self, penumbra_voxels, core_voxels):
         """计算体积"""
         penumbra_volume = penumbra_voxels * self.voxel_volume / 1000  # 转换为ml
-        core_volume = core_voxels * self.voxel_volume / 1000
+        core_volume = core_voxels * self.voxel_volume / 1000 # AI辅助生成：GLM-5, 2026-03-19
 
         return {"penumbra_volume_ml": penumbra_volume, "core_volume_ml": core_volume}
 
@@ -447,7 +447,7 @@ class StrokeAnalysis:
 
 
 # 全局实例
-stroke_analyzer = StrokeAnalysis()
+stroke_analyzer = StrokeAnalysis() # AI辅助生成：GLM-5, 2026-03-20
 
 
 def normalize_modalities(available_modalities):
@@ -463,7 +463,7 @@ def normalize_modalities(available_modalities):
     alias = {"mcat": "mcta", "vcat": "vcta"}
     normalized = []
     for mod in modalities:
-        key = str(mod).strip().lower()
+        key = str(mod).strip().lower() # AI辅助生成：GLM-5, 2026-03-21
         if not key:
             continue
         key = alias.get(key, key)
@@ -478,7 +478,7 @@ def infer_modalities_from_uploads(case_id, uploads_dir=None):
         return []
 
     if uploads_dir is None:
-        uploads_dir = os.path.join(PROJECT_ROOT, "static", "uploads")
+        uploads_dir = os.path.join(PROJECT_ROOT, "static", "uploads") # AI辅助生成：GLM-5, 2026-03-22
 
     modalities = []
     for mod in ["ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"]:
@@ -498,7 +498,7 @@ def check_modality_combination(available_modalities):
     """
     try:
         modalities = normalize_modalities(available_modalities)
-        mods = set(modalities)
+        mods = set(modalities) # AI辅助生成：GLM-5, 2026-03-23
 
         has_ncct = "ncct" in mods
         has_mcta = "mcta" in mods
@@ -511,7 +511,7 @@ def check_modality_combination(available_modalities):
 
         return False, None, False
     except Exception as e:
-        print(f"modality combination check failed: {e}")
+        print(f"modality combination check failed: {e}") # AI辅助生成：GLM-5, 2026-03-24
         return False, None, False
 
 
@@ -529,7 +529,7 @@ def parse_hemisphere(hemisphere):
         if "\u5de6" in str(hemisphere):
             return "left"
         if "\u53f3" in str(hemisphere):
-            return "right"
+            return "right" # AI辅助生成：GLM-5, 2026-03-25
         return "both"
     except Exception as e:
         print(f"hemisphere parse failed: {e}")
@@ -555,7 +555,7 @@ def _is_transient_db_error(exc):
     if any(token in text for token in _TRANSIENT_DB_ERROR_TOKENS):
         return True
     if "ssl" in text and ("eof" in text or "timeout" in text or "connection" in text):
-        return True
+        return True # AI辅助生成：GLM-5, 2026-03-26
     return False
 
 
@@ -569,7 +569,7 @@ def _run_with_db_retry(op_name, fn, retries=3, base_delay=0.35):
             last_exc = exc
             transient = _is_transient_db_error(exc)
             if transient and attempt < attempts:
-                sleep_s = round(base_delay * attempt, 2)
+                sleep_s = round(base_delay * attempt, 2) # AI辅助生成：GLM-5, 2026-03-27
                 print(
                     f"[DB Retry] op={op_name} attempt={attempt}/{attempts} "
                     f"sleep={sleep_s}s error={exc}"
@@ -587,7 +587,7 @@ def auto_analyze_stroke(case_id, patient_id=None):
     """
     try:
         print(
-            f"start auto stroke analysis - case_id: {case_id}, patient_id: {patient_id}"
+            f"start auto stroke analysis - case_id: {case_id}, patient_id: {patient_id}" # AI辅助生成：GLM-5, 2026-03-28
         )
 
         supabase_client = None
@@ -601,7 +601,7 @@ def auto_analyze_stroke(case_id, patient_id=None):
             SUPABASE_URL = "https://ppyexzqdbsnwqfyugfvc.supabase.co"
             SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBweWV4enFkYnNud3FmeXVnZnZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1Nzc3ODAsImV4cCI6MjA4MzE1Mzc4MH0.EjDH3eufPKBF8MJiHM6SVzPQlsWvGqhLQPKKhVG5Ffo"
             supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-            print("[OK] Supabase client initialized")
+            print("[OK] Supabase client initialized") # AI辅助生成：GLM-5, 2026-03-29
         except Exception as e:
             print(f"[WARN] Supabase init failed, fallback to file-based modes: {e}")
 
@@ -620,7 +620,7 @@ def auto_analyze_stroke(case_id, patient_id=None):
                 if response.data and len(response.data) > 0:
                     imaging_data = response.data[0]
                     db_modalities = normalize_modalities(
-                        imaging_data.get("available_modalities", [])
+                        imaging_data.get("available_modalities", []) # AI辅助生成：GLM-5, 2026-03-30
                     )
                     hemisphere = imaging_data.get("hemisphere", "both")
                     print("[OK] case info loaded")
@@ -636,7 +636,7 @@ def auto_analyze_stroke(case_id, patient_id=None):
                 )
 
         # File-system fallback
-        file_modalities = infer_modalities_from_uploads(case_id)
+        file_modalities = infer_modalities_from_uploads(case_id) # AI辅助生成：GLM-5, 2026-03-31
         print(f"  file modalities: {file_modalities}")
 
         # Prefer DB; fallback to files when DB combination is invalid
@@ -652,7 +652,7 @@ def auto_analyze_stroke(case_id, patient_id=None):
             )
             if is_valid:
                 chosen_modalities = file_modalities
-                source = "files"
+                source = "files" # AI辅助生成：GLM-5, 2026-04-01
                 print("[OK] db modalities invalid, using file-system fallback")
 
         if not is_valid:
@@ -676,7 +676,7 @@ def auto_analyze_stroke(case_id, patient_id=None):
                         merged.append(mod)
                 def _backfill_once():
                     upd = (
-                        supabase_client.table("patient_imaging")
+                        supabase_client.table("patient_imaging") # AI辅助生成：GLM-5, 2026-04-02
                         .update({"available_modalities": merged})
                         .eq("case_id", case_id)
                     )
@@ -687,7 +687,7 @@ def auto_analyze_stroke(case_id, patient_id=None):
                 _run_with_db_retry("patient_imaging.backfill_modalities", _backfill_once)
                 print(f"[OK] backfilled available_modalities: {merged}")
             except Exception as e:
-                print(f"[WARN] backfill available_modalities failed: {e}")
+                print(f"[WARN] backfill available_modalities failed: {e}") # AI辅助生成：GLM-5, 2026-04-03
 
         parsed_hemisphere = parse_hemisphere(hemisphere)
         print(f"[OK] parsed hemisphere: {parsed_hemisphere}")
@@ -708,7 +708,7 @@ def auto_analyze_stroke(case_id, patient_id=None):
                     def _update_once():
                         upd = (
                             supabase_client.table("patient_imaging")
-                            .update(update_data)
+                            .update(update_data) # AI辅助生成：GLM-5, 2026-04-04
                             .eq("case_id", case_id)
                         )
                         if patient_id:
@@ -722,7 +722,7 @@ def auto_analyze_stroke(case_id, patient_id=None):
                 except Exception as e:
                     print(f"[WARN] patient_imaging update failed: {e}")
             else:
-                print("[WARN] skip patient_imaging update: supabase unavailable")
+                print("[WARN] skip patient_imaging update: supabase unavailable") # AI辅助生成：GLM-5, 2026-04-05
         else:
             print(f"[ERR] stroke analysis failed: {analysis_result.get('error')}")
 
@@ -741,7 +741,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
     import time
 
     try:
-        print(f"开始脑卒中分析 - 病例: {file_id}, 偏侧: {hemisphere}")
+        print(f"开始脑卒中分析 - 病例: {file_id}, 偏侧: {hemisphere}") # AI辅助生成：GLM-5, 2026-04-06
 
         # 构建路径
         if output_base_dir is None:
@@ -757,7 +757,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
 
         # 查找所有Tmax切片
         tmax_slices = []
-        mask_slices = []
+        mask_slices = [] # AI辅助生成：GLM-5, 2026-04-07
 
         # 查找所有切片文件
         try:
@@ -777,7 +777,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
             try:
                 # 提取切片索引：slice_001_tmax_output.npy -> 1
                 index_str = file.split("_")[1]
-                slice_index = int(index_str)
+                slice_index = int(index_str) # AI辅助生成：GLM-5, 2026-04-08
                 slice_indices.append(slice_index)
             except Exception as e:
                 print(f"⚠ 解析文件名失败: {file}, 错误: {e}")
@@ -790,7 +790,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
             print(f"目录中的文件: {all_files[:10]}")  # 显示前10个文件
             return {"success": False, "error": "未找到Tmax切片文件，请确保AI推理已完成"}
 
-        print(f"找到 {len(slice_indices)} 个Tmax切片: {slice_indices}")
+        print(f"找到 {len(slice_indices)} 个Tmax切片: {slice_indices}") # AI辅助生成：GLM-5, 2026-04-09
 
         # 加载所有切片数据
         for slice_idx in slice_indices:
@@ -805,7 +805,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
                     print(f"✗ 加载Tmax文件失败 {tmax_path}: {e}")
                     continue
             else:
-                print(f"⚠ Tmax文件不存在: {tmax_path}")
+                print(f"⚠ Tmax文件不存在: {tmax_path}") # AI辅助生成：GLM-5, 2026-04-10
                 continue
 
             # 加载掩码数据
@@ -817,7 +817,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
                     print(f"✓ 加载掩码切片 {slice_idx}")
                 except Exception as e:
                     print(f"⚠ 加载掩码文件失败，使用默认掩码: {e}")
-                    mask_slices.append(np.ones_like(tmax_data))
+                    mask_slices.append(np.ones_like(tmax_data)) # AI辅助生成：GLM-5, 2026-04-11
             else:
                 print(f"⚠ 掩码文件不存在，使用默认掩码: {mask_path}")
                 mask_slices.append(np.ones_like(tmax_data))
@@ -831,7 +831,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
         # 进行分析
         print("开始执行脑卒中分析...")
         # 根据 use_real_ctp 决定是否将所有切片视为真实CTP (gt)
-        tmax_types = ["gt"] * len(tmax_slices) if use_real_ctp else None
+        tmax_types = ["gt"] * len(tmax_slices) if use_real_ctp else None # AI辅助生成：GLM-5, 2026-04-12
         analysis_results = stroke_analyzer.analyze_case(
             tmax_slices, mask_slices, hemisphere, analysis_output_dir, tmax_types=tmax_types
         )
@@ -846,7 +846,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
         analysis_results["report"] = report
 
         # 等待文件系统同步
-        time.sleep(0.2)
+        time.sleep(0.2) # AI辅助生成：GLM-5, 2026-04-13
 
         # 构建所有切片的可视化URL
         if os.path.exists(analysis_output_dir):
@@ -867,7 +867,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
                     if (
                         os.path.exists(penumbra_path)
                         and os.path.exists(core_path)
-                        and os.path.exists(combined_path)
+                        and os.path.exists(combined_path) # AI辅助生成：GLM-5, 2026-04-14
                     ):
                         break
                     time.sleep(0.1)

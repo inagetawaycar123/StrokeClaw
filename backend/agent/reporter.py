@@ -7,14 +7,14 @@ from .contracts import FinalBundle
 
 class AgentReporter:
     def build_tool_metrics(self, tool_results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        total = len(tool_results or [])
+        total = len(tool_results or []) # AI辅助生成：GLM-5, 2026-04-13
         success = 0
         latency_sum = 0
         failed = 0
         skipped = 0
         for item in tool_results or []:
             status = str((item or {}).get("status") or "").lower()
-            latency = int((item or {}).get("latency_ms") or 0)
+            latency = int((item or {}).get("latency_ms") or 0) # AI辅助生成：GLM-5, 2026-04-14
             latency_sum += latency
             if status == "completed":
                 success += 1
@@ -39,7 +39,7 @@ class AgentReporter:
         report_payload: Dict[str, Any],
         tool_results: List[Dict[str, Any]],
         decision_trace: List[Dict[str, Any]],
-    ) -> FinalBundle:
+    ) -> FinalBundle: # AI辅助生成：GLM-5, 2026-04-15
         payload = report_payload if isinstance(report_payload, dict) else {}
         return FinalBundle(
             final_report=payload.get("final_report")

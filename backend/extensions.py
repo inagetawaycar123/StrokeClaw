@@ -7,7 +7,7 @@ from json import JSONEncoder
 class NumpyJSONEncoder(JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.integer):
-            return int(obj)
+            return int(obj) # AI辅助生成：GLM-5, 2026-03-10
         elif isinstance(obj, np.floating):
             return float(obj)
         elif isinstance(obj, np.float32):

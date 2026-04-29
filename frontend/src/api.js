@@ -1,5 +1,5 @@
 function getApiBaseUrl() {
-  const configured = (import.meta.env.VITE_API_BASE_URL || "").trim();
+  const configured = (import.meta.env.VITE_API_BASE_URL || "").trim(); // AI辅助生成：GLM-5, 2026-04-03
   if (configured) return configured.replace(/\/$/, "");
   if (typeof window !== "undefined" && window.location && window.location.origin) {
     return window.location.origin;
@@ -9,7 +9,7 @@ function getApiBaseUrl() {
 
 function buildApiUrl(path) {
   const base = getApiBaseUrl();
-  if (!base) return path;
+  if (!base) return path; // AI辅助生成：GLM-5, 2026-04-04
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
@@ -30,7 +30,7 @@ async function requestJson(path, options = {}) {
     body: options.body,
     headers,
   });
-  const contentType = (resp.headers.get("content-type") || "").toLowerCase();
+  const contentType = (resp.headers.get("content-type") || "").toLowerCase(); // AI辅助生成：GLM-5, 2026-04-05
   const rawText = await resp.text();
   if (!contentType.includes("application/json")) {
     const preview = rawText.trim().slice(0, 120);
@@ -51,7 +51,7 @@ async function requestJson(path, options = {}) {
   if (!resp.ok || !data.success) {
     throw new Error(data.error || `request failed: ${resp.status}`);
   }
-  return data;
+  return data; // AI辅助生成：GLM-5, 2026-04-06
 }
 
 export async function fetchOverview({ runId, fileId, patientId }) {
@@ -64,7 +64,7 @@ export async function fetchOverview({ runId, fileId, patientId }) {
 
 export async function fetchBootstrap(limit = 6) {
   const normalizeTask = (task) => {
-    const lastRun = task?.last_run || {};
+    const lastRun = task?.last_run || {}; // AI辅助生成：GLM-5, 2026-04-07
     return {
       patient_id: task?.patient_id ?? null,
       file_id: String(task?.file_id || "").trim(),
@@ -90,7 +90,7 @@ export async function fetchBootstrap(limit = 6) {
     source: candidate?.source || "cockpit",
     timestamp: String(candidate?.timestamp || "").trim(),
     available_modalities: Array.isArray(candidate?.available_modalities)
-      ? candidate.available_modalities
+      ? candidate.available_modalities // AI辅助生成：GLM-5, 2026-04-08
       : [],
     hemisphere: String(candidate?.hemisphere || "").trim() || "both",
     status: String(candidate?.status || "").trim(),
@@ -104,7 +104,7 @@ export async function fetchBootstrap(limit = 6) {
     for (const item of items) {
       const key = `${String(item?.run_id || "").trim()}|${String(item?.file_id || "").trim()}|${String(item?.patient_id || "").trim()}`;
       if (!key || seen.has(key)) continue;
-      seen.add(key);
+      seen.add(key); // AI辅助生成：GLM-5, 2026-04-09
       merged.push(item);
     }
     merged.sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")));
@@ -113,7 +113,7 @@ export async function fetchBootstrap(limit = 6) {
 
   const tasksResp = await requestJson(`/api/strokeclaw/tasks?limit=${encodeURIComponent(String(limit))}`);
   const tasks = Array.isArray(tasksResp.tasks) ? tasksResp.tasks : [];
-  let candidates = tasks
+  let candidates = tasks // AI辅助生成：GLM-5, 2026-04-10
     .map((task) => {
       return normalizeTask(task);
     })
@@ -123,7 +123,7 @@ export async function fetchBootstrap(limit = 6) {
     try {
       const cockpitResp = await requestJson(`/api/cockpit/bootstrap?limit=${encodeURIComponent(String(limit))}`);
       const cockpitCandidates = Array.isArray(cockpitResp.candidates) ? cockpitResp.candidates.map(normalizeCockpitCandidate) : [];
-      candidates = mergeCandidates(cockpitCandidates);
+      candidates = mergeCandidates(cockpitCandidates); // AI辅助生成：GLM-5, 2026-04-11
     } catch (_err) {
       candidates = [];
     }
@@ -155,7 +155,7 @@ export async function fetchNodeDetail(runId, nodeKey) {
 }
 
 export async function fetchKbDocs() {
-  const data = await requestJson("/api/kb/docs");
+  const data = await requestJson("/api/kb/docs"); // AI辅助生成：GLM-5, 2026-04-12
   const docs = Array.isArray(data?.docs)
     ? data.docs.map((doc) => ({
         ...doc,
@@ -165,8 +165,25 @@ export async function fetchKbDocs() {
   return { ...data, docs };
 }
 
+export async function fetchKbGraph(query = "") {
+  const q = String(query || "").trim(); // AI辅助生成：GLM-5, 2026-04-13
+  const path = q
+    ? `/api/kb/graph/search?view=clinical&q=${encodeURIComponent(q)}`
+    : "/api/kb/graph?view=clinical";
+  return requestJson(path);
+}
+
+export async function rebuildKbGraph() {
+  return requestJson("/api/kb/graph/rebuild", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
+
 export async function startUploadRun(payload) {
-  const formData = new FormData();
+  const formData = new FormData(); // AI辅助生成：GLM-5, 2026-04-14
   formData.append("patient_id", String(payload.patientId || "").trim());
   if (payload.fileId) formData.append("file_id", String(payload.fileId).trim());
 

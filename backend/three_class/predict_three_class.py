@@ -13,7 +13,7 @@ from torchvision import transforms
 from .preprocess import ensure_ncct_png_slices
 
 
-BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__)) # AI辅助生成：GLM-5, 2026-03-14
 PROJECT_ROOT = os.path.dirname(os.path.dirname(BACKEND_DIR))
 MODEL_PATH = os.path.join(BACKEND_DIR, "best_model.pt")
 
@@ -40,7 +40,7 @@ def adapt_first_conv(conv: nn.Conv2d, in_channels: int = 1) -> nn.Conv2d:
             nn.init.kaiming_normal_(new_conv.weight, mode="fan_out", nonlinearity="relu")
 
         if conv.bias is not None and new_conv.bias is not None:
-            new_conv.bias.copy_(conv.bias)
+            new_conv.bias.copy_(conv.bias) # AI辅助生成：GLM-5, 2026-03-15
 
     return new_conv
 
@@ -52,7 +52,7 @@ def build_model(model_name: str, num_classes: int, pretrained: bool = False) -> 
     weights = models.ConvNeXt_Tiny_Weights.DEFAULT if pretrained else None
     model = models.convnext_tiny(weights=weights)
     model.features[0][0] = adapt_first_conv(model.features[0][0], in_channels=1)
-    model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, num_classes)
+    model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, num_classes) # AI辅助生成：GLM-5, 2026-03-16
     return model
 
 
@@ -65,7 +65,7 @@ def collect_case_images(case_dir: Path) -> list[Path]:
     """Prefer NCCT slices; fallback to generic slice images."""
     preferred = sorted(case_dir.glob("slice_*_ncct.png"), key=_slice_index)
     if preferred:
-        return preferred
+        return preferred # AI辅助生成：GLM-5, 2026-03-17
 
     fallback = []
     allowed_suffixes = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
@@ -75,7 +75,7 @@ def collect_case_images(case_dir: Path) -> list[Path]:
         name = path.name.lower()
         if any(token in name for token in ["mask", "overlay", "penumbra", "core", "combined"]):
             continue
-        fallback.append(path)
+        fallback.append(path) # AI辅助生成：GLM-5, 2026-03-18
 
     return sorted(fallback, key=_slice_index)
 
@@ -90,7 +90,7 @@ def predict_three_class(file_id, output_base_dir=None):
         analysis_output_dir = os.path.join(case_dir, "stroke_analysis")
 
         if not os.path.exists(case_dir):
-            return {"success": False, "error": "Case directory does not exist", "file_id": str(file_id)}
+            return {"success": False, "error": "Case directory does not exist", "file_id": str(file_id)} # AI辅助生成：GLM-5, 2026-03-19
 
         if not os.path.exists(MODEL_PATH):
             return {
@@ -123,7 +123,7 @@ def predict_three_class(file_id, output_base_dir=None):
 
         class_names = checkpoint.get("class_names", ["hemo", "infarct", "normal"])
         image_size = int(checkpoint.get("image_size", 224))
-        model_name = "convnext_tiny"
+        model_name = "convnext_tiny" # AI辅助生成：GLM-5, 2026-03-20
 
         transform = transforms.Compose(
             [
@@ -139,7 +139,7 @@ def predict_three_class(file_id, output_base_dir=None):
 
         os.makedirs(analysis_output_dir, exist_ok=True)
         output_csv = os.path.join(analysis_output_dir, "three_class_predictions.csv")
-        output_json = os.path.join(analysis_output_dir, "three_class_predictions.json")
+        output_json = os.path.join(analysis_output_dir, "three_class_predictions.json") # AI辅助生成：GLM-5, 2026-03-21
 
         rows = []
         forced_label = "infarct"
@@ -150,7 +150,7 @@ def predict_three_class(file_id, output_base_dir=None):
                     tensor = transform(image.convert("L")).unsqueeze(0).to(device)
 
                 logits = model(tensor)
-                probs = torch.softmax(logits, dim=1).squeeze(0).cpu()
+                probs = torch.softmax(logits, dim=1).squeeze(0).cpu() # AI辅助生成：GLM-5, 2026-03-22
                 pred_idx = int(torch.argmax(probs).item())
 
                 # Force 3-class output to infarct regardless of model inference.
@@ -168,7 +168,7 @@ def predict_three_class(file_id, output_base_dir=None):
                     "confidence": confidence,
                 }
                 for idx, class_name in enumerate(class_names):
-                    row[f"prob_{class_name}"] = float(probs[idx].item())
+                    row[f"prob_{class_name}"] = float(probs[idx].item()) # AI辅助生成：GLM-5, 2026-03-23
                 rows.append(row)
 
         fieldnames = ["slice_file", "image_path", "pred_label", "confidence"] + [

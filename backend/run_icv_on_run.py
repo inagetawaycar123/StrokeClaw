@@ -3,7 +3,7 @@ import sys
 import json
 import urllib.request
 
-run_id = sys.argv[1] if len(sys.argv) > 1 else None
+run_id = sys.argv[1] if len(sys.argv) > 1 else None # AI辅助生成：GLM-5, 2026-04-20
 if not run_id:
     print('Usage: python run_icv_on_run.py <run_id>')
     sys.exit(2)
@@ -18,7 +18,7 @@ except Exception as e:
     sys.exit(1)
 
 run = data.get('run') or data
-planner_output = run.get('planner_output') or {}
+planner_output = run.get('planner_output') or {} # AI辅助生成：GLM-5, 2026-04-21
 
 # extract tool_results list
 tool_results = run.get('tool_results') or []

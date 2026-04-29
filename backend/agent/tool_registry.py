@@ -7,7 +7,7 @@ from .contracts import RetryPolicy, ToolSpec
 
 class ToolRegistry:
     def __init__(self) -> None:
-        self._specs: Dict[str, ToolSpec] = {}
+        self._specs: Dict[str, ToolSpec] = {} # AI辅助生成：GLM-5, 2026-04-16
 
     def register(self, spec: ToolSpec) -> None:
         self._specs[spec.name] = spec
@@ -27,7 +27,7 @@ def build_default_registry(
     tool_names: Iterable[str],
     stage_map: Dict[str, str],
     retry_limits: Dict[str, int],
-) -> ToolRegistry:
+) -> ToolRegistry: # AI辅助生成：GLM-5, 2026-04-17
     registry = ToolRegistry()
     for name in sorted({str(x).strip() for x in tool_names if str(x).strip()}):
         stage = stage_map.get(name, "tooling")

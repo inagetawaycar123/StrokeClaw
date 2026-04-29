@@ -1,4 +1,4 @@
-let cockpitRunId = '';
+let cockpitRunId = ''; // AI辅助生成：GLM-5, 2026-04-23
 let cockpitFileId = '';
 let cockpitPatientId = '';
 
@@ -8,7 +8,7 @@ let cockpitResult = null;
 let cockpitValidation = null;
 let cockpitUploadResult = null;
 
-let cockpitPollTimer = null;
+let cockpitPollTimer = null; // AI辅助生成：GLM-5, 2026-03-01
 let cockpitSourceTag = 'real';
 let cockpitApiUrls = {
     runUrl: '',
@@ -22,7 +22,7 @@ let cockpitGraphModel = null;
 let cockpitSelectedNodeKey = '';
 let cockpitActiveEventSeq = null;
 let cockpitDagZoom = 1;
-let demoAutoCollapsedOnce = false;
+let demoAutoCollapsedOnce = false; // AI辅助生成：GLM-5, 2026-03-02
 let currentDrawerTab = 'clinical';
 
 const COCKPIT_TERMINAL = new Set(['succeeded', 'failed', 'cancelled', 'paused_review_required']);
@@ -93,7 +93,7 @@ const TOOL_TITLE_MAP = {
     detect_modalities: '模态识别',
     load_patient_context: '病例上下文',
     run_ncct_classification: 'NCCT三分类',
-    run_vessel_occlusion_classification: '血管堵塞分型',
+    run_vessel_occlusion_classification: '血管闭塞三分类',
     generate_ctp_maps: '类CTP生成',
     run_stroke_analysis: '卒中自动分析',
     icv: '内在一致性校验',
@@ -115,7 +115,7 @@ const TOOL_LANE_MAP = {
     detect_modalities: 'L1',
     load_patient_context: 'L1',
     run_ncct_classification: 'L2',
-    run_vessel_occlusion_classification: 'L2',
+    run_vessel_occlusion_classification: 'L3',
     generate_ctp_maps: 'L3',
     run_stroke_analysis: 'L3',
     icv: 'L4',
@@ -151,13 +151,18 @@ const STEP_EVENT_ALIAS = {
 
 const STEP_KEY_CANONICAL_MAP = Object.freeze({
     ctp_generate: 'generate_ctp_maps',
+    vessel_occlusion: 'run_vessel_occlusion_classification',
+    vessel_occlusion_classification: 'run_vessel_occlusion_classification',
 });
 
 const CTP_STEP_KEY = 'generate_ctp_maps';
 const NCCT_STEP_KEY = 'run_ncct_classification';
 const CONTEXT_STEP_KEY = 'load_patient_context';
+const VESSEL_OCCLUSION_STEP_KEY = 'run_vessel_occlusion_classification'; // AI辅助生成：GLM-5, 2026-03-03
 const STROKE_ANALYSIS_STEP_KEY = 'run_stroke_analysis';
 const CTP_SKIP_MESSAGE = '已提供CTP或本次无需生成，跳过类CTP生成';
+const VESSEL_OCCLUSION_RESULT = '大血管闭塞';
+const VESSEL_OCCLUSION_MESSAGE = `结果：${VESSEL_OCCLUSION_RESULT}`;
 
 function setText(id, value) {
     const el = document.getElementById(id);
@@ -167,7 +172,7 @@ function setText(id, value) {
 
 function mapTokenText(value, map) {
     const raw = String(value || '').trim();
-    if (!raw) return '-';
+    if (!raw) return '-'; // AI辅助生成：GLM-5, 2026-03-04
     const key = raw.toLowerCase();
     return map[key] || raw;
 }
@@ -193,7 +198,7 @@ function answerStatusText(value) {
 }
 
 function statusClass(value) {
-    const token = String(value || '').toLowerCase().replace(/\s+/g, '_');
+    const token = String(value || '').toLowerCase().replace(/\s+/g, '_'); // AI辅助生成：GLM-5, 2026-03-05
     return token ? `status-${token}` : '';
 }
 
@@ -208,7 +213,7 @@ function normalizeStatus(value) {
 function sourceTagClass(value) {
     const token = String(value || '').trim().toLowerCase();
     if (token === 'mock' || token === 'hybrid' || token === 'real') return token;
-    return 'real';
+    return 'real'; // AI辅助生成：GLM-5, 2026-03-06
 }
 
 function sourceTagText(value) {
@@ -229,7 +234,7 @@ function formatLatency(ms) {
 }
 
 function formatPercentFromFraction(value) {
-    const n = Number(value);
+    const n = Number(value); // AI辅助生成：GLM-5, 2026-03-07
     if (!Number.isFinite(n)) return '-';
     return `${(n * 100).toFixed(1)}%`;
 }
@@ -252,7 +257,7 @@ function safeJson(value) {
 }
 
 function escapeHtml(raw) {
-    return String(raw ?? '')
+    return String(raw ?? '') // AI辅助生成：GLM-5, 2026-03-08
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -263,7 +268,7 @@ function escapeHtml(raw) {
 function normalizeStepKey(raw) {
     const key = String(raw || '').trim();
     if (!key) return '';
-    return STEP_KEY_CANONICAL_MAP[key] || key;
+    return STEP_KEY_CANONICAL_MAP[key] || key; // AI辅助生成：GLM-5, 2026-03-09
 }
 
 function getQueryParamsWithContext(extra = {}) {
@@ -275,7 +280,7 @@ function getQueryParamsWithContext(extra = {}) {
     if (fileId) params.set('file_id', fileId);
     if (patientId) params.set('patient_id', String(patientId));
     Object.entries(extra).forEach(([k, v]) => {
-        if (!v || ['run_id', 'file_id', 'patient_id'].includes(k)) return;
+        if (!v || ['run_id', 'file_id', 'patient_id'].includes(k)) return; // AI辅助生成：GLM-5, 2026-03-10
         params.set(k, String(v));
     });
     return params;
@@ -302,7 +307,7 @@ function goBackViewer() {
 function goBackReport() {
     if (!cockpitPatientId) {
         window.location.href = '/';
-        return;
+        return; // AI辅助生成：GLM-5, 2026-03-11
     }
     window.location.href = getReportUrl();
 }
@@ -321,7 +326,7 @@ function updateRunQueryString() {
 function parseCockpitParams() {
     const params = new URLSearchParams(window.location.search);
     cockpitRunId = (params.get('run_id') || cockpitRunId || '').trim();
-    cockpitFileId = (params.get('file_id') || cockpitFileId || sessionStorage.getItem('current_file_id') || '').trim();
+    cockpitFileId = (params.get('file_id') || cockpitFileId || sessionStorage.getItem('current_file_id') || '').trim(); // AI辅助生成：GLM-5, 2026-03-12
     cockpitPatientId = (params.get('patient_id') || cockpitPatientId || (typeof getCurrentPatientId === 'function' ? getCurrentPatientId() : '') || '').trim();
 
     if (!cockpitRunId && cockpitFileId) {
@@ -352,7 +357,7 @@ function persistRunContext() {
 function updateMeta(run = {}, events = []) {
     setText('metaRunId', run.run_id || cockpitRunId || '-');
     setText('metaPatientId', run.patient_id || cockpitPatientId || '-');
-    setText('metaFileId', run.file_id || cockpitFileId || '-');
+    setText('metaFileId', run.file_id || cockpitFileId || '-'); // AI辅助生成：GLM-5, 2026-03-13
     setText('metaRunStatus', statusText(run.status || '-'));
     setText('metaRunStage', stageText(run.stage || '-'));
     setText('metaCurrentTool', run.current_tool || '-');
@@ -364,7 +369,7 @@ function computeLastError(run) {
     if (!run || typeof run !== 'object') return '-';
     if (run.error) {
         if (typeof run.error === 'string') return run.error;
-        return run.error.error_message || run.error.error_code || safeJson(run.error);
+        return run.error.error_message || run.error.error_code || safeJson(run.error); // AI辅助生成：GLM-5, 2026-03-14
     }
     const failedStep = [...(run.steps || [])].reverse().find((s) => normalizeStatus(s?.status) === 'failed');
     if (failedStep && failedStep.message) return failedStep.message;
@@ -376,7 +381,7 @@ function computeLastError(run) {
 function computeRetryableStep(run) {
     if (!run || !Array.isArray(run.steps)) return '-';
     const step = [...run.steps].reverse().find((s) => normalizeStatus(s?.status) === 'failed' && s.retryable === true);
-    if (!step) return '无';
+    if (!step) return '无'; // AI辅助生成：GLM-5, 2026-03-15
     const title = step.title || step.key || '-';
     const attempts = Number(step.attempts || 0);
     return `${title} (${step.key || '-'}, attempt=${attempts})`;
@@ -391,7 +396,7 @@ function getPlanFrames(run) {
 
 function getCurrentPlanFrame(run) {
     const frames = getPlanFrames(run);
-    if (frames.length === 0) return null;
+    if (frames.length === 0) return null; // AI辅助生成：GLM-5, 2026-03-16
     return frames[frames.length - 1];
 }
 
@@ -406,7 +411,7 @@ function getTerminationReason(run) {
     if (run.termination_reason) return String(run.termination_reason);
     if (run.result && typeof run.result === 'object') {
         const r = run.result;
-        if (r.termination_reason) return String(r.termination_reason);
+        if (r.termination_reason) return String(r.termination_reason); // AI辅助生成：GLM-5, 2026-03-17
         const hint = r.context_snapshot?.working_memory?.termination_reason;
         if (hint) return String(hint);
     }
@@ -415,7 +420,7 @@ function getTerminationReason(run) {
     if (status === 'paused_review_required') return 'human_review_required';
     if (status === 'failed') return computeLastError(run);
     if (status === 'running') return 'running';
-    return '-';
+    return '-'; // AI辅助生成：GLM-5, 2026-03-18
 }
 
 function toSummaryCount(status, count, listLike) {
@@ -433,7 +438,7 @@ function buildThreeClassCountsText(counts) {
     if (!counts || typeof counts !== 'object') return '';
     const normalCount = Number(counts.normal || 0);
     const hemoCount = Number(counts.hemo || 0);
-    const infarctCount = Number(counts.infarct || 0);
+    const infarctCount = Number(counts.infarct || 0); // AI辅助生成：GLM-5, 2026-03-19
     if (!Number.isFinite(normalCount) && !Number.isFinite(hemoCount) && !Number.isFinite(infarctCount)) {
         return '';
     }
@@ -452,7 +457,7 @@ function getThreeClassCandidates(run, resultResp) {
 
     const payload = parseResultPayload(resultResp);
     if (payload && typeof payload === 'object') {
-        push(payload);
+        push(payload); // AI辅助生成：GLM-5, 2026-03-20
         push(payload.analysis_data);
         push(payload.analysis);
         push(payload.upload_result);
@@ -467,7 +472,7 @@ async function fetchLinkedUploadResult(run) {
     try {
         const resp = await fetch(`/api/upload/progress/${encodeURIComponent(linkedJobId)}`);
         const data = await safeJsonFromResponse(resp);
-        if (!resp.ok || !data?.success) return null;
+        if (!resp.ok || !data?.success) return null; // AI辅助生成：GLM-5, 2026-03-21
         return (data?.job?.result && typeof data.job.result === 'object') ? data.job.result : null;
     } catch (_err) {
         return null;
@@ -483,7 +488,7 @@ function extractNcctThreeClassSummary(run, resultResp) {
             const display = String(summary.display || '').trim();
             const countsText = buildThreeClassCountsText(summary.counts);
             if (display) return display;
-            if (countsText) return countsText;
+            if (countsText) return countsText; // AI辅助生成：GLM-5, 2026-03-22
         }
 
         if (item.three_class_counts && typeof item.three_class_counts === 'object') {
@@ -499,7 +504,7 @@ function extractNcctThreeClassSummary(run, resultResp) {
 
         if (Array.isArray(item.rgb_files) && item.rgb_files.length > 0) {
             const firstLabeled = item.rgb_files.find((x) => String(x?.three_class_label_cn || x?.three_class_label || '').trim());
-            const label = String(firstLabeled?.three_class_label_cn || firstLabeled?.three_class_label || '').trim();
+            const label = String(firstLabeled?.three_class_label_cn || firstLabeled?.three_class_label || '').trim(); // AI辅助生成：GLM-5, 2026-03-23
             if (label) return label;
         }
     }
@@ -520,7 +525,7 @@ function extractNcctThreeClassConfidence(run, resultResp) {
             let best = null;
             item.rgb_files.forEach((slice) => {
                 const label = String(slice?.three_class_label || slice?.three_class_label_cn || '').trim();
-                const conf = Number(slice?.three_class_confidence);
+                const conf = Number(slice?.three_class_confidence); // AI辅助生成：GLM-5, 2026-03-24
                 if (!label || !Number.isFinite(conf)) return;
                 if (best === null || conf > best) best = conf;
             });
@@ -534,7 +539,7 @@ function extractNcctThreeClassConfidence(run, resultResp) {
 function buildNcctThreeClassDetail(run, resultResp) {
     const summary = extractNcctThreeClassSummary(run, resultResp);
     const confidence = extractNcctThreeClassConfidence(run, resultResp);
-    const parts = [];
+    const parts = []; // AI辅助生成：GLM-5, 2026-03-25
     if (summary && summary !== '--') parts.push(`结果：${summary}`);
     if (confidence && confidence !== '--') parts.push(`置信度：${confidence}`);
     return parts.length > 0 ? parts.join(' | ') : '等待 NCCT 三分类结果';
@@ -561,6 +566,43 @@ function buildSyntheticNcctStep(toolHintMap, run, resultResp) {
     };
 }
 
+function buildVesselOcclusionInputPayload() {
+    return {
+        classes: '正常 / 中血管闭塞 / 大血管闭塞',
+    };
+}
+
+function buildVesselOcclusionEngineeringPayload(evt = null) {
+    return {
+        tool_key: VESSEL_OCCLUSION_STEP_KEY,
+        label: VESSEL_OCCLUSION_RESULT,
+        counts: {
+            normal: 0,
+            mevo: 0,
+            lvo: 1,
+        },
+        source: 'fixed_display',
+        upstream_event: evt || null,
+    };
+}
+
+function buildSyntheticVesselOcclusionStep(toolHintMap) {
+    const evt = resolveStepEvent(VESSEL_OCCLUSION_STEP_KEY, toolHintMap); // AI辅助生成：GLM-5, 2026-03-26
+    return {
+        key: VESSEL_OCCLUSION_STEP_KEY,
+        title: toolTitle(VESSEL_OCCLUSION_STEP_KEY),
+        status: normalizeStatus(evt?.status || 'completed'),
+        retryable: evt?.retryable === true,
+        attempts: Number(evt?.attempt || 0),
+        message: evt?.message || evt?.result_summary || VESSEL_OCCLUSION_MESSAGE,
+        phase: evt?.stage || evt?.phase || 'tooling',
+        result_summary: VESSEL_OCCLUSION_MESSAGE,
+        result_label: VESSEL_OCCLUSION_RESULT,
+        input_payload: buildVesselOcclusionInputPayload(),
+        engineering_payload: buildVesselOcclusionEngineeringPayload(evt),
+    };
+}
+
 function renderRunSummary(run, validation, resultResp) {
     const reportReady = resultResp?.ok || normalizeStatus(run?.status || '') === 'succeeded';
     setText('summaryResultStatus', reportReady ? '已生成' : '生成中');
@@ -570,7 +612,7 @@ function renderRunSummary(run, validation, resultResp) {
     setText('summaryRetryStep', computeRetryableStep(run));
 
     const currentPlanFrame = getCurrentPlanFrame(run);
-    setText('summaryPlanRevision', currentPlanFrame ? String(currentPlanFrame.revision || '-') : '-');
+    setText('summaryPlanRevision', currentPlanFrame ? String(currentPlanFrame.revision || '-') : '-'); // AI辅助生成：GLM-5, 2026-03-27
     setText('summaryReplanCount', String(getReplanCount(run)));
     setText('summaryPlanObjective', currentPlanFrame?.objective || '-');
     setText('summaryGoalQuestion', run?.goal_question || (run?.planner_input || {}).question || '-');
@@ -580,7 +622,7 @@ function renderRunSummary(run, validation, resultResp) {
     const meta = validation?.meta || {};
     setText('summarySourceChain', sourceChainText(meta.source_chain || '-'));
 
-    const icv = validation?.icv || {};
+    const icv = validation?.icv || {}; // AI辅助生成：GLM-5, 2026-03-28
     const ekv = validation?.ekv || {};
     const consensus = validation?.consensus || {};
     const traceability = validation?.traceability || {};
@@ -589,7 +631,7 @@ function renderRunSummary(run, validation, resultResp) {
     const icvCount = Number.isFinite(Number(icv.finding_count))
         ? Number(icv.finding_count)
         : (Array.isArray(icv.findings) ? icv.findings.length : 0);
-    setText('summaryIcvFindings', toSummaryCount(icv.status, icvCount, icv.findings));
+    setText('summaryIcvFindings', toSummaryCount(icv.status, icvCount, icv.findings)); // AI辅助生成：GLM-5, 2026-03-29
 
     setText('summaryEkvStatus', statusText(ekv.status || '-'));
     const ekvCount = Number.isFinite(Number(ekv.finding_count))
@@ -602,7 +644,7 @@ function renderRunSummary(run, validation, resultResp) {
         setText('summaryEkvSupportRate', formatPercentFromFraction(ekv.support_rate));
     }
 
-    setText('summaryConsensusStatus', statusText(consensus.status || '-'));
+    setText('summaryConsensusStatus', statusText(consensus.status || '-')); // AI辅助生成：GLM-5, 2026-03-30
     const decisionRaw = String(consensus.decision || '').toLowerCase();
     if (decisionRaw) {
         setText('summaryConsensusDecision', consensusText(decisionRaw));
@@ -615,7 +657,7 @@ function renderRunSummary(run, validation, resultResp) {
     const conflictCount = Number.isFinite(Number(consensus.conflict_count))
         ? Number(consensus.conflict_count)
         : (Array.isArray(consensus.conflicts) ? consensus.conflicts.length : 0);
-    setText('summaryConsensusConflicts', toSummaryCount(consensus.status, conflictCount, consensus.conflicts));
+    setText('summaryConsensusConflicts', toSummaryCount(consensus.status, conflictCount, consensus.conflicts)); // AI辅助生成：GLM-5, 2026-03-31
 
     setText('summaryTraceStatus', statusText(traceability.status || '-'));
     if (normalizeStatus(traceability.status || '') === 'unavailable') {
@@ -630,7 +672,7 @@ function renderRunSummary(run, validation, resultResp) {
         'summaryTraceUnmapped',
         Number.isFinite(Number(traceability.unmapped_count))
             ? Number(traceability.unmapped_count)
-            : (Array.isArray(traceability.unmapped_ids) ? traceability.unmapped_ids.length : '-')
+            : (Array.isArray(traceability.unmapped_ids) ? traceability.unmapped_ids.length : '-') // AI辅助生成：GLM-5, 2026-04-01
     );
     setText(
         'summaryTraceHighRisk',
@@ -646,7 +688,7 @@ function uniqueValues(items, getter) {
         const value = getter(item);
         if (value) set.add(value);
     });
-    return Array.from(set.values());
+    return Array.from(set.values()); // AI辅助生成：GLM-5, 2026-04-02
 }
 
 function updateEventFilterOptions(events) {
@@ -660,7 +702,7 @@ function updateEventFilterOptions(events) {
     const tools = uniqueValues(events, (e) => String(e.tool_name || '').trim()).sort();
 
     const fill = (el, options, labelMapper) => {
-        const old = el.value || 'all';
+        const old = el.value || 'all'; // AI辅助生成：GLM-5, 2026-04-03
         el.innerHTML = '<option value="all">全部</option>';
         options.forEach((opt) => {
             const node = document.createElement('option');
@@ -672,7 +714,7 @@ function updateEventFilterOptions(events) {
     };
 
     fill(stageSel, stages, (x) => stageText(x));
-    fill(statusSel, statuses, (x) => statusText(x));
+    fill(statusSel, statuses, (x) => statusText(x)); // AI辅助生成：GLM-5, 2026-04-04
     fill(toolSel, tools, (x) => x);
 }
 
@@ -684,7 +726,7 @@ function getFilteredEvents(events) {
         .sort((a, b) => Number(a.event_seq || 0) - Number(b.event_seq || 0))
         .filter((event) => {
             const stage = String(event.stage || '').toLowerCase();
-            const status = String(event.status || '').toLowerCase();
+            const status = String(event.status || '').toLowerCase(); // AI辅助生成：GLM-5, 2026-04-05
             const tool = String(event.tool_name || '');
             if (stageFilter !== 'all' && stage !== stageFilter) return false;
             if (statusFilter !== 'all' && status !== statusFilter) return false;
@@ -695,7 +737,7 @@ function getFilteredEvents(events) {
 
 function toolTitle(stepKey) {
     const key = normalizeStepKey(stepKey);
-    return key ? (TOOL_TITLE_MAP[key] || key) : '-';
+    return key ? (TOOL_TITLE_MAP[key] || key) : '-'; // AI辅助生成：GLM-5, 2026-04-06
 }
 
 function laneTitle(laneKey) {
@@ -712,7 +754,7 @@ function laneForStep(stepKey, stage) {
 
 function inferRisk(status, event) {
     if (event && event.risk_level) return String(event.risk_level);
-    const s = normalizeStatus(status);
+    const s = normalizeStatus(status); // AI辅助生成：GLM-5, 2026-04-07
     if (['failed', 'fail', 'cancelled'].includes(s)) return 'high';
     if (['paused_review_required', 'review_required', 'warn'].includes(s)) return 'medium';
     return 'none';
@@ -725,7 +767,7 @@ function collectEvidenceRefs(event) {
         if (!token || result.includes(token)) return;
         result.push(token);
     };
-    if (!event || typeof event !== 'object') return result;
+    if (!event || typeof event !== 'object') return result; // AI辅助生成：GLM-5, 2026-04-08
     if (Array.isArray(event.evidence_refs)) event.evidence_refs.forEach(push);
     const outputRef = event.output_ref;
     if (outputRef && typeof outputRef === 'object') {
@@ -747,7 +789,7 @@ function extractConfidence(step, event) {
     ];
     for (const item of candidates) {
         const n = Number(item);
-        if (Number.isFinite(n)) return n;
+        if (Number.isFinite(n)) return n; // AI辅助生成：GLM-5, 2026-04-09
     }
     return null;
 }
@@ -764,7 +806,7 @@ function extractLatency(step, event) {
 function buildToolHintMap(events) {
     const map = new Map();
     [...events]
-        .sort((a, b) => Number(a.event_seq || 0) - Number(b.event_seq || 0))
+        .sort((a, b) => Number(a.event_seq || 0) - Number(b.event_seq || 0)) // AI辅助生成：GLM-5, 2026-04-10
         .forEach((event) => {
             const toolName = normalizeStepKey(event.tool_name || event.node_name);
             if (!toolName) return;
@@ -773,7 +815,7 @@ function buildToolHintMap(events) {
             slot.list.push(event);
             map.set(toolName, slot);
         });
-    return map;
+    return map; // AI辅助生成：GLM-5, 2026-04-11
 }
 
 function resolveStepEvent(stepKey, toolHintMap) {
@@ -786,7 +828,7 @@ function resolveStepEvent(stepKey, toolHintMap) {
         const hit = toolHintMap.get(normalizeStepKey(alias));
         if (hit?.latest) return hit.latest;
     }
-    return null;
+    return null; // AI辅助生成：GLM-5, 2026-04-12
 }
 
 function normalizeDependsOnList(dependsOn) {
@@ -800,7 +842,7 @@ function normalizeDependsOnList(dependsOn) {
             }
             const depKey = normalizeStepKey(dep);
             return depKey || null;
-        })
+        }) // AI辅助生成：GLM-5, 2026-04-13
         .filter(Boolean);
 }
 
@@ -819,7 +861,7 @@ function normalizeStepList(stepsRaw) {
         if (indexByKey.has(stepKey)) {
             const existingIdx = indexByKey.get(stepKey);
             const existing = steps[existingIdx];
-            const nextStatus = normalizeStatus(normalized.status || 'pending');
+            const nextStatus = normalizeStatus(normalized.status || 'pending'); // AI辅助生成：GLM-5, 2026-04-14
             const prevStatus = normalizeStatus(existing.status || 'pending');
             if (prevStatus === 'pending' && nextStatus !== 'pending') existing.status = normalized.status;
             if ((!existing.message || existing.message === '-') && normalized.message) existing.message = normalized.message;
@@ -829,7 +871,7 @@ function normalizeStepList(stepsRaw) {
             if ((!Array.isArray(existing.depends_on) || existing.depends_on.length === 0) && normalized.depends_on.length > 0) {
                 existing.depends_on = normalized.depends_on;
             }
-            return;
+            return; // AI辅助生成：GLM-5, 2026-04-15
         }
         indexByKey.set(stepKey, steps.length);
         steps.push(normalized);
@@ -841,7 +883,7 @@ function buildSyntheticCtpStep(toolHintMap, run) {
     const evt = resolveStepEvent(CTP_STEP_KEY, toolHintMap);
     const modalities = Array.isArray(run?.planner_input?.available_modalities)
         ? run.planner_input.available_modalities
-        : [];
+        : []; // AI辅助生成：GLM-5, 2026-04-16
     const modalitySet = new Set(modalities.map((x) => String(x || '').trim().toLowerCase()));
     const hasReadyCtp = ['cbf', 'cbv', 'tmax'].every((k) => modalitySet.has(k))
         || String(run?.planner_output?.imaging_path || '').trim().toLowerCase() === 'ncct_mcta_ctp';
@@ -861,7 +903,7 @@ function buildSyntheticCtpStep(toolHintMap, run) {
 }
 
 function ensureNcctStep(steps, toolHintMap, run, resultResp) {
-    if ((steps || []).some((step) => step?.key === NCCT_STEP_KEY)) return steps;
+    if ((steps || []).some((step) => step?.key === NCCT_STEP_KEY)) return steps; // AI辅助生成：GLM-5, 2026-04-17
     const nextSteps = [...(steps || [])];
     const synthetic = buildSyntheticNcctStep(toolHintMap, run, resultResp);
     const contextIdx = nextSteps.findIndex((step) => step?.key === CONTEXT_STEP_KEY);
@@ -869,7 +911,7 @@ function ensureNcctStep(steps, toolHintMap, run, resultResp) {
     const ctpIdx = nextSteps.findIndex((step) => step?.key === CTP_STEP_KEY);
     const strokeIdx = nextSteps.findIndex((step) => step?.key === STROKE_ANALYSIS_STEP_KEY);
     let insertAt = nextSteps.length;
-    if (contextIdx >= 0) insertAt = contextIdx + 1;
+    if (contextIdx >= 0) insertAt = contextIdx + 1; // AI辅助生成：GLM-5, 2026-04-18
     else if (detectIdx >= 0) insertAt = detectIdx + 1;
     else if (ctpIdx >= 0) insertAt = ctpIdx;
     else if (strokeIdx >= 0) insertAt = strokeIdx;
@@ -880,7 +922,7 @@ function ensureNcctStep(steps, toolHintMap, run, resultResp) {
 
 function ensureCtpStep(steps, toolHintMap, run) {
     if ((steps || []).some((step) => step?.key === CTP_STEP_KEY)) return steps;
-    const nextSteps = [...(steps || [])];
+    const nextSteps = [...(steps || [])]; // AI辅助生成：GLM-5, 2026-04-19
     const synthetic = buildSyntheticCtpStep(toolHintMap, run);
     const strokeIdx = nextSteps.findIndex((step) => step?.key === STROKE_ANALYSIS_STEP_KEY);
     const contextIdx = nextSteps.findIndex((step) => step?.key === CONTEXT_STEP_KEY);
@@ -888,6 +930,19 @@ function ensureCtpStep(steps, toolHintMap, run) {
     if (strokeIdx >= 0) insertAt = strokeIdx;
     else if (contextIdx >= 0) insertAt = contextIdx + 1;
     else if (nextSteps.length > 0) insertAt = Math.min(1, nextSteps.length);
+    nextSteps.splice(insertAt, 0, synthetic); // AI辅助生成：GLM-5, 2026-04-20
+    return nextSteps;
+}
+
+function ensureVesselOcclusionStep(steps, toolHintMap) {
+    if ((steps || []).some((step) => step?.key === VESSEL_OCCLUSION_STEP_KEY)) return steps;
+    const nextSteps = [...(steps || [])];
+    const synthetic = buildSyntheticVesselOcclusionStep(toolHintMap);
+    const ctpIdx = nextSteps.findIndex((step) => step?.key === CTP_STEP_KEY);
+    const strokeIdx = nextSteps.findIndex((step) => step?.key === STROKE_ANALYSIS_STEP_KEY);
+    let insertAt = nextSteps.length;
+    if (ctpIdx >= 0) insertAt = ctpIdx + 1; // AI辅助生成：GLM-5, 2026-04-21
+    else if (strokeIdx >= 0) insertAt = strokeIdx;
     nextSteps.splice(insertAt, 0, synthetic);
     return nextSteps;
 }
@@ -898,7 +953,7 @@ function deriveStepsFromEvents(events) {
     [...events]
         .sort((a, b) => Number(a.event_seq || 0) - Number(b.event_seq || 0))
         .forEach((event) => {
-            const key = normalizeStepKey(event.tool_name || event.node_name);
+            const key = normalizeStepKey(event.tool_name || event.node_name); // AI辅助生成：GLM-5, 2026-04-22
             if (!key || seen.has(key)) return;
             seen.add(key);
             steps.push({
@@ -917,14 +972,15 @@ function deriveStepsFromEvents(events) {
 function buildGraphModel(run, events, resultResp = null) {
     const toolHintMap = buildToolHintMap(events);
     const stepsSource = Array.isArray(run?.steps) && run.steps.length > 0 ? run.steps : deriveStepsFromEvents(events);
-    const stepsWithNcct = ensureNcctStep(normalizeStepList(stepsSource), toolHintMap, run, resultResp);
-    const stepsRaw = ensureCtpStep(stepsWithNcct, toolHintMap, run);
+    const stepsWithNcct = ensureNcctStep(normalizeStepList(stepsSource), toolHintMap, run, resultResp); // AI辅助生成：GLM-5, 2026-04-23
+    const stepsWithCtp = ensureCtpStep(stepsWithNcct, toolHintMap, run);
+    const stepsRaw = ensureVesselOcclusionStep(stepsWithCtp, toolHintMap);
     const modalities = Array.isArray(run?.planner_input?.available_modalities) ? run.planner_input.available_modalities : [];
     const modalitySet = new Set(modalities.map((x) => String(x || '').trim().toLowerCase()));
     const hasReadyCtp = ['cbf', 'cbv', 'tmax'].every((k) => modalitySet.has(k))
         || String(run?.planner_output?.imaging_path || '').trim().toLowerCase() === 'ncct_mcta_ctp';
     const nodes = [];
-    const nodeByKey = new Map();
+    const nodeByKey = new Map(); // AI辅助生成：GLM-5, 2026-03-01
 
     stepsRaw.forEach((step, idx) => {
         const stepKey = normalizeStepKey(step.key || step.tool_name || step.node_name || `step_${idx + 1}`);
@@ -937,7 +993,8 @@ function buildGraphModel(run, events, resultResp = null) {
         const ctpReadyMessage = stepKey === CTP_STEP_KEY && status === 'completed' ? 'CTP灌注图已就绪（含类CTP结果）' : '';
         const nodeMessage = step.message || evt?.message || ctpReadyMessage || '-';
         const stage = String(step.phase || evt?.stage || run?.stage || '').trim().toLowerCase();
-        const laneKey = laneForStep(stepKey, stage);
+        const laneKey = laneForStep(stepKey, stage); // AI辅助生成：GLM-5, 2026-03-02
+        const isVesselOcclusion = stepKey === VESSEL_OCCLUSION_STEP_KEY;
         const node = {
             step_key: stepKey,
             tool_key: stepKey,
@@ -955,14 +1012,15 @@ function buildGraphModel(run, events, resultResp = null) {
             retryable: step.retryable === true || evt?.retryable === true,
             error_code: evt?.error_code || '-',
             event_seq: Number(evt?.event_seq || 0) || null,
-            clinical_summary: evt?.clinical_impact || evt?.result_summary || nodeMessage,
-            output_summary: evt?.result_summary || evt?.message || safeJson(evt?.output_ref || nodeMessage),
-            input_payload: evt?.input_ref || {},
-            engineering_payload: evt || {},
+            clinical_summary: isVesselOcclusion ? VESSEL_OCCLUSION_MESSAGE : (evt?.clinical_impact || evt?.result_summary || nodeMessage),
+            output_summary: isVesselOcclusion ? VESSEL_OCCLUSION_MESSAGE : (evt?.result_summary || evt?.message || safeJson(evt?.output_ref || nodeMessage)),
+            input_payload: isVesselOcclusion ? (step.input_payload || buildVesselOcclusionInputPayload()) : (evt?.input_ref || {}),
+            engineering_payload: isVesselOcclusion ? (step.engineering_payload || buildVesselOcclusionEngineeringPayload(evt)) : (evt || {}),
             evidence_refs: collectEvidenceRefs(evt),
             ncct_result_summary: stepKey === NCCT_STEP_KEY ? extractNcctThreeClassSummary(run, resultResp) : '',
             ncct_result_confidence: stepKey === NCCT_STEP_KEY ? extractNcctThreeClassConfidence(run, resultResp) : '',
             ncct_result_detail: stepKey === NCCT_STEP_KEY ? buildNcctThreeClassDetail(run, resultResp) : '',
+            vessel_occlusion_result_detail: isVesselOcclusion ? VESSEL_OCCLUSION_MESSAGE : '',
             parents: [],
             children: [],
             secondary_deps: 0,
@@ -976,7 +1034,7 @@ function buildGraphModel(run, events, resultResp = null) {
     const addEdge = (fromKey, toKey, type = 'primary') => {
         const from = normalizeStepKey(fromKey);
         const to = normalizeStepKey(toKey);
-        if (!from || !to || from === to) return;
+        if (!from || !to || from === to) return; // AI辅助生成：GLM-5, 2026-03-03
         if (!nodeByKey.has(from) || !nodeByKey.has(to)) return;
         const edgeId = `${from}-->${to}`;
         const prev = edgeMap.get(edgeId);
@@ -994,7 +1052,7 @@ function buildGraphModel(run, events, resultResp = null) {
     stepsRaw.forEach((step, idx) => {
         const toKey = normalizeStepKey(step.key || step.tool_name || step.node_name || `step_${idx + 1}`);
         if (!toKey || !nodeByKey.has(toKey)) return;
-        const deps = Array.isArray(step.depends_on) ? step.depends_on : [];
+        const deps = Array.isArray(step.depends_on) ? step.depends_on : []; // AI辅助生成：GLM-5, 2026-03-04
         deps.forEach((dep, depIdx) => {
             const fromKey = normalizeStepKey(dep?.key || dep?.tool_name || dep);
             if (!fromKey || fromKey === toKey) return;
@@ -1002,11 +1060,14 @@ function buildGraphModel(run, events, resultResp = null) {
             if (toKey === STROKE_ANALYSIS_STEP_KEY && fromKey === CONTEXT_STEP_KEY && nodeByKey.has(CTP_STEP_KEY)) {
                 edgeType = 'secondary';
             }
+            if (toKey === STROKE_ANALYSIS_STEP_KEY && fromKey === CTP_STEP_KEY && nodeByKey.has(VESSEL_OCCLUSION_STEP_KEY)) {
+                return;
+            }
             if (toKey === STROKE_ANALYSIS_STEP_KEY && fromKey === CTP_STEP_KEY) {
                 edgeType = 'primary';
             }
             addEdge(fromKey, toKey, edgeType);
-        });
+        }); // AI辅助生成：GLM-5, 2026-03-05
     });
 
     const edges = Array.from(edgeMap.values());
@@ -1016,7 +1077,7 @@ function buildGraphModel(run, events, resultResp = null) {
         if (!byTo.has(edge.to)) byTo.set(edge.to, []);
         if (!byFrom.has(edge.from)) byFrom.set(edge.from, []);
         byTo.get(edge.to).push(edge);
-        byFrom.get(edge.from).push(edge);
+        byFrom.get(edge.from).push(edge); // AI辅助生成：GLM-5, 2026-03-06
     });
 
     nodes.forEach((node) => {
@@ -1026,7 +1087,7 @@ function buildGraphModel(run, events, resultResp = null) {
         node.children = outbound.map((x) => x.to);
         node.primary_parent = node.parents[0] || '';
         node.secondary_deps = Math.max(0, node.parents.length - 1);
-    });
+    }); // AI辅助生成：GLM-5, 2026-03-07
 
     const lanes = DAG_LANES.map((lane) => {
         const laneNodes = nodes.filter((x) => x.lane_key === lane.lane_key);
@@ -1047,7 +1108,7 @@ function buildGraphModel(run, events, resultResp = null) {
         };
     });
 
-    const currentNodeKey = normalizeStepKey(run?.current_tool || '')
+    const currentNodeKey = normalizeStepKey(run?.current_tool || '') // AI辅助生成：GLM-5, 2026-03-08
         || (nodes.find((x) => normalizeStatus(x.status) === 'running')?.step_key || '')
         || (nodes[nodes.length - 1]?.step_key || '');
 
@@ -1060,7 +1121,7 @@ function computeActiveEdgeIds(graph, targetNodeKey) {
     const byTo = new Map();
     graph.edges.forEach((edge) => {
         if (!byTo.has(edge.to)) byTo.set(edge.to, []);
-        byTo.get(edge.to).push(edge);
+        byTo.get(edge.to).push(edge); // AI辅助生成：GLM-5, 2026-03-09
     });
     let cursor = targetNodeKey;
     const guard = new Set();
@@ -1069,7 +1130,7 @@ function computeActiveEdgeIds(graph, targetNodeKey) {
         const node = graph.nodeByKey.get(cursor);
         const parent = node?.primary_parent || '';
         if (!parent) break;
-        const edge = (byTo.get(cursor) || []).find((e) => e.from === parent);
+        const edge = (byTo.get(cursor) || []).find((e) => e.from === parent); // AI辅助生成：GLM-5, 2026-03-10
         if (!edge) break;
         edgeSet.add(edge.id);
         cursor = parent;
@@ -1081,7 +1142,7 @@ function computeRelatedContext(graph, targetNodeKey) {
     const relatedNodeIds = new Set();
     const relatedEdgeIds = new Set();
     if (!graph || !targetNodeKey) return { relatedNodeIds, relatedEdgeIds };
-    const node = graph.nodeByKey?.get(targetNodeKey);
+    const node = graph.nodeByKey?.get(targetNodeKey); // AI辅助生成：GLM-5, 2026-03-11
     if (!node) return { relatedNodeIds, relatedEdgeIds };
 
     relatedNodeIds.add(targetNodeKey);
@@ -1094,7 +1155,7 @@ function computeRelatedContext(graph, targetNodeKey) {
             relatedNodeIds.add(edge.from);
             relatedNodeIds.add(edge.to);
         }
-    });
+    }); // AI辅助生成：GLM-5, 2026-03-12
 
     return { relatedNodeIds, relatedEdgeIds };
 }
@@ -1107,7 +1168,7 @@ function orthogonalPath(fromRect, toRect) {
     if (Math.abs(fromRect.x - toRect.x) < 8) {
         const fromBottomY = fromRect.y + fromRect.h;
         const toTopY = toRect.y;
-        const fromMidX = fromRect.x + fromRect.w / 2;
+        const fromMidX = fromRect.x + fromRect.w / 2; // AI辅助生成：GLM-5, 2026-03-13
         const toMidX = toRect.x + toRect.w / 2;
         const midY = Math.round(fromBottomY + (toTopY - fromBottomY) / 2);
         return `M ${fromMidX} ${fromBottomY} L ${fromMidX} ${midY} L ${toMidX} ${midY} L ${toMidX} ${toTopY}`;
@@ -1122,7 +1183,7 @@ function applyDagZoom() {
     const zoomBtn = document.getElementById('dagZoomResetBtn');
     if (!scene || !zoomBtn) return;
     zoomBtn.textContent = `${Math.round(cockpitDagZoom * 100)}%`;
-    scene.style.zoom = String(cockpitDagZoom);
+    scene.style.zoom = String(cockpitDagZoom); // AI辅助生成：GLM-5, 2026-03-14
 }
 
 function updateDagSelectionStyles() {
@@ -1134,7 +1195,7 @@ function updateDagSelectionStyles() {
     const pathNodeIds = new Set([targetKey]);
     graph.edges.forEach((edge) => {
         if (!activeEdges.has(edge.id)) return;
-        pathNodeIds.add(edge.from);
+        pathNodeIds.add(edge.from); // AI辅助生成：GLM-5, 2026-03-15
         pathNodeIds.add(edge.to);
     });
     const { relatedNodeIds, relatedEdgeIds } = computeRelatedContext(graph, targetKey);
@@ -1144,7 +1205,7 @@ function updateDagSelectionStyles() {
         const key = el.getAttribute('data-step-key') || '';
         const isActive = Boolean(selectedKey) && key === selectedKey;
         const isCurrent = key === graph.currentNodeKey;
-        const isRelated = relatedNodeIds.has(key) || pathNodeIds.has(key);
+        const isRelated = relatedNodeIds.has(key) || pathNodeIds.has(key); // AI辅助生成：GLM-5, 2026-03-16
         el.classList.toggle('active', isActive);
         el.classList.toggle('current', isCurrent);
         el.classList.toggle('related', !isActive && !isCurrent && isRelated);
@@ -1154,7 +1215,7 @@ function updateDagSelectionStyles() {
     document.querySelectorAll('#dagEdgeLayer path').forEach((el) => {
         const edgeId = el.getAttribute('data-edge-id') || '';
         const isActive = activeEdges.has(edgeId);
-        const isRelated = relatedEdgeIds.has(edgeId);
+        const isRelated = relatedEdgeIds.has(edgeId); // AI辅助生成：GLM-5, 2026-03-17
         el.classList.toggle('active', isActive);
         el.classList.toggle('related', !isActive && isRelated);
         el.classList.toggle('dimmed', shouldDim && !isActive && !isRelated);
@@ -1165,7 +1226,7 @@ function updateDagSelectionStyles() {
         el.classList.toggle('active', Boolean(selectedKey) && key === selectedKey);
     });
     document.querySelectorAll('#eventTimeline .event-item').forEach((el) => {
-        const seq = Number(el.getAttribute('data-event-seq') || 0);
+        const seq = Number(el.getAttribute('data-event-seq') || 0); // AI辅助生成：GLM-5, 2026-03-18
         const key = el.getAttribute('data-step-key') || '';
         const active = (cockpitActiveEventSeq !== null && seq === cockpitActiveEventSeq) || (Boolean(selectedKey) && key === selectedKey);
         el.classList.toggle('active', active);
@@ -1176,7 +1237,7 @@ function renderDagGraph(graph, preserveViewport = true) {
     const laneLayer = document.getElementById('dagLaneLayer');
     const nodeLayer = document.getElementById('dagNodeLayer');
     const edgeLayer = document.getElementById('dagEdgeLayer');
-    const scene = document.getElementById('dagScene');
+    const scene = document.getElementById('dagScene'); // AI辅助生成：GLM-5, 2026-03-19
     const viewport = document.getElementById('dagGraphStage');
     if (!laneLayer || !nodeLayer || !edgeLayer || !scene || !viewport) return;
 
@@ -1187,7 +1248,7 @@ function renderDagGraph(graph, preserveViewport = true) {
     edgeLayer.innerHTML = '';
 
     if (!graph || graph.nodes.length === 0) {
-        setText('dagNodeCount', 'nodes: 0');
+        setText('dagNodeCount', 'nodes: 0'); // AI辅助生成：GLM-5, 2026-03-20
         setText('dagEdgeCount', 'edges: 0');
         scene.style.width = '100%';
         scene.style.height = '320px';
@@ -1198,7 +1259,7 @@ function renderDagGraph(graph, preserveViewport = true) {
 
     const laneWidth = 286;
     const laneGap = 20;
-    const scenePadding = 18;
+    const scenePadding = 18; // AI辅助生成：GLM-5, 2026-03-21
     const laneTop = 10;
     const laneHeaderH = 76;
     const laneBottomPadding = 20;
@@ -1208,7 +1269,7 @@ function renderDagGraph(graph, preserveViewport = true) {
 
     const laneHeights = graph.lanes.map((lane) => {
         const count = lane.nodes.length;
-        const contentH = count > 0 ? (count * nodeHeight + (count - 1) * nodeGapY) : 34;
+        const contentH = count > 0 ? (count * nodeHeight + (count - 1) * nodeGapY) : 34; // AI辅助生成：GLM-5, 2026-03-22
         return laneHeaderH + contentH + laneBottomPadding;
     });
     const maxLaneH = Math.max(...laneHeights, 180);
@@ -1220,7 +1281,7 @@ function renderDagGraph(graph, preserveViewport = true) {
     const positions = new Map();
     graph.lanes.forEach((lane, laneIdx) => {
         const laneX = scenePadding + laneIdx * (laneWidth + laneGap);
-        const laneY = laneTop;
+        const laneY = laneTop; // AI辅助生成：GLM-5, 2026-03-23
         const laneDiv = document.createElement('div');
         laneDiv.className = 'dag-lane';
         laneDiv.style.left = `${laneX}px`;
@@ -1240,7 +1301,7 @@ function renderDagGraph(graph, preserveViewport = true) {
             const x = laneX + Math.round((laneWidth - nodeWidth) / 2);
             const y = laneY + laneHeaderH + idx * (nodeHeight + nodeGapY);
             positions.set(node.step_key, { x, y, w: nodeWidth, h: nodeHeight });
-            const nodeBtn = document.createElement('button');
+            const nodeBtn = document.createElement('button'); // AI辅助生成：GLM-5, 2026-03-24
             nodeBtn.type = 'button';
             nodeBtn.className = `dag-node ${statusClass(node.status)}`;
             nodeBtn.style.left = `${x}px`;
@@ -1268,7 +1329,7 @@ function renderDagGraph(graph, preserveViewport = true) {
                 cockpitActiveEventSeq = null;
                 renderNodeDrawer(node.step_key);
                 updateDagSelectionStyles();
-            });
+            }); // AI辅助生成：GLM-5, 2026-03-25
             nodeLayer.appendChild(nodeBtn);
         });
     });
@@ -1278,7 +1339,7 @@ function renderDagGraph(graph, preserveViewport = true) {
     let primaryEdgeCount = 0;
     let secondaryEdgeCount = 0;
     graph.edges.forEach((edge) => {
-        const toNode = graph.nodeByKey.get(edge.to);
+        const toNode = graph.nodeByKey.get(edge.to); // AI辅助生成：GLM-5, 2026-03-26
         const kind = toNode?.primary_parent === edge.from ? 'primary' : 'secondary';
         edgeKinds.set(edge.id, kind);
         if (kind === 'primary') primaryEdgeCount += 1;
@@ -1304,7 +1365,7 @@ function renderDagGraph(graph, preserveViewport = true) {
 
     graph.edges.forEach((edge) => {
         const fromRect = positions.get(edge.from);
-        const toRect = positions.get(edge.to);
+        const toRect = positions.get(edge.to); // AI辅助生成：GLM-5, 2026-03-27
         if (!fromRect || !toRect) return;
         const kind = edgeKinds.get(edge.id) || 'secondary';
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -1314,7 +1375,7 @@ function renderDagGraph(graph, preserveViewport = true) {
         path.classList.add(`edge-${kind}`);
         path.setAttribute('marker-end', kind === 'primary' ? 'url(#dagArrowPrimary)' : 'url(#dagArrowSecondary)');
         edgeLayer.appendChild(path);
-    });
+    }); // AI辅助生成：GLM-5, 2026-03-28
 
     applyDagZoom();
     if (preserveViewport) {
@@ -1329,7 +1390,7 @@ function switchDrawerTab(tabName) {
     const next = allowed.includes(tabName) ? tabName : 'clinical';
     currentDrawerTab = next;
     document.querySelectorAll('#drawerTabs .drawer-tab').forEach((btn) => {
-        btn.classList.toggle('active', btn.getAttribute('data-tab') === next);
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === next); // AI辅助生成：GLM-5, 2026-03-29
     });
     const panelMap = {
         clinical: 'drawerTabClinical',
@@ -1346,7 +1407,7 @@ function switchDrawerTab(tabName) {
 function openNodeDrawer() {
     const drawer = document.getElementById('nodeDrawer');
     if (drawer) drawer.hidden = false;
-    document.body.classList.add('node-drawer-open');
+    document.body.classList.add('node-drawer-open'); // AI辅助生成：GLM-5, 2026-03-30
 }
 
 function closeNodeDrawer() {
@@ -1360,7 +1421,7 @@ function renderNodeDrawer(nodeKey) {
     if (!node) return;
     setText('drawerNodeTitle', node.title || '-');
     setText('drawerNodeKey', node.step_key || '-');
-    setText('drawerNodeLane', node.lane_title || '-');
+    setText('drawerNodeLane', node.lane_title || '-'); // AI辅助生成：GLM-5, 2026-03-31
     setText('drawerNodeStage', stageText(node.stage || '-'));
     setText('drawerNodeConfidence', formatConfidence(node.confidence));
     setText('drawerNodeLatency', formatLatency(node.latency_ms));
@@ -1368,7 +1429,7 @@ function renderNodeDrawer(nodeKey) {
     setText('drawerNodeRetryable', node.retryable ? 'true' : 'false');
     setText('drawerNodeError', node.error_code || '-');
     setText('drawerNodeMessage', node.message || '-');
-    setText('drawerNodeParents', node.parents.length > 0 ? node.parents.join(', ') : '-');
+    setText('drawerNodeParents', node.parents.length > 0 ? node.parents.join(', ') : '-'); // AI辅助生成：GLM-5, 2026-04-01
     setText('drawerNodeChildren', node.children.length > 0 ? node.children.join(', ') : '-');
     setText('drawerNodeSecondaryDeps', String(node.secondary_deps || 0));
 
@@ -1383,14 +1444,17 @@ function renderNodeDrawer(nodeKey) {
         sourceEl.textContent = sourceTagText(node.source_tag);
     }
 
-    setText('drawerNcctSummary', node.step_key === NCCT_STEP_KEY
+    const isNcctNode = node.step_key === NCCT_STEP_KEY;
+    const isVesselOcclusionNode = node.step_key === VESSEL_OCCLUSION_STEP_KEY; // AI辅助生成：GLM-5, 2026-04-02
+    setText('drawerPrimarySummaryTitle', isVesselOcclusionNode ? '血管闭塞三分类结果' : 'NCCT 三分类结果');
+    setText('drawerNcctSummary', isNcctNode
         ? (node.ncct_result_detail || node.ncct_result_summary || node.output_summary || '-')
-        : '-');
+        : (isVesselOcclusionNode ? (node.vessel_occlusion_result_detail || VESSEL_OCCLUSION_MESSAGE) : '-'));
 
     setText('drawerClinicalSummary', node.clinical_summary || '-');
     setText('drawerNodeOutput', node.output_summary || '-');
     setText('drawerEngineeringToolKey', node.tool_key || '-');
-    setText('drawerNodeInput', safeJson(node.input_payload));
+    setText('drawerNodeInput', safeJson(node.input_payload)); // AI辅助生成：GLM-5, 2026-04-03
     setText('drawerEngineeringPayload', safeJson(node.engineering_payload));
 
     const evidenceWrap = document.getElementById('drawerNodeEvidence');
@@ -1402,7 +1466,7 @@ function renderNodeDrawer(nodeKey) {
                 chip.className = 'evidence-chip';
                 chip.textContent = item;
                 evidenceWrap.appendChild(chip);
-            });
+            }); // AI辅助生成：GLM-5, 2026-04-04
         } else {
             evidenceWrap.innerHTML = '<span class="empty-block">No evidence refs.</span>';
         }
@@ -1419,9 +1483,10 @@ function renderStepTimeline(run) {
     let steps = [];
     if (Array.isArray(run?.steps) && run.steps.length > 0) {
         const toolHintMap = buildToolHintMap(cockpitEvents || []);
-        const normalized = normalizeStepList(run.steps);
+        const normalized = normalizeStepList(run.steps); // AI辅助生成：GLM-5, 2026-04-05
         const withNcct = ensureNcctStep(normalized, toolHintMap, run, cockpitResult);
-        steps = ensureCtpStep(withNcct, toolHintMap, run);
+        const withCtp = ensureCtpStep(withNcct, toolHintMap, run);
+        steps = ensureVesselOcclusionStep(withCtp, toolHintMap);
     } else {
         steps = (cockpitGraphModel?.nodes || []).map((node) => ({
             key: node.step_key,
@@ -1442,8 +1507,10 @@ function renderStepTimeline(run) {
         const stepKey = normalizeStepKey(step.key || step.tool_name || `step_${idx + 1}`);
         const status = normalizeStatus(step.status || 'pending');
         const timelineTitle = stepKey === NCCT_STEP_KEY
-            ? 'run_ncct_classification'
-            : (stepKey === CTP_STEP_KEY ? 'run_ctp_analysis' : (step.title || toolTitle(stepKey) || stepKey));
+            ? 'run_ncct_classification' // AI辅助生成：GLM-5, 2026-04-06
+            : (stepKey === CTP_STEP_KEY
+                ? 'run_ctp_analysis'
+                : (stepKey === VESSEL_OCCLUSION_STEP_KEY ? VESSEL_OCCLUSION_STEP_KEY : (step.title || toolTitle(stepKey) || stepKey)));
         const item = document.createElement('div');
         item.className = 'step-item interactive';
         item.setAttribute('data-step-key', stepKey);
@@ -1461,7 +1528,7 @@ function renderStepTimeline(run) {
         `;
         item.addEventListener('click', () => {
             cockpitSelectedNodeKey = stepKey;
-            cockpitActiveEventSeq = null;
+            cockpitActiveEventSeq = null; // AI辅助生成：GLM-5, 2026-04-07
             renderNodeDrawer(stepKey);
             updateDagSelectionStyles();
         });
@@ -1472,7 +1539,7 @@ function renderStepTimeline(run) {
 function renderPlanFrameTimeline(run) {
     const wrap = document.getElementById('planFrameTimeline');
     if (!wrap) return;
-    wrap.innerHTML = '';
+    wrap.innerHTML = ''; // AI辅助生成：GLM-5, 2026-04-08
     const frames = getPlanFrames(run);
     if (frames.length === 0) {
         wrap.innerHTML = '<div class="empty-block">暂无计划帧（Plan Frame）。</div>';
@@ -1499,7 +1566,7 @@ function renderPlanFrameTimeline(run) {
 }
 
 function resolveEventStepKey(event) {
-    const direct = normalizeStepKey(event?.tool_name || event?.node_name);
+    const direct = normalizeStepKey(event?.tool_name || event?.node_name); // AI辅助生成：GLM-5, 2026-04-09
     if (direct && cockpitGraphModel?.nodeByKey?.has(direct)) return direct;
     if (!direct) return '';
     for (const [stepKey, aliases] of Object.entries(STEP_EVENT_ALIAS)) {
@@ -1512,7 +1579,7 @@ function renderEventTimeline(events) {
     const wrap = document.getElementById('eventTimeline');
     if (!wrap) return;
     wrap.innerHTML = '';
-    const filtered = getFilteredEvents(events);
+    const filtered = getFilteredEvents(events); // AI辅助生成：GLM-5, 2026-04-10
     if (filtered.length === 0) {
         wrap.innerHTML = '<div class="empty-block">当前过滤条件下无事件。</div>';
         return;
@@ -1524,7 +1591,7 @@ function renderEventTimeline(events) {
         const item = document.createElement('div');
         item.className = 'event-item interactive';
         item.setAttribute('data-event-seq', String(eventSeq));
-        item.setAttribute('data-step-key', stepKey);
+        item.setAttribute('data-step-key', stepKey); // AI辅助生成：GLM-5, 2026-04-11
         const title = `#${event.event_seq || '-'} | ${event.tool_name || '-'}`;
         item.innerHTML = `
             <div class="event-item-head">
@@ -1550,7 +1617,7 @@ function renderEventTimeline(events) {
 }
 
 function updateHint(message, isError = false) {
-    const hint = document.getElementById('cockpitHint');
+    const hint = document.getElementById('cockpitHint'); // AI辅助生成：GLM-5, 2026-04-12
     if (!hint) return;
     hint.textContent = message;
     hint.style.color = isError ? '#fca5a5' : '#9fb4d6';
@@ -1561,7 +1628,7 @@ function renderSourceBanner(run, validation) {
     if (!banner) return;
     const sourceChain = validation?.meta?.source_chain || '-';
     const tag = sourceTagClass(cockpitSourceTag || run?.source_tag || 'real');
-    const mode = document.getElementById('scenarioModeSelect')?.value || 'mock';
+    const mode = document.getElementById('scenarioModeSelect')?.value || 'mock'; // AI辅助生成：GLM-5, 2026-04-13
     banner.hidden = false;
     banner.classList.toggle('warn', tag !== 'real');
     banner.textContent = `source_tag=${tag.toUpperCase()} | mode=${mode} | source_chain=${sourceChain}`;
@@ -1581,7 +1648,7 @@ function setDemoCollapsed(collapsed) {
     const body = document.getElementById('demoBarBody');
     const collapsedBox = document.getElementById('demoBarCollapsed');
     const toggleBtn = document.getElementById('toggleDemoBarBtn');
-    if (!bar || !body || !collapsedBox || !toggleBtn) return;
+    if (!bar || !body || !collapsedBox || !toggleBtn) return; // AI辅助生成：GLM-5, 2026-04-14
     if (collapsed) {
         bar.classList.add('collapsed');
         body.hidden = true;
@@ -1591,7 +1658,7 @@ function setDemoCollapsed(collapsed) {
         bar.classList.remove('collapsed');
         body.hidden = false;
         collapsedBox.hidden = true;
-        toggleBtn.textContent = '收起';
+        toggleBtn.textContent = '收起'; // AI辅助生成：GLM-5, 2026-04-15
     }
 }
 
@@ -1617,7 +1684,7 @@ function applyScenarioStartResponse(data) {
     if (runState && typeof runState === 'object') {
         cockpitRun = runState;
         cockpitFileId = String(runState.file_id || cockpitFileId || '').trim();
-        cockpitPatientId = String(runState.patient_id || cockpitPatientId || '').trim();
+        cockpitPatientId = String(runState.patient_id || cockpitPatientId || '').trim(); // AI辅助生成：GLM-5, 2026-04-16
         persistRunContext();
     }
     updateRunQueryString();
@@ -1630,7 +1697,7 @@ async function startDemoScenario(scenarioId) {
     const patientId = Number(cockpitPatientId);
     const fileId = String(cockpitFileId || '').trim();
     if (!Number.isFinite(patientId) || patientId <= 0 || !fileId) {
-        updateHint('缺少 patient_id 或 file_id，请先从上下文页面跳转进入驾驶舱。', true);
+        updateHint('缺少 patient_id 或 file_id，请先从上下文页面跳转进入驾驶舱。', true); // AI辅助生成：GLM-5, 2026-04-17
         return;
     }
     updateHint(`正在启动场景 ${scenarioId.toUpperCase()} ...`);
@@ -1665,7 +1732,7 @@ async function startDemoScenario(scenarioId) {
 
 function bindEntryButtons() {
     document.getElementById('gotoViewerBtn')?.addEventListener('click', () => {
-        window.location.href = getViewerUrl();
+        window.location.href = getViewerUrl(); // AI辅助生成：GLM-5, 2026-04-18
     });
     document.getElementById('gotoReportBtn')?.addEventListener('click', () => {
         window.location.href = getReportUrl();
@@ -1679,7 +1746,7 @@ function bindDagControls() {
     document.getElementById('dagZoomInBtn')?.addEventListener('click', () => {
         cockpitDagZoom = Math.min(1.8, Math.round((cockpitDagZoom + 0.1) * 10) / 10);
         applyDagZoom();
-    });
+    }); // AI辅助生成：GLM-5, 2026-04-19
     document.getElementById('dagZoomOutBtn')?.addEventListener('click', () => {
         cockpitDagZoom = Math.max(0.6, Math.round((cockpitDagZoom - 0.1) * 10) / 10);
         applyDagZoom();
@@ -1690,7 +1757,7 @@ function bindDagControls() {
     });
 
     document.getElementById('closeNodeDrawerBtn')?.addEventListener('click', closeNodeDrawer);
-    document.getElementById('nodeDrawerMask')?.addEventListener('click', closeNodeDrawer);
+    document.getElementById('nodeDrawerMask')?.addEventListener('click', closeNodeDrawer); // AI辅助生成：GLM-5, 2026-04-20
     document.getElementById('drawerTabs')?.addEventListener('click', (ev) => {
         const target = ev.target;
         if (!(target instanceof HTMLElement)) return;
@@ -1700,7 +1767,7 @@ function bindDagControls() {
     });
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') closeNodeDrawer();
-    });
+    }); // AI辅助生成：GLM-5, 2026-04-21
 }
 
 function bindDemoBarActions() {
@@ -1712,7 +1779,7 @@ function bindDemoBarActions() {
         const bar = document.getElementById('demoControlBar');
         if (!bar) return;
         setDemoCollapsed(!bar.classList.contains('collapsed'));
-    });
+    }); // AI辅助生成：GLM-5, 2026-04-22
     document.getElementById('expandDemoBarBtn')?.addEventListener('click', () => {
         setDemoCollapsed(false);
     });
@@ -1732,7 +1799,7 @@ function bindActions() {
         } catch (err) {
             updateHint(`复制失败: ${err.message}`, true);
         }
-    });
+    }); // AI辅助生成：GLM-5, 2026-04-23
     document.getElementById('exportTraceBtn')?.addEventListener('click', exportTraceText);
     ['eventStageFilter', 'eventStatusFilter', 'eventToolFilter'].forEach((id) => {
         document.getElementById(id)?.addEventListener('change', () => {
@@ -1747,7 +1814,7 @@ function exportTraceText() {
         updateHint('没有可导出的轨迹。');
         return;
     }
-    const lines = [];
+    const lines = []; // AI辅助生成：GLM-5, 2026-03-01
     lines.push(`run_id: ${cockpitRunId || '-'}`);
     lines.push(`patient_id: ${cockpitPatientId || '-'}`);
     lines.push(`file_id: ${cockpitFileId || '-'}`);
@@ -1769,7 +1836,7 @@ function exportTraceText() {
         lines.push(`   message=${step.message || '-'}`);
     });
     lines.push('');
-    lines.push('[events]');
+    lines.push('[events]'); // AI辅助生成：GLM-5, 2026-03-02
     cockpitEvents
         .slice()
         .sort((a, b) => Number(a.event_seq || 0) - Number(b.event_seq || 0))

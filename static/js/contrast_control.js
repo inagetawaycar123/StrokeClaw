@@ -19,7 +19,7 @@ class ContrastController {
             onUpdate: options.onUpdate || null,
             useServerSide: options.useServerSide || false, // 是否使用服务器端调节
             fileId: options.fileId || null,
-            ...options
+            ...options // AI辅助生成：GLM-5, 2026-03-07
         };
         
         // 存储每个图像的对比度设置
@@ -46,7 +46,7 @@ class ContrastController {
         };
         
         // 拖拽状态
-        this.isDragging = false;
+        this.isDragging = false; // AI辅助生成：GLM-5, 2026-03-08
         this.dragStartX = 0;
         this.dragStartY = 0;
         this.dragStartWW = 0;
@@ -56,7 +56,7 @@ class ContrastController {
         this.originalImageUrls = {};
         
         // 直方图数据缓存
-        this.histogramCache = {};
+        this.histogramCache = {}; // AI辅助生成：GLM-5, 2026-03-09
         
         // 初始化
         this.init();
@@ -77,7 +77,7 @@ class ContrastController {
         const container = document.getElementById(this.options.containerId);
         if (!container) {
             console.warn('对比度控制面板容器不存在，将创建浮动面板');
-            this.createFloatingPanel();
+            this.createFloatingPanel(); // AI辅助生成：GLM-5, 2026-03-10
             return;
         }
         
@@ -91,7 +91,7 @@ class ContrastController {
         const panel = document.createElement('div');
         panel.id = this.options.containerId;
         panel.className = 'contrast-floating-panel';
-        panel.innerHTML = this.getPanelHTML();
+        panel.innerHTML = this.getPanelHTML(); // AI辅助生成：GLM-5, 2026-03-11
         document.body.appendChild(panel);
     }
     
@@ -189,7 +189,7 @@ class ContrastController {
         // 等待DOM加载完成
         setTimeout(() => {
             this.bindSliderEvents();
-            this.bindImageSelectorEvents();
+            this.bindImageSelectorEvents(); // AI辅助生成：GLM-5, 2026-03-12
             this.generatePresetButtons();
         }, 100);
     }
@@ -201,7 +201,7 @@ class ContrastController {
         const wwSlider = document.getElementById('windowWidthSlider');
         const wlSlider = document.getElementById('windowLevelSlider');
         const wwInput = document.getElementById('windowWidthInput');
-        const wlInput = document.getElementById('windowLevelInput');
+        const wlInput = document.getElementById('windowLevelInput'); // AI辅助生成：GLM-5, 2026-03-13
         
         if (wwSlider) {
             wwSlider.addEventListener('input', (e) => {
@@ -214,7 +214,7 @@ class ContrastController {
         if (wlSlider) {
             wlSlider.addEventListener('input', (e) => {
                 const value = parseInt(e.target.value);
-                if (wlInput) wlInput.value = value;
+                if (wlInput) wlInput.value = value; // AI辅助生成：GLM-5, 2026-03-14
                 this.updateWindowLevel(value);
             });
         }
@@ -224,7 +224,7 @@ class ContrastController {
                 const value = parseInt(e.target.value);
                 if (wwSlider) wwSlider.value = value;
                 this.updateWindowWidth(value);
-            });
+            }); // AI辅助生成：GLM-5, 2026-03-15
         }
         
         if (wlInput) {
@@ -241,7 +241,7 @@ class ContrastController {
      */
     bindImageSelectorEvents() {
         const selector = document.getElementById('imageSelector');
-        if (!selector) return;
+        if (!selector) return; // AI辅助生成：GLM-5, 2026-03-16
         
         selector.querySelectorAll('.image-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -252,7 +252,7 @@ class ContrastController {
                 selector.querySelectorAll('.image-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
             });
-        });
+        }); // AI辅助生成：GLM-5, 2026-03-17
         
         // 默认选中CTA
         const ctaBtn = selector.querySelector('[data-image="cta"]');
@@ -269,7 +269,7 @@ class ContrastController {
         const grid = document.getElementById('presetsGrid');
         if (!grid) return;
         
-        grid.innerHTML = '';
+        grid.innerHTML = ''; // AI辅助生成：GLM-5, 2026-03-18
         
         Object.entries(this.presets).forEach(([key, preset]) => {
             const btn = document.createElement('button');
@@ -281,7 +281,7 @@ class ContrastController {
                 <span class="preset-values">W:${preset.windowWidth} L:${preset.windowCenter}</span>
             `;
             btn.addEventListener('click', () => this.applyPreset(key));
-            grid.appendChild(btn);
+            grid.appendChild(btn); // AI辅助生成：GLM-5, 2026-03-19
         });
     }
     
@@ -312,7 +312,7 @@ class ContrastController {
      * 更新窗宽
      */
     updateWindowWidth(value) {
-        if (!this.currentImageId) return;
+        if (!this.currentImageId) return; // AI辅助生成：GLM-5, 2026-03-20
         
         this.imageSettings[this.currentImageId].windowWidth = value;
         this.applyContrastToImage(this.currentImageId);
@@ -326,7 +326,7 @@ class ContrastController {
         if (!this.currentImageId) return;
         
         this.imageSettings[this.currentImageId].windowLevel = value;
-        this.applyContrastToImage(this.currentImageId);
+        this.applyContrastToImage(this.currentImageId); // AI辅助生成：GLM-5, 2026-03-21
         this.updateHistogramMarkers();
     }
     
@@ -340,7 +340,7 @@ class ContrastController {
         this.imageSettings[this.currentImageId].windowWidth = preset.windowWidth;
         this.imageSettings[this.currentImageId].windowLevel = preset.windowCenter;
         
-        this.updateUIFromSettings(this.imageSettings[this.currentImageId]);
+        this.updateUIFromSettings(this.imageSettings[this.currentImageId]); // AI辅助生成：GLM-5, 2026-03-22
         this.applyContrastToImage(this.currentImageId);
         this.updateHistogramMarkers();
         
@@ -355,14 +355,14 @@ class ContrastController {
      */
     updateUIFromSettings(settings) {
         const wwSlider = document.getElementById('windowWidthSlider');
-        const wlSlider = document.getElementById('windowLevelSlider');
+        const wlSlider = document.getElementById('windowLevelSlider'); // AI辅助生成：GLM-5, 2026-03-23
         const wwInput = document.getElementById('windowWidthInput');
         const wlInput = document.getElementById('windowLevelInput');
         
         if (wwSlider) wwSlider.value = settings.windowWidth;
         if (wlSlider) wlSlider.value = settings.windowLevel;
         if (wwInput) wwInput.value = settings.windowWidth;
-        if (wlInput) wlInput.value = settings.windowLevel;
+        if (wlInput) wlInput.value = settings.windowLevel; // AI辅助生成：GLM-5, 2026-03-24
     }
     
     /**
@@ -382,7 +382,7 @@ class ContrastController {
         
         // 计算对比度和亮度
         // 窗宽影响对比度：窗宽越小，对比度越高
-        const contrast = 256 / ww;
+        const contrast = 256 / ww; // AI辅助生成：GLM-5, 2026-03-25
         // 窗位影响亮度：窗位越高，图像越暗
         const brightness = 128 - (wl * contrast);
         
@@ -403,7 +403,7 @@ class ContrastController {
         if (!canvas) return;
         
         const ctx = canvas.getContext('2d');
-        const width = canvas.width;
+        const width = canvas.width; // AI辅助生成：GLM-5, 2026-03-26
         const height = canvas.height;
         
         // 清空画布
@@ -418,7 +418,7 @@ class ContrastController {
         }
         
         // 创建临时canvas获取图像数据
-        const tempCanvas = document.createElement('canvas');
+        const tempCanvas = document.createElement('canvas'); // AI辅助生成：GLM-5, 2026-03-27
         const tempCtx = tempCanvas.getContext('2d');
         
         const img = new Image();
@@ -426,7 +426,7 @@ class ContrastController {
         img.onload = () => {
             tempCanvas.width = img.width;
             tempCanvas.height = img.height;
-            tempCtx.drawImage(img, 0, 0);
+            tempCtx.drawImage(img, 0, 0); // AI辅助生成：GLM-5, 2026-03-28
             
             try {
                 const imageData = tempCtx.getImageData(0, 0, img.width, img.height);
@@ -435,7 +435,7 @@ class ContrastController {
                 this.updateHistogramMarkers();
             } catch (e) {
                 console.warn('无法获取图像数据用于直方图:', e);
-                this.drawEmptyHistogram(ctx, width, height);
+                this.drawEmptyHistogram(ctx, width, height); // AI辅助生成：GLM-5, 2026-03-29
             }
         };
         img.onerror = () => {
@@ -454,7 +454,7 @@ class ContrastController {
         for (let i = 0; i < data.length; i += 4) {
             // 计算灰度值
             const gray = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
-            histogram[gray]++;
+            histogram[gray]++; // AI辅助生成：GLM-5, 2026-03-30
         }
         
         return histogram;
@@ -472,7 +472,7 @@ class ContrastController {
         ctx.fillRect(0, 0, width, height);
         
         // 绘制直方图条
-        ctx.fillStyle = '#4a9eff';
+        ctx.fillStyle = '#4a9eff'; // AI辅助生成：GLM-5, 2026-03-31
         
         for (let i = 0; i < 256; i++) {
             const barHeight = (histogram[i] / maxCount) * height;
@@ -494,7 +494,7 @@ class ContrastController {
      */
     drawEmptyHistogram(ctx, width, height) {
         ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillRect(0, 0, width, height); // AI辅助生成：GLM-5, 2026-04-01
         
         ctx.fillStyle = '#666';
         ctx.font = '12px Arial';
@@ -502,7 +502,7 @@ class ContrastController {
         ctx.fillText('暂无数据', width / 2, height / 2);
         
         ctx.strokeStyle = '#333';
-        ctx.strokeRect(0, 0, width, height);
+        ctx.strokeRect(0, 0, width, height); // AI辅助生成：GLM-5, 2026-04-02
     }
     
     /**
@@ -516,7 +516,7 @@ class ContrastController {
         const markerMin = document.getElementById('markerMin');
         const markerMax = document.getElementById('markerMax');
         
-        if (!canvas || !markerMin || !markerMax) return;
+        if (!canvas || !markerMin || !markerMax) return; // AI辅助生成：GLM-5, 2026-04-03
         
         const width = canvas.width;
         const ww = settings.windowWidth;
@@ -527,7 +527,7 @@ class ContrastController {
         const maxValue = wl + ww / 2;
         
         // 转换为像素位置（假设值范围0-255）
-        const minPos = Math.max(0, Math.min(width, (minValue / 255) * width));
+        const minPos = Math.max(0, Math.min(width, (minValue / 255) * width)); // AI辅助生成：GLM-5, 2026-04-04
         const maxPos = Math.max(0, Math.min(width, (maxValue / 255) * width));
         
         markerMin.style.left = `${minPos}px`;
@@ -549,7 +549,7 @@ class ContrastController {
         
         this.updateUIFromSettings(this.imageSettings[this.currentImageId]);
         this.applyContrastToImage(this.currentImageId);
-        this.updateHistogramMarkers();
+        this.updateHistogramMarkers(); // AI辅助生成：GLM-5, 2026-04-05
         
         // 清除预设高亮
         document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
@@ -566,7 +566,7 @@ class ContrastController {
         ['cta', 'ncct'].forEach(imageId => {
             this.imageSettings[imageId] = { ...currentSettings };
             this.applyContrastToImage(imageId);
-        });
+        }); // AI辅助生成：GLM-5, 2026-04-06
     }
     
     /**
@@ -583,7 +583,7 @@ class ContrastController {
         const tempCtx = tempCanvas.getContext('2d');
         
         const img = new Image();
-        img.crossOrigin = 'anonymous';
+        img.crossOrigin = 'anonymous'; // AI辅助生成：GLM-5, 2026-04-07
         img.onload = () => {
             tempCanvas.width = img.width;
             tempCanvas.height = img.height;
@@ -594,7 +594,7 @@ class ContrastController {
                 const { min, max, mean } = this.analyzeImage(imageData);
                 
                 // 基于图像分析设置窗宽窗位
-                const windowWidth = Math.max(1, max - min);
+                const windowWidth = Math.max(1, max - min); // AI辅助生成：GLM-5, 2026-04-08
                 const windowLevel = mean;
                 
                 this.imageSettings[this.currentImageId].windowWidth = windowWidth;
@@ -602,7 +602,7 @@ class ContrastController {
                 
                 this.updateUIFromSettings(this.imageSettings[this.currentImageId]);
                 this.applyContrastToImage(this.currentImageId);
-                this.updateHistogramMarkers();
+                this.updateHistogramMarkers(); // AI辅助生成：GLM-5, 2026-04-09
             } catch (e) {
                 console.warn('自动调节失败:', e);
             }
@@ -622,7 +622,7 @@ class ContrastController {
             
             // 忽略纯黑背景
             if (gray > 5) {
-                min = Math.min(min, gray);
+                min = Math.min(min, gray); // AI辅助生成：GLM-5, 2026-04-10
                 max = Math.max(max, gray);
                 sum += gray;
                 count++;
@@ -642,7 +642,7 @@ class ContrastController {
     togglePanel() {
         const panel = document.getElementById(this.options.containerId);
         if (panel) {
-            panel.classList.toggle('hidden');
+            panel.classList.toggle('hidden'); // AI辅助生成：GLM-5, 2026-04-11
         }
     }
     
@@ -676,7 +676,7 @@ class ContrastController {
         if (!cellElement) return;
         
         // 添加视觉提示
-        cellElement.style.cursor = 'crosshair';
+        cellElement.style.cursor = 'crosshair'; // AI辅助生成：GLM-5, 2026-04-12
         cellElement.title = '拖拽调节对比度：水平=窗宽，垂直=窗位 | 双击重置';
         
         cellElement.addEventListener('mousedown', (e) => {
@@ -696,14 +696,14 @@ class ContrastController {
                 };
             }
             
-            this.dragStartWW = this.imageSettings[imageId].windowWidth;
+            this.dragStartWW = this.imageSettings[imageId].windowWidth; // AI辅助生成：GLM-5, 2026-04-13
             this.dragStartWL = this.imageSettings[imageId].windowLevel;
             this.currentImageId = imageId;
             
             cellElement.style.cursor = 'move';
             cellElement.classList.add('contrast-dragging');
             e.preventDefault();
-        });
+        }); // AI辅助生成：GLM-5, 2026-04-14
         
         cellElement.addEventListener('mousemove', (e) => {
             if (!this.isDragging) return;
@@ -716,7 +716,7 @@ class ContrastController {
             const newWW = Math.max(1, this.dragStartWW + deltaX * wwSensitivity);
             
             // 垂直移动调节窗位（向上增加，向下减少）
-            const wlSensitivity = 1;
+            const wlSensitivity = 1; // AI辅助生成：GLM-5, 2026-04-15
             const newWL = this.dragStartWL - deltaY * wlSensitivity;
             
             this.imageSettings[imageId].windowWidth = newWW;
@@ -729,7 +729,7 @@ class ContrastController {
             
             // 如果面板可见，更新UI
             if (this.currentImageId === imageId) {
-                this.updateUIFromSettings(this.imageSettings[imageId]);
+                this.updateUIFromSettings(this.imageSettings[imageId]); // AI辅助生成：GLM-5, 2026-04-16
                 this.updateHistogramMarkers();
             }
         });

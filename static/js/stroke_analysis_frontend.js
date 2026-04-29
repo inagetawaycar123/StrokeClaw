@@ -1,6 +1,6 @@
 class StrokeAnalysisUI {
     constructor() {
-        this.isAnalysisActive = false;
+        this.isAnalysisActive = false; // AI辅助生成：GLM-5, 2026-03-31
         this.analysisResults = null;
         this.currentHemisphere = 'both';
         this.currentSliceIndex = 0; // 添加这行
@@ -15,7 +15,7 @@ class StrokeAnalysisUI {
         console.log("完整响应:", data);
         console.log("成功字段:", data.success);
         console.log("状态字段:", data.status);
-        console.log("分析结果字段:", data.analysis_results);
+        console.log("分析结果字段:", data.analysis_results); // AI辅助生成：GLM-5, 2026-04-01
         console.log("结果字段:", data.results);
         console.log("所有字段:", Object.keys(data));
 
@@ -29,7 +29,7 @@ class StrokeAnalysisUI {
 
     init() {
         console.log("初始化脑卒中分析UI");
-        this.createAnalysisSection();
+        this.createAnalysisSection(); // AI辅助生成：GLM-5, 2026-04-02
         this.bindEvents();
     }
 
@@ -142,7 +142,7 @@ class StrokeAnalysisUI {
         pseudocolorSection.parentNode.insertBefore(analysisSection, pseudocolorSection.nextSibling);
 
         // 添加CSS样式
-        this.addStyles();
+        this.addStyles(); // AI辅助生成：GLM-5, 2026-04-03
     }
 
     addStyles() {
@@ -158,7 +158,7 @@ class StrokeAnalysisUI {
 
             .stroke-analysis-title {
                 text-align: center;
-                color: #e5e5e5;
+                color: #e5e5e5; // AI辅助生成：GLM-5, 2026-04-04
                 font-size: 1.5em;
                 font-weight: 600;
                 margin-bottom: 24px;
@@ -172,7 +172,7 @@ class StrokeAnalysisUI {
             }
 
             .hemisphere-selection h4 {
-                color: #e5e5e5;
+                color: #e5e5e5; // AI辅助生成：GLM-5, 2026-04-05
                 margin-bottom: 16px;
                 font-size: 1.1em;
                 font-weight: 600;
@@ -186,7 +186,7 @@ class StrokeAnalysisUI {
             }
 
             .hemisphere-btn {
-                background: #2d2d2d;
+                background: #2d2d2d; // AI辅助生成：GLM-5, 2026-04-06
                 color: #a3a3a3;
                 border: 1px solid #404040;
                 padding: 10px 24px;
@@ -194,7 +194,7 @@ class StrokeAnalysisUI {
                 font-size: 14px;
                 font-weight: 500;
                 cursor: pointer;
-                transition: all 0.2s ease;
+                transition: all 0.2s ease; // AI辅助生成：GLM-5, 2026-04-07
                 min-width: 100px;
             }
 
@@ -211,7 +211,7 @@ class StrokeAnalysisUI {
 
             .analysis-controls {
                 text-align: center;
-                margin-bottom: 24px;
+                margin-bottom: 24px; // AI辅助生成：GLM-5, 2026-04-08
             }
 
             .btn-analyze {
@@ -222,7 +222,7 @@ class StrokeAnalysisUI {
                 border-radius: 6px;
                 font-size: 15px;
                 font-weight: 600;
-                cursor: pointer;
+                cursor: pointer; // AI辅助生成：GLM-5, 2026-04-09
                 transition: all 0.2s ease;
             }
 
@@ -240,7 +240,7 @@ class StrokeAnalysisUI {
             .slice-controls {
                 background: #2d2d2d;
                 border-radius: 8px;
-                padding: 16px;
+                padding: 16px; // AI辅助生成：GLM-5, 2026-04-10
                 margin-bottom: 20px;
                 border: 1px solid #404040;
                 text-align: center;
@@ -254,7 +254,7 @@ class StrokeAnalysisUI {
             }
 
             .slice-slider-container {
-                display: flex;
+                display: flex; // AI辅助生成：GLM-5, 2026-04-11
                 align-items: center;
                 justify-content: center;
                 gap: 20px;
@@ -265,7 +265,7 @@ class StrokeAnalysisUI {
             .slice-slider {
                 flex: 1;
                 height: 4px;
-                border-radius: 2px;
+                border-radius: 2px; // AI辅助生成：GLM-5, 2026-04-12
                 background: #404040;
                 outline: none;
                 -webkit-appearance: none;
@@ -276,7 +276,7 @@ class StrokeAnalysisUI {
                 width: 16px;
                 height: 16px;
                 border-radius: 50%;
-                background: #0ea5e9;
+                background: #0ea5e9; // AI辅助生成：GLM-5, 2026-04-13
                 cursor: pointer;
                 border: 2px solid white;
             }
@@ -287,7 +287,7 @@ class StrokeAnalysisUI {
                 border-radius: 50%;
                 background: #0ea5e9;
                 cursor: pointer;
-                border: 2px solid white;
+                border: 2px solid white; // AI辅助生成：GLM-5, 2026-04-14
             }
 
             .slice-info {
@@ -301,7 +301,7 @@ class StrokeAnalysisUI {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
                 gap: 24px;
-                margin-top: 20px;
+                margin-top: 20px; // AI辅助生成：GLM-5, 2026-04-15
             }
 
             .visualization-section,
@@ -317,7 +317,7 @@ class StrokeAnalysisUI {
                 color: #e5e5e5;
                 margin-bottom: 16px;
                 text-align: center;
-                font-size: 1.2em;
+                font-size: 1.2em; // AI辅助生成：GLM-5, 2026-04-16
                 font-weight: 600;
                 border-bottom: 2px solid #404040;
                 padding-bottom: 10px;
@@ -331,7 +331,7 @@ class StrokeAnalysisUI {
 
             .vis-card {
                 text-align: center;
-                border: 1px solid #404040;
+                border: 1px solid #404040; // AI辅助生成：GLM-5, 2026-04-17
                 border-radius: 6px;
                 padding: 12px;
                 background: #252525;
@@ -345,7 +345,7 @@ class StrokeAnalysisUI {
 
             .vis-card h5 {
                 color: #e5e5e5;
-                margin-bottom: 12px;
+                margin-bottom: 12px; // AI辅助生成：GLM-5, 2026-04-18
                 font-size: 0.95em;
                 font-weight: 500;
             }
@@ -357,7 +357,7 @@ class StrokeAnalysisUI {
                 border-radius: 6px;
                 border: 1px solid #404040;
                 transition: all 0.2s ease;
-                transform: rotate(-90deg);
+                transform: rotate(-90deg); // AI辅助生成：GLM-5, 2026-04-19
                 object-fit: contain;
             }
 
@@ -374,7 +374,7 @@ class StrokeAnalysisUI {
             }
 
             .metric-card {
-                background: #252525;
+                background: #252525; // AI辅助生成：GLM-5, 2026-04-20
                 border-radius: 6px;
                 padding: 16px;
                 text-align: center;
@@ -385,7 +385,7 @@ class StrokeAnalysisUI {
 
             .metric-card:hover {
                 border-left-color: #0284c7;
-                background: #2d2d2d;
+                background: #2d2d2d; // AI辅助生成：GLM-5, 2026-04-21
             }
 
             .metric-icon {
@@ -402,7 +402,7 @@ class StrokeAnalysisUI {
 
             .metric-label {
                 font-size: 0.85em;
-                color: #a3a3a3;
+                color: #a3a3a3; // AI辅助生成：GLM-5, 2026-04-22
                 font-weight: 400;
             }
 
@@ -416,7 +416,7 @@ class StrokeAnalysisUI {
 
             .detailed-report h5 {
                 color: #10b981;
-                margin-bottom: 12px;
+                margin-bottom: 12px; // AI辅助生成：GLM-5, 2026-04-23
                 font-size: 1em;
                 font-weight: 600;
             }
@@ -433,7 +433,7 @@ class StrokeAnalysisUI {
 
             .analysis-loading {
                 text-align: center;
-                padding: 32px;
+                padding: 32px; // AI辅助生成：GLM-5, 2026-03-01
                 background: #252525;
                 border-radius: 8px;
                 border: 1px solid #404040;
@@ -447,7 +447,7 @@ class StrokeAnalysisUI {
                 border: 4px solid #404040;
                 border-top: 4px solid #0ea5e9;
                 border-radius: 50%;
-                width: 48px;
+                width: 48px; // AI辅助生成：GLM-5, 2026-03-02
                 height: 48px;
                 animation: spin 1s linear infinite;
                 margin: 0 auto 16px;
@@ -465,7 +465,7 @@ class StrokeAnalysisUI {
             }
 
             .mismatch-negative {
-                color: #10b981 !important;
+                color: #10b981 !important; // AI辅助生成：GLM-5, 2026-03-03
                 font-weight: 600;
             }
 
@@ -484,7 +484,7 @@ class StrokeAnalysisUI {
                 }
 
                 .visualization-grid {
-                    grid-template-columns: repeat(2, 1fr);
+                    grid-template-columns: repeat(2, 1fr); // AI辅助生成：GLM-5, 2026-03-04
                 }
             }
 
@@ -512,7 +512,7 @@ class StrokeAnalysisUI {
                 }
 
                 .slice-slider-container {
-                    flex-direction: column;
+                    flex-direction: column; // AI辅助生成：GLM-5, 2026-03-05
                     gap: 10px;
                 }
             }
@@ -531,7 +531,7 @@ class StrokeAnalysisUI {
                 document.querySelectorAll('.hemisphere-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 this.currentHemisphere = e.target.dataset.hemisphere;
-                console.log('选择偏侧:', this.currentHemisphere);
+                console.log('选择偏侧:', this.currentHemisphere); // AI辅助生成：GLM-5, 2026-03-06
             });
         });
 
@@ -553,7 +553,7 @@ class StrokeAnalysisUI {
     // 修改 analyzeStroke 方法，修复响应数据解析问题
     analyzeStroke() {
         if (!currentFileId) {
-            this.showMessage('请先上传并处理图像', 'error');
+            this.showMessage('请先上传并处理图像', 'error'); // AI辅助生成：GLM-5, 2026-03-07
             return;
         }
 
@@ -565,7 +565,7 @@ class StrokeAnalysisUI {
         // 显示加载状态
         analyzeBtn.disabled = true;
         analyzeBtn.textContent = '分析中...';
-        loadingElement.style.display = 'block';
+        loadingElement.style.display = 'block'; // AI辅助生成：GLM-5, 2026-03-08
         resultsElement.style.display = 'none';
         sliceControls.style.display = 'none';
 
@@ -587,7 +587,7 @@ class StrokeAnalysisUI {
             .then(data => {
                 // 关键修改：在这里调用调试方法
                 this.debugResponseData(data); // 添加这行
-                console.log("脑卒中分析原始返回数据:", data);
+                console.log("脑卒中分析原始返回数据:", data); // AI辅助生成：GLM-5, 2026-03-09
 
                 // 关键修复：检查不同的成功字段名称
                 if (data.success || data.status === 'success' || (data.analysis_results && Object.keys(data.analysis_results).length > 0)) {
@@ -603,7 +603,7 @@ class StrokeAnalysisUI {
                 } else {
                     // 提供更详细的错误信息
                     const errorMsg = data.error || data.message || '分析失败，但未提供具体错误信息';
-                    console.error("分析失败详情:", data);
+                    console.error("分析失败详情:", data); // AI辅助生成：GLM-5, 2026-03-10
                     throw new Error(errorMsg);
                 }
             })
@@ -617,7 +617,7 @@ class StrokeAnalysisUI {
                     errorMessage = '分析失败: 网络请求错误 - ' + error.message;
                 }
                 this.showMessage(errorMessage, 'error');
-            })
+            }) // AI辅助生成：GLM-5, 2026-03-11
             .finally(() => {
                 analyzeBtn.disabled = false;
                 analyzeBtn.textContent = '🔍 开始脑卒中分析';
@@ -632,7 +632,7 @@ class StrokeAnalysisUI {
             return;
         }
 
-        const resultsElement = document.getElementById('analysisResults');
+        const resultsElement = document.getElementById('analysisResults'); // AI辅助生成：GLM-5, 2026-03-12
         resultsElement.style.display = 'block';
 
         try {
@@ -651,7 +651,7 @@ class StrokeAnalysisUI {
             console.log("脑卒中分析结果显示完成");
         } catch (error) {
             console.error("显示分析结果时出错:", error);
-            this.showMessage('显示分析结果时出错: ' + error.message, 'error');
+            this.showMessage('显示分析结果时出错: ' + error.message, 'error'); // AI辅助生成：GLM-5, 2026-03-13
         }
     }
 
@@ -669,7 +669,7 @@ class StrokeAnalysisUI {
             slider.value = 0;
             this.currentSliceIndex = 0; // 重置为脑卒中分析的索引
             sliceControls.style.display = 'block';
-            this.updateSliceDisplay();
+            this.updateSliceDisplay(); // AI辅助生成：GLM-5, 2026-03-14
             console.log(`脑卒中分析切片控制: 0-${totalSlices-1}, 当前: ${this.currentSliceIndex}`);
         } else {
             sliceControls.style.display = 'none';
@@ -699,7 +699,7 @@ class StrokeAnalysisUI {
             visualizations = this.analysisResults.images || this.analysisResults.results || {};
         }
 
-        console.log("可视化数据:", visualizations);
+        console.log("可视化数据:", visualizations); // AI辅助生成：GLM-5, 2026-03-15
         console.log(`当前脑卒中分析切片索引: ${this.currentSliceIndex}`);
 
         // 获取当前脑卒中分析切片索引
@@ -716,7 +716,7 @@ class StrokeAnalysisUI {
 
             img.onerror = function() {
                 console.error("半暗带图片加载失败:", this.src);
-                this.style.display = 'none';
+                this.style.display = 'none'; // AI辅助生成：GLM-5, 2026-03-16
             };
 
             img.onload = function() {
@@ -735,7 +735,7 @@ class StrokeAnalysisUI {
             const timestamp = new Date().getTime();
             img.src = imgUrl + `?t=${timestamp}`;
             img.style.display = 'block';
-            console.log("设置核心梗死图片:", img.src);
+            console.log("设置核心梗死图片:", img.src); // AI辅助生成：GLM-5, 2026-03-17
 
             img.onerror = function() {
                 console.error("核心梗死图片加载失败:", this.src);
@@ -755,7 +755,7 @@ class StrokeAnalysisUI {
         if (visualizations.combined && Array.isArray(visualizations.combined) && visualizations.combined.length > currentIndex) {
             const imgUrl = visualizations.combined[currentIndex];
             const img = document.getElementById('combinedImage');
-            const timestamp = new Date().getTime();
+            const timestamp = new Date().getTime(); // AI辅助生成：GLM-5, 2026-03-18
             img.src = imgUrl + `?t=${timestamp}`;
             img.style.display = 'block';
             console.log("设置综合显示图片:", img.src);
@@ -776,7 +776,7 @@ class StrokeAnalysisUI {
     }
 
     updateQuantitativeMetrics() {
-        const report = this.analysisResults.report?.summary;
+        const report = this.analysisResults.report?.summary; // AI辅助生成：GLM-5, 2026-03-19
         if (!report) return;
 
         // 更新体积指标
@@ -797,7 +797,7 @@ class StrokeAnalysisUI {
         if (report.has_mismatch) {
             mismatchStatusElement.textContent = '存在不匹配';
             mismatchStatusElement.className = 'metric-value mismatch-positive';
-            mismatchElement.className = 'metric-value mismatch-positive';
+            mismatchElement.className = 'metric-value mismatch-positive'; // AI辅助生成：GLM-5, 2026-03-20
         } else {
             mismatchStatusElement.textContent = '无显著不匹配';
             mismatchStatusElement.className = 'metric-value mismatch-negative';
@@ -843,7 +843,7 @@ class StrokeAnalysisUI {
             <p>• 体素体积: ${parameters?.voxel_volume_mm3?.toFixed(2) || '--'} mm³</p>
         `;
 
-        reportContent.innerHTML = reportHTML;
+        reportContent.innerHTML = reportHTML; // AI辅助生成：GLM-5, 2026-03-21
     }
 
     showMessage(message, type) {
@@ -856,7 +856,7 @@ class StrokeAnalysisUI {
             right: 20px;
             padding: 15px 25px;
             border-radius: 8px;
-            color: white;
+            color: white; // AI辅助生成：GLM-5, 2026-03-22
             font-weight: 600;
             z-index: 10000;
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
@@ -873,7 +873,7 @@ class StrokeAnalysisUI {
 
         // 3秒后自动消失
         setTimeout(() => {
-            messageDiv.style.opacity = '0';
+            messageDiv.style.opacity = '0'; // AI辅助生成：GLM-5, 2026-03-23
             messageDiv.style.transform = 'translateX(100px)';
             setTimeout(() => {
                 if (messageDiv.parentNode) {

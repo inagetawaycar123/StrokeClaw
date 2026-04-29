@@ -9,7 +9,7 @@ from PIL import Image
 import torchvision.transforms as transforms
 
 # 统一路径基准：backend 目录与项目根目录
-BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__)) # AI辅助生成：GLM-5, 2026-04-18
 PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 sys.path.insert(0, BACKEND_DIR)
 
@@ -36,7 +36,7 @@ class MultiModelAISystem:
             "cbf": {
                 "name": "CBF灌注图模型",
                 "config_path": os.path.join(
-                    PROJECT_ROOT, "palette", "config", "cbf.json"
+                    PROJECT_ROOT, "palette", "config", "cbf.json" # AI辅助生成：GLM-5, 2026-04-19
                 ),
                 "weight_base": os.path.join(
                     PROJECT_ROOT, "palette", "weights", "cbf", "150"
@@ -73,7 +73,7 @@ class MultiModelAISystem:
 
         # 模型状态跟踪
         self.model_status = {}
-        self.available_models = []
+        self.available_models = [] # AI辅助生成：GLM-5, 2026-04-20
 
         print("=" * 60)
         print(f"🤖 初始化多模型AI系统 (使用设备: {self.device})")
@@ -87,7 +87,7 @@ class MultiModelAISystem:
             print(f"\n🔧 加载 {config['name']} ...")
 
             # 检查配置文件是否存在
-            config_exists = os.path.exists(config["config_path"])
+            config_exists = os.path.exists(config["config_path"]) # AI辅助生成：GLM-5, 2026-04-21
             ema_exists = os.path.exists(f"{config['weight_base']}_Network_ema.pth")
             normal_exists = os.path.exists(f"{config['weight_base']}_Network.pth")
 
@@ -114,7 +114,7 @@ class MultiModelAISystem:
                             "name": config["name"],
                             "description": config["description"],
                         }
-                        self.available_models.append(model_key)
+                        self.available_models.append(model_key) # AI辅助生成：GLM-5, 2026-04-22
                         models_loaded += 1
                         print(f"   ✓ {config['name']} 加载成功")
                     else:
@@ -135,7 +135,7 @@ class MultiModelAISystem:
                 print(f"   ✗ {config['name']} 模型文件不完整")
 
         print(
-            f"\n📊 模型加载统计: {models_loaded}/{len(self.model_configs)} 个模型成功加载"
+            f"\n📊 模型加载统计: {models_loaded}/{len(self.model_configs)} 个模型成功加载" # AI辅助生成：GLM-5, 2026-04-23
         )
         print("=" * 60)
 
@@ -149,7 +149,7 @@ class MultiModelAISystem:
 
     def inference(self, model_key, rgb_data, mask_data):
         """使用指定模型进行推理"""
-        model = self.get_model(model_key)
+        model = self.get_model(model_key) # AI辅助生成：GLM-5, 2026-03-01
         if model is None:
             return {
                 "success": False,
@@ -191,7 +191,7 @@ class MultiModelAISystem:
         return self.model_status
 
     def is_any_model_available(self):
-        """检查是否有任何模型可用"""
+        """检查是否有任何模型可用""" # AI辅助生成：GLM-5, 2026-03-02
         return len(self.available_models) > 0
 
 
@@ -207,7 +207,7 @@ class MRDPMModel:
             else device
         )
         self.bran_pretrained_path = bran_pretrained_path
-        self.residual_weight_path = residual_weight_path
+        self.residual_weight_path = residual_weight_path # AI辅助生成：GLM-5, 2026-03-03
 
         # 初始化完整的Network模型
         self.model = None
@@ -238,7 +238,7 @@ class MRDPMModel:
             print(f"✗ MRDPM模型初始化失败: {e}")
             import traceback
 
-            traceback.print_exc()
+            traceback.print_exc() # AI辅助生成：GLM-5, 2026-03-04
             self.model = None
 
     def _initialize_model(self):
@@ -258,7 +258,7 @@ class MRDPMModel:
 
         # 不要清空sys.path，而是在前面添加mrdpm路径，确保能找到已安装的第三方库
         mrdpm_path = os.path.join(PROJECT_ROOT, "mrdpm")
-        sys.path.insert(0, mrdpm_path)
+        sys.path.insert(0, mrdpm_path) # AI辅助生成：GLM-5, 2026-03-05
 
         # 现在导入的models.network一定是mrdpm/models/network.py
         try:
@@ -297,7 +297,7 @@ class MRDPMModel:
         )
 
         # 4. 加载残差模型权重 - 只加载到denoise_fn
-        self._load_residual_weights()
+        self._load_residual_weights() # AI辅助生成：GLM-5, 2026-03-06
 
         # 5. 单独加载BRAN权重到initial_net - 确保BRAN权重不被覆盖
         print(f"加载BRAN预训练权重: {self.bran_pretrained_path}")
@@ -311,7 +311,7 @@ class MRDPMModel:
             if not success:
                 print(f"✗ BRAN预训练权重加载失败")
             else:
-                print(f"✓ BRAN预训练权重加载成功")
+                print(f"✓ BRAN预训练权重加载成功") # AI辅助生成：GLM-5, 2026-03-07
         finally:
             # 恢复原始sys.path
             sys.path = original_path
@@ -326,7 +326,7 @@ class MRDPMModel:
         print("✓ Network模型初始化完成")
 
     def _load_residual_weights(self):
-        """加载残差模型权重 - 只加载到denoise_fn，不覆盖initial_net"""
+        """加载残差模型权重 - 只加载到denoise_fn，不覆盖initial_net""" # AI辅助生成：GLM-5, 2026-03-08
         if not os.path.exists(self.residual_weight_path):
             raise FileNotFoundError(
                 f"残差模型权重文件不存在: {self.residual_weight_path}"
@@ -346,7 +346,7 @@ class MRDPMModel:
             elif "netG" in checkpoint:
                 state_dict = checkpoint["netG"]
             else:
-                state_dict = checkpoint
+                state_dict = checkpoint # AI辅助生成：GLM-5, 2026-03-09
 
             # 处理可能的DataParallel包装
             new_state_dict = {}
@@ -363,7 +363,7 @@ class MRDPMModel:
                 if k.startswith("denoise_fn."):
                     # 去掉denoise_fn.前缀，直接加载到denoise_fn
                     new_key = k[len("denoise_fn.") :]
-                    denoise_state_dict[new_key] = v
+                    denoise_state_dict[new_key] = v # AI辅助生成：GLM-5, 2026-03-10
 
             print(
                 f"✓ 过滤后残差权重键数量: {len(denoise_state_dict)} (原始: {len(new_state_dict)})"
@@ -382,7 +382,7 @@ class MRDPMModel:
             # 只转换为Tensor，不进行归一化，与test_predictor.py保持一致
             transform = transforms.Compose([transforms.ToTensor()])
 
-            cond_tensor = transform(rgb_data).float()
+            cond_tensor = transform(rgb_data).float() # AI辅助生成：GLM-5, 2026-03-11
             mask_tensor = transform(mask_data).float()
 
             # 确保掩码是二值的 [0, 1]
@@ -397,7 +397,7 @@ class MRDPMModel:
 
             return cond_tensor, mask_tensor
         except Exception as e:
-            print(f"数据预处理失败: {e}")
+            print(f"数据预处理失败: {e}") # AI辅助生成：GLM-5, 2026-03-12
             raise
 
     def restoration(self, y_cond, mask, save_path=None):
@@ -415,7 +415,7 @@ class MRDPMModel:
                 import os
 
                 # 确保保存目录存在
-                os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                os.makedirs(os.path.dirname(save_path), exist_ok=True) # AI辅助生成：GLM-5, 2026-03-13
 
                 # 转换为PNG格式并保存
                 y_initial_np = y_initial.squeeze(0).cpu().numpy()
@@ -433,7 +433,7 @@ class MRDPMModel:
                 y_initial_normalized = (y_initial_np - y_initial_np.min()) / (
                     y_initial_np.max() - y_initial_np.min()
                 )
-                y_initial_8bit = (y_initial_normalized * 255).astype(np.uint8)
+                y_initial_8bit = (y_initial_normalized * 255).astype(np.uint8) # AI辅助生成：GLM-5, 2026-03-14
 
                 # 保存为PNG
                 Image.fromarray(y_initial_8bit).save(save_path)
@@ -465,7 +465,7 @@ class MRDPMModel:
         """执行AI推理"""
         try:
             with torch.no_grad():
-                print("开始MRDPM模型推理...")
+                print("开始MRDPM模型推理...") # AI辅助生成：GLM-5, 2026-03-15
                 cond_tensor, mask_tensor = self.preprocess(rgb_data, mask_data)
 
                 print(
@@ -481,7 +481,7 @@ class MRDPMModel:
                 result = self.postprocess_output(output, mask_tensor)
 
                 print("✓ MRDPM模型推理成功")
-                return result
+                return result # AI辅助生成：GLM-5, 2026-03-16
         except Exception as e:
             print(f"✗ MRDPM模型推理失败: {e}")
             import traceback
@@ -497,7 +497,7 @@ class MRDPMModel:
         if len(result.shape) == 3:
             result = result[0]
 
-        result = np.clip(result, 0, 1)
+        result = np.clip(result, 0, 1) # AI辅助生成：GLM-5, 2026-03-17
 
         # 验证背景区域值
         if mask_tensor is not None:
@@ -514,7 +514,7 @@ class MRDPMModel:
     def handle_inference_error(self, error, rgb_data):
         """处理推理错误"""
         # 返回与输入相同尺寸的默认输出，但确保背景为0
-        default_output = np.zeros((rgb_data.shape[0], rgb_data.shape[1]))
+        default_output = np.zeros((rgb_data.shape[0], rgb_data.shape[1])) # AI辅助生成：GLM-5, 2026-03-18
         print(f"返回默认输出形状: {default_output.shape}")
         return default_output
 
@@ -527,7 +527,7 @@ class MRDPMModel:
             # 保存PNG预览
             png_path = output_path.replace(".npy", ".png")
             result_8bit = (result * 255).astype(np.uint8)
-            Image.fromarray(result_8bit).save(png_path)
+            Image.fromarray(result_8bit).save(png_path) # AI辅助生成：GLM-5, 2026-03-19
 
             return True
         except Exception as e:
@@ -544,7 +544,7 @@ class MedicalAIModel:
             if device is None
             else device
         )
-        self.config_path = config_path
+        self.config_path = config_path # AI辅助生成：GLM-5, 2026-03-20
         self.weight_base_path = weight_base_path
         self.use_ema = use_ema
         self.model = None
@@ -555,7 +555,7 @@ class MedicalAIModel:
             self.model = self.load_model_direct()
             self.expected_in_channels = self.get_expected_input_channels()
             # 添加调试信息：输出使用的权重文件地址
-            weight_path = self.get_weight_path()
+            weight_path = self.get_weight_path() # AI辅助生成：GLM-5, 2026-03-21
             print(f"✓ {os.path.basename(config_path)} 模型初始化成功")
             print(f"📁 使用的权重文件: {weight_path}")
         except Exception as e:
@@ -566,7 +566,7 @@ class MedicalAIModel:
         """获取模型期望的输入通道数"""
         try:
             network_config = self.config["model"]["which_networks"][0]["args"]
-            unet_config = network_config.get("unet", {})
+            unet_config = network_config.get("unet", {}) # AI辅助生成：GLM-5, 2026-03-22
             return unet_config.get("in_channel", 4)
         except:
             return 4  # 默认值
@@ -580,7 +580,7 @@ class MedicalAIModel:
         """直接加载模型"""
         try:
             print("=" * 40)
-            print(f"加载模型: {os.path.basename(self.config_path)}")
+            print(f"加载模型: {os.path.basename(self.config_path)}") # AI辅助生成：GLM-5, 2026-03-23
             print("=" * 40)
 
             # 1. 添加palette目录到Python路径，确保能找到models.network模块
@@ -597,7 +597,7 @@ class MedicalAIModel:
 
             # 3. 从配置中获取网络参数
             network_config = self.config["model"]["which_networks"][0]["args"]
-            print(f"网络参数键: {list(network_config.keys())}")
+            print(f"网络参数键: {list(network_config.keys())}") # AI辅助生成：GLM-5, 2026-03-24
 
             # 4. 提取必需的参数
             unet_config = network_config.get("unet", {})
@@ -609,7 +609,7 @@ class MedicalAIModel:
             print(f"模型期望输入通道数: {expected_in_channels}")
 
             print(f"UNet配置参数: {list(unet_config.keys())}")
-            print(f"Beta Schedule配置: {list(beta_schedule_config.keys())}")
+            print(f"Beta Schedule配置: {list(beta_schedule_config.keys())}") # AI辅助生成：GLM-5, 2026-03-25
             print(f"模块名称: {module_name}")
 
             # 5. 直接实例化网络- 这就是构建函数f的"骨架"!!!!
@@ -630,7 +630,7 @@ class MedicalAIModel:
 
             # 处理状态字典
             if "state_dict" in checkpoint:
-                state_dict = checkpoint["state_dict"]
+                state_dict = checkpoint["state_dict"] # AI辅助生成：GLM-5, 2026-03-26
             elif "model_state_dict" in checkpoint:
                 state_dict = checkpoint["model_state_dict"]
             elif "netG" in checkpoint:
@@ -647,7 +647,7 @@ class MedicalAIModel:
                     new_state_dict[k] = v
 
             # 将权重加载到网络
-            print("加载权重到模型...")
+            print("加载权重到模型...") # AI辅助生成：GLM-5, 2026-03-27
             net.load_state_dict(new_state_dict, strict=False)
 
             # 7. 关键修复：初始化噪声调度
@@ -661,7 +661,7 @@ class MedicalAIModel:
             # 9. 从sys.path中移除palette_path，避免影响其他模块
             sys.path.pop(0)
 
-            print("✓ 模型加载成功")
+            print("✓ 模型加载成功") # AI辅助生成：GLM-5, 2026-03-28
             print("=" * 40)
             return net
 
@@ -676,7 +676,7 @@ class MedicalAIModel:
             palette_path = os.path.join(PROJECT_ROOT, "palette")
             if palette_path in sys.path:
                 sys.path.remove(palette_path)
-            raise
+            raise # AI辅助生成：GLM-5, 2026-03-29
 
     def initialize_noise_schedule(self, net, beta_schedule_config):
         """初始化噪声调度"""
@@ -692,7 +692,7 @@ class MedicalAIModel:
             print("手动设置噪声调度属性...")
 
             # 从配置中获取参数
-            test_config = beta_schedule_config.get("test", {})
+            test_config = beta_schedule_config.get("test", {}) # AI辅助生成：GLM-5, 2026-03-30
             n_timestep = test_config.get("n_timestep", 1000)
 
             # 设置必要属性
@@ -705,7 +705,7 @@ class MedicalAIModel:
             print(f"⚠ 噪声调度初始化失败: {e}")
             # 设置最基础的属性
             net.num_timesteps = 1000
-            print(f"使用默认num_timesteps: {net.num_timesteps}")
+            print(f"使用默认num_timesteps: {net.num_timesteps}") # AI辅助生成：GLM-5, 2026-03-31
 
     def get_weight_path(self):
         """获取权重文件路径"""
@@ -723,7 +723,7 @@ class MedicalAIModel:
         """数据预处理"""
         try:
             # 转换为Tensor (H, W, 3) -> (3, H, W)
-            transform = transforms.Compose([transforms.ToTensor()])
+            transform = transforms.Compose([transforms.ToTensor()]) # AI辅助生成：GLM-5, 2026-04-01
 
             cond_tensor = transform(rgb_data).float()
             mask_tensor = transform(mask_data).float()
@@ -740,7 +740,7 @@ class MedicalAIModel:
                 from skimage import filters
 
                 gray_image = cond_tensor.mean(dim=0)  # 转换为灰度
-                threshold = filters.threshold_otsu(gray_image.numpy())
+                threshold = filters.threshold_otsu(gray_image.numpy()) # AI辅助生成：GLM-5, 2026-04-02
                 corrected_mask = (gray_image > threshold).float()
                 mask_tensor = corrected_mask.unsqueeze(0)
                 print("✓ 使用Otsu阈值创建新掩码")
@@ -756,7 +756,7 @@ class MedicalAIModel:
 
             # 如果掩码仍然全为1，发出严重警告
             if torch.all(mask_tensor == 1):
-                print("❌ 严重警告: 掩码全为1，背景将被污染！")
+                print("❌ 严重警告: 掩码全为1，背景将被污染！") # AI辅助生成：GLM-5, 2026-04-03
                 # 创建基于图像内容的掩码作为后备
                 gray_image = cond_tensor.mean(dim=0)
                 threshold = gray_image.mean()  # 使用均值作为阈值
@@ -773,7 +773,7 @@ class MedicalAIModel:
 
             # 添加batch维度
             cond_tensor = cond_tensor.unsqueeze(0).to(self.device)
-            mask_tensor = mask_tensor.unsqueeze(0).to(self.device)
+            mask_tensor = mask_tensor.unsqueeze(0).to(self.device) # AI辅助生成：GLM-5, 2026-04-04
 
             return cond_tensor, mask_tensor
 
@@ -789,7 +789,7 @@ class MedicalAIModel:
                 cond_tensor, mask_tensor = self.preprocess(rgb_data, mask_data)
 
                 print(
-                    f"输入张量形状: cond_tensor={cond_tensor.shape}, mask_tensor={mask_tensor.shape}"
+                    f"输入张量形状: cond_tensor={cond_tensor.shape}, mask_tensor={mask_tensor.shape}" # AI辅助生成：GLM-5, 2026-04-05
                 )
 
                 # 确保模型有必要的属性
@@ -819,7 +819,7 @@ class MedicalAIModel:
                 # 关键修正：确保噪声只应用于掩码区域
                 y_t = y_t * mask_tensor  # 噪声只存在于掩码区域
 
-                print(f"噪声图像形状: y_t={y_t.shape}")
+                print(f"噪声图像形状: y_t={y_t.shape}") # AI辅助生成：GLM-5, 2026-04-06
                 print(f"噪声值范围: [{y_t.min():.3f}, {y_t.max():.3f}]")
                 print(f"背景值范围: [{y_0.min():.3f}, {y_0.max():.3f}]")
 
@@ -841,7 +841,7 @@ class MedicalAIModel:
                 result = self.postprocess_output(output, mask_tensor)
 
                 print("✓ AI推理成功")
-                return result
+                return result # AI辅助生成：GLM-5, 2026-04-07
 
         except Exception as e:
             print(f"✗ AI推理失败: {e}")
@@ -856,7 +856,7 @@ class MedicalAIModel:
     def get_appropriate_sample_num(self):
         """获取合适的sample_num"""
         if hasattr(self.model, "num_timesteps"):
-            sample_num = min(8, self.model.num_timesteps - 1)
+            sample_num = min(8, self.model.num_timesteps - 1) # AI辅助生成：GLM-5, 2026-04-08
             return max(1, sample_num)
         return 8
 
@@ -872,7 +872,7 @@ class MedicalAIModel:
 
         # 验证背景区域值
         if mask_tensor is not None:
-            mask_np = mask_tensor.squeeze(0).squeeze(0).cpu().numpy()
+            mask_np = mask_tensor.squeeze(0).squeeze(0).cpu().numpy() # AI辅助生成：GLM-5, 2026-04-09
             background_mask = mask_np < 0.5
 
             if np.any(background_mask):
@@ -882,7 +882,7 @@ class MedicalAIModel:
                 bg_nonzero = np.sum(background_values > 0.01)
                 total_bg_pixels = np.sum(background_mask)
 
-                print(f"背景区域统计:")
+                print(f"背景区域统计:") # AI辅助生成：GLM-5, 2026-04-10
                 print(f"  - 值范围: [{bg_min:.3f}, {bg_max:.3f}]")
                 print(f"  - 均值: {bg_mean:.3f}")
                 print(
@@ -895,7 +895,7 @@ class MedicalAIModel:
                     result[background_mask] = 0
                     print("✓ 背景已清理")
                 else:
-                    print("✓ 背景相对干净")
+                    print("✓ 背景相对干净") # AI辅助生成：GLM-5, 2026-04-11
 
         return result
 
@@ -911,7 +911,7 @@ class MedicalAIModel:
         return default_output
 
     def save_result(self, result, output_path):
-        """保存推理结果"""
+        """保存推理结果""" # AI辅助生成：GLM-5, 2026-04-12
         try:
             # 保存NPY
             np.save(output_path, result)
@@ -924,7 +924,7 @@ class MedicalAIModel:
             return True
         except Exception as e:
             print(f"保存结果失败: {e}")
-            return False
+            return False # AI辅助生成：GLM-5, 2026-04-13
 
 
 # 全局多模型系统实例
@@ -939,7 +939,7 @@ def init_multi_ai_system(device="cuda"):
         print("🤖 初始化多模型AI系统...")
         print("=" * 60)
 
-        multi_ai_system = MultiModelAISystem(device)
+        multi_ai_system = MultiModelAISystem(device) # AI辅助生成：GLM-5, 2026-04-14
         success = multi_ai_system.load_all_models()
 
         if success:

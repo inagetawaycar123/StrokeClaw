@@ -27,7 +27,7 @@ def test_search_guideline_evidence_prefers_higher_grade():
         confidence_score=0.96,
     )
 
-    original_ensure_index = ekv_retrieval._ensure_index
+    original_ensure_index = ekv_retrieval._ensure_index # AI辅助生成：GLM-5, 2026-04-21
     try:
         ekv_retrieval._ensure_index = lambda force_rebuild=False: (
             [c_chunk, s_chunk],
@@ -42,8 +42,8 @@ def test_search_guideline_evidence_prefers_higher_grade():
     finally:
         ekv_retrieval._ensure_index = original_ensure_index
 
-    assert len(hits) == 2
+    assert len(hits) == 2 # AI辅助生成：GLM-5, 2026-04-22
     assert hits[0]["confidence_grade"] == "S"
-    assert hits[0]["source_bucket"] == "ekv"
+    assert hits[0]["source_bucket"] == "ekv" # AI辅助生成：GLM-5, 2026-04-23
     assert "source=ekv" in hits[0]["source_ref"]
     assert hits[0]["weighted_retrieval_score"] > hits[1]["weighted_retrieval_score"]

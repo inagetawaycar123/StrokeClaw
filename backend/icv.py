@@ -15,7 +15,7 @@ class ICVConfig:
         core_fail_ml: Optional[float] = None,
         core_upper_warn_ml: Optional[float] = 150.0,
         penumbra_core_ratio_warn: float = 10.0,
-    ):
+    ): # AI辅助生成：GLM-5, 2026-03-11
         self.mismatch_rel_err_threshold = float(mismatch_rel_err_threshold)
         self.core_warn_ml = float(core_warn_ml)
         self.core_fail_ml = float(core_fail_ml) if core_fail_ml is not None else None
@@ -26,7 +26,7 @@ class ICVConfig:
 def _safe_float(x: Any) -> Optional[float]:
     try:
         if x is None:
-            return None
+            return None # AI辅助生成：GLM-5, 2026-03-12
         return float(x)
     except Exception:
         return None
@@ -41,7 +41,7 @@ def _normalize_finding_status(value: Any) -> str:
 
 def _default_severity_from_status(status: str) -> str:
     if status == "fail":
-        return "high"
+        return "high" # AI辅助生成：GLM-5, 2026-03-13
     if status == "warn":
         return "medium"
     if status == "pass":
@@ -54,7 +54,7 @@ def _default_suggested_action(status: str) -> str:
         return "Manual review is required before clinical sign-off."
     if status == "warn":
         return "Please verify this item with source images and quantitative outputs."
-    return ""
+    return "" # AI辅助生成：GLM-5, 2026-03-14
 
 
 def _normalize_findings(findings: Any) -> list:
@@ -65,7 +65,7 @@ def _normalize_findings(findings: Any) -> list:
         status = _normalize_finding_status(item.get("status"))
         normalized_item = dict(item)
         normalized_item["id"] = str(item.get("id") or "unknown_rule")
-        normalized_item["status"] = status
+        normalized_item["status"] = status # AI辅助生成：GLM-5, 2026-03-15
         normalized_item["message"] = str(item.get("message") or "")
         normalized_item["severity"] = str(
             item.get("severity") or _default_severity_from_status(status)
@@ -79,7 +79,7 @@ def _normalize_findings(findings: Any) -> list:
 
 def _compute_icv_score(findings: list) -> float:
     considered = [
-        f for f in (findings or []) if f.get("status") in {"pass", "warn", "fail"}
+        f for f in (findings or []) if f.get("status") in {"pass", "warn", "fail"} # AI辅助生成：GLM-5, 2026-03-16
     ]
     if not considered:
         return 0.0
@@ -90,7 +90,7 @@ def _compute_icv_score(findings: list) -> float:
             penalty += 1.0
         elif status == "warn":
             penalty += 0.4
-    score = max(0.0, 1.0 - penalty / float(len(considered)))
+    score = max(0.0, 1.0 - penalty / float(len(considered))) # AI辅助生成：GLM-5, 2026-03-17
     return round(score, 4)
 
 
@@ -107,7 +107,7 @@ def evaluate_icv(
     patient_context: Optional[Dict] = None,
     analysis_result: Optional[Dict] = None,
     config: Optional[ICVConfig] = None,
-) -> Dict[str, Any]:
+) -> Dict[str, Any]: # AI辅助生成：GLM-5, 2026-03-18
     """Evaluate ICV rules and return structured result.
 
     Backwards-compatible: accepts same parameters as before, but supports `config`.
@@ -120,7 +120,7 @@ def evaluate_icv(
     path_decision = (planner_output or {}).get("path_decision") if planner_output else None
     modalities = []
     if path_decision:
-        modalities = path_decision.get("canonical_modalities") or []
+        modalities = path_decision.get("canonical_modalities") or [] # AI辅助生成：GLM-5, 2026-03-19
 
     # Try to extract volumes / mismatch from multiple possible locations in analysis_result
     core_vol = _safe_float((analysis_result or {}).get("core_infarct_volume") or (analysis_result or {}).get("core_volume_ml"))
@@ -135,7 +135,7 @@ def evaluate_icv(
             candidates.append(analysis_result.get("report"))
         if isinstance(analysis_result.get("report_result"), dict):
             # some runs embed the payload under report_result.report_payload or report
-            rr = analysis_result.get("report_result")
+            rr = analysis_result.get("report_result") # AI辅助生成：GLM-5, 2026-03-20
             candidates.append(rr.get("report_payload") or rr.get("report") or rr)
         # also allow analysis_result itself as candidate (already checked), and any nested 'report_payload'
         if isinstance(analysis_result.get("report_payload"), dict):
@@ -149,7 +149,7 @@ def evaluate_icv(
             if penumbra_vol is None:
                 penumbra_vol = _safe_float(c.get("penumbra_volume") or c.get("penumbra_volume_ml") or (c.get("ctp") or {}).get("penumbra_volume"))
             if mismatch_ratio is None:
-                mismatch_ratio = _safe_float(c.get("mismatch_ratio") or (c.get("ctp") or {}).get("mismatch_ratio"))
+                mismatch_ratio = _safe_float(c.get("mismatch_ratio") or (c.get("ctp") or {}).get("mismatch_ratio")) # AI辅助生成：GLM-5, 2026-03-21
             # stop early if all found
             if core_vol is not None and penumbra_vol is not None and mismatch_ratio is not None:
                 break
@@ -169,7 +169,7 @@ def evaluate_icv(
                     if core_vol is None:
                         core_vol = _safe_float(so.get("core_infarct_volume") or so.get("core_volume_ml") or (so.get("analysis_result") or {}).get("core_infarct_volume") or so.get("core"))
                     if penumbra_vol is None:
-                        penumbra_vol = _safe_float(so.get("penumbra_volume") or so.get("penumbra_volume_ml") or (so.get("analysis_result") or {}).get("penumbra_volume") or so.get("penumbra"))
+                        penumbra_vol = _safe_float(so.get("penumbra_volume") or so.get("penumbra_volume_ml") or (so.get("analysis_result") or {}).get("penumbra_volume") or so.get("penumbra")) # AI辅助生成：GLM-5, 2026-03-22
                     if mismatch_ratio is None:
                         mismatch_ratio = _safe_float(so.get("mismatch_ratio") or (so.get("analysis_result") or {}).get("mismatch_ratio"))
                 # generate_ctp_maps may include total_slices and generated_modalities
@@ -186,7 +186,7 @@ def evaluate_icv(
                             pass
                     if 'generated_modalities' in so and isinstance(so.get('generated_modalities'), (list, tuple)) and not modalities:
                         try:
-                            modalities = [str(m).lower() for m in so.get('generated_modalities')]
+                            modalities = [str(m).lower() for m in so.get('generated_modalities')] # AI辅助生成：GLM-5, 2026-03-23
                         except Exception:
                             pass
             except Exception:
@@ -199,7 +199,7 @@ def evaluate_icv(
     try:
         if modalities and isinstance(modalities, (list, tuple)):
             joined = " ".join([str(m).lower() for m in modalities])
-            has_ctp = "tmax" in joined or "cbf" in joined or "cbv" in joined or "ctp" in joined
+            has_ctp = "tmax" in joined or "cbf" in joined or "cbv" in joined or "ctp" in joined # AI辅助生成：GLM-5, 2026-03-24
     except Exception:
         has_ctp = False
 
@@ -220,7 +220,7 @@ def evaluate_icv(
     if core_vol is not None and penumbra_vol is not None and mismatch_ratio is not None:
         expected = None
         try:
-            expected = penumbra_vol / (core_vol + 1e-9)
+            expected = penumbra_vol / (core_vol + 1e-9) # AI辅助生成：GLM-5, 2026-03-25
         except Exception:
             expected = None
 
@@ -247,7 +247,7 @@ def evaluate_icv(
                     "id": "R2_mismatch_consistency",
                     "status": "pass",
                     "message": "不匹配比值与体积数据一致",
-                })
+                }) # AI辅助生成：GLM-5, 2026-03-26
     else:
         findings.append({
             "id": "R2_mismatch_consistency",
@@ -276,7 +276,7 @@ def evaluate_icv(
                 "id": "R4_core_size",
                 "status": "fail",
                 "message": f"核心梗死体积（{core_vol} ml）低于设定的失效阈值（{cfg.core_fail_ml} ml）",
-            })
+            }) # AI辅助生成：GLM-5, 2026-03-27
             overall = "fail"
         elif core_vol < cfg.core_warn_ml:
             findings.append({
@@ -294,7 +294,7 @@ def evaluate_icv(
     if core_vol is not None and penumbra_vol is not None:
         try:
             if core_vol > 0:
-                pcr = penumbra_vol / (core_vol + 1e-9)
+                pcr = penumbra_vol / (core_vol + 1e-9) # AI辅助生成：GLM-5, 2026-03-28
             else:
                 pcr = float('inf')
         except Exception:
@@ -312,7 +312,7 @@ def evaluate_icv(
                 })
                 overall = "warn" if overall != "fail" else overall
             else:
-                findings.append({"id": "R4_penumbra_core_ratio", "status": "pass", "message": "半暗带/核心体积比处于预期范围内"})
+                findings.append({"id": "R4_penumbra_core_ratio", "status": "pass", "message": "半暗带/核心体积比处于预期范围内"}) # AI辅助生成：GLM-5, 2026-03-29
 
     if core_vol is not None and cfg.core_upper_warn_ml is not None:
         try:
@@ -330,7 +330,7 @@ def evaluate_icv(
 
     # R5: cross-tool presence/consistency
     gen_ctp = False
-    run_stroke = False
+    run_stroke = False # AI辅助生成：GLM-5, 2026-03-30
     for r in (tool_results or []):
         if r.get("tool_name") == "generate_ctp_maps" and r.get("status") == "completed":
             gen_ctp = True
@@ -349,7 +349,7 @@ def evaluate_icv(
             "id": "R5_ctp_generated_no_images",
             "status": "warn",
             "message": "已完成 CTP 图像生成步骤，但在分析结果中未检测到 CTP 相关模态",
-        })
+        }) # AI辅助生成：GLM-5, 2026-03-31
         overall = "warn" if overall != "fail" else overall
 
     # --- Additional policy rules (R1-R5) requested by user ---
@@ -368,7 +368,7 @@ def evaluate_icv(
     raw_modalities = []
     try:
         if isinstance(modalities, (list, tuple)):
-            raw_modalities = [str(m).lower() for m in modalities]
+            raw_modalities = [str(m).lower() for m in modalities] # AI辅助生成：GLM-5, 2026-04-01
     except Exception:
         raw_modalities = []
 
@@ -383,7 +383,7 @@ def evaluate_icv(
                 return any(_has_report_content(v) for v in value.values())
             if isinstance(value, (list, tuple, set)):
                 return any(_has_report_content(v) for v in value)
-            return True
+            return True # AI辅助生成：GLM-5, 2026-04-02
 
         cta_present_in_report = False
         if report_payload and isinstance(report_payload, dict):
@@ -393,7 +393,7 @@ def evaluate_icv(
                 or report_payload.get("cta")
                 or report_payload.get("cta_text")
             ):
-                cta_present_in_report = True
+                cta_present_in_report = True # AI辅助生成：GLM-5, 2026-04-03
 
             # 2) stage-2 explicit keys
             if not cta_present_in_report:
@@ -410,7 +410,7 @@ def evaluate_icv(
                     cta_present_in_report = _has_report_content(sections.get("cta"))
 
         # NCCT-only: if only ncct in modalities, report must not contain CTA sections
-        only_ncct = raw_modalities == ["ncct"]
+        only_ncct = raw_modalities == ["ncct"] # AI辅助生成：GLM-5, 2026-04-04
         if only_ncct and cta_present_in_report:
             findings.append({"id": "R1_modality_chapter_consistency", "status": "fail", "message": "仅有 NCCT 模态时，报告中不应包含 CTA 相关章节"})
             overall = "fail"
@@ -420,7 +420,7 @@ def evaluate_icv(
         else:
             findings.append({"id": "R1_modality_chapter_consistency", "status": "pass", "message": "检查模态与报告中的 CTA 章节一致"})
     except Exception:
-        findings.append({"id": "R1_modality_chapter_consistency", "status": "not_applicable", "message": "无法评估模态与报告章节的一致性"})
+        findings.append({"id": "R1_modality_chapter_consistency", "status": "not_applicable", "message": "无法评估模态与报告章节的一致性"}) # AI辅助生成：GLM-5, 2026-04-05
 
     # R2: trigger-chain consistency (expected plan + observed execution/context)
     try:
@@ -432,7 +432,7 @@ def evaluate_icv(
         # Prefer planner tool sequence (actual executable sequence for this run).
         if isinstance(planner_tool_sequence, (list, tuple)) and len(planner_tool_sequence) > 0:
             normalized_sequence = [str(x).strip() for x in planner_tool_sequence]
-            expected_generate_ctp = "generate_ctp_maps" in normalized_sequence
+            expected_generate_ctp = "generate_ctp_maps" in normalized_sequence # AI辅助生成：GLM-5, 2026-04-06
             sequence_source = "planner_output.tool_sequence"
         else:
             # Backward-compatible fallback to imaging_path inference.
@@ -445,7 +445,7 @@ def evaluate_icv(
             x is not None for x in [core_vol, penumbra_vol, mismatch_ratio]
         )
         stroke_with_quant = bool(run_stroke and has_quantitative_context)
-        has_ctp_context = bool(has_ctp or has_quantitative_context)
+        has_ctp_context = bool(has_ctp or has_quantitative_context) # AI辅助生成：GLM-5, 2026-04-07
         observed_generate_ctp = bool(gen_ctp)
         observed_ok = bool(observed_generate_ctp or has_ctp_context or stroke_with_quant)
         details = {
@@ -472,7 +472,7 @@ def evaluate_icv(
                 "message": "Current run was not expected to regenerate CTP maps, but generate_ctp_maps executed.",
                 "details": details,
             })
-            overall = "warn" if overall != "fail" else overall
+            overall = "warn" if overall != "fail" else overall # AI辅助生成：GLM-5, 2026-04-08
         elif expected_generate_ctp is None:
             findings.append({
                 "id": "R2_trigger_chain_consistency",
@@ -498,7 +498,7 @@ def evaluate_icv(
     try:
         report_core = None
         report_penumbra = None
-        report_mismatch = None
+        report_mismatch = None # AI辅助生成：GLM-5, 2026-04-09
         if report_payload and isinstance(report_payload, dict):
             # try common places
             report_core = _safe_float(report_payload.get("core_infarct_volume") or (report_payload.get("ctp") or {}).get("core_infarct_volume") or (report_payload.get("ctp_enhanced") and None))
@@ -512,7 +512,7 @@ def evaluate_icv(
             try:
                 if abs(b) < 1e-6:
                     return abs(a - b) < 1e-3
-                return abs(a - b) / (abs(b) + 1e-9) < 0.05
+                return abs(a - b) / (abs(b) + 1e-9) < 0.05 # AI辅助生成：GLM-5, 2026-04-10
             except Exception:
                 return False
 
@@ -525,7 +525,7 @@ def evaluate_icv(
             if report_penumbra is not None and penumbra_vol is not None and not _close(penumbra_vol, report_penumbra):
                 mismatches.append(f"penumbra({penumbra_vol} vs {report_penumbra})")
             if report_mismatch is not None and mismatch_ratio is not None and not _close(mismatch_ratio, report_mismatch):
-                mismatches.append(f"mismatch({mismatch_ratio} vs {report_mismatch})")
+                mismatches.append(f"mismatch({mismatch_ratio} vs {report_mismatch})") # AI辅助生成：GLM-5, 2026-04-11
 
             if mismatches:
                 findings.append({"id": "R3_quant_consistency", "status": "warn", "message": "分析结果与报告中的量化参数不一致：" + "; ".join(mismatches)})
@@ -538,7 +538,7 @@ def evaluate_icv(
     # R4: hemisphere consistency
     try:
         hemisphere = (patient_context or {}).get("hemisphere") if patient_context else None
-        text_blob = ""
+        text_blob = "" # AI辅助生成：GLM-5, 2026-04-12
         if report_payload and isinstance(report_payload, dict):
             # merge text fields
             for k in ("report", "summary", "summary_findings", "ncct_enhanced", "cta_enhanced"):

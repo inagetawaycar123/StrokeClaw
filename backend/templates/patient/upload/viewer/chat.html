@@ -46,8 +46,11 @@
                     </form>
                     <div class="chat-input-footer">
                         <div class="kb-panel">
-                            <button type="button" class="kb-toggle" onclick="toggleKbPanel()" title="查看权威医学文献">权威文献库</button>
-                            <div class="kb-caption">点击查看指南/共识/文献 PDF</div>
+                            <div class="kb-actions">
+                                <button type="button" class="kb-toggle" onclick="toggleKbPanel()" title="查看权威医学文献">权威文献库</button>
+                                <button type="button" class="kg-toggle" onclick="openKnowledgeGraphPage()" title="查看知识图谱增强 RAG">知识图谱</button>
+                            </div>
+                            <div class="kb-caption">点击查看指南/共识/文献 PDF 与知识图谱</div>
                             <div class="kb-list" id="kb-list" style="display: none;">
                                 <div class="kb-loading" id="kb-loading">加载中...</div>
                                 <div class="kb-empty" id="kb-empty" style="display: none;">暂无文献</div>
@@ -490,6 +493,13 @@
     position: relative;
 }
 
+.kb-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
 .kb-caption {
     margin-top: 6px;
     font-size: 11px;
@@ -508,6 +518,22 @@
 
 .kb-toggle:hover {
     border-color: #4facfe;
+}
+
+.kg-toggle {
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #143a46 0%, #0a2330 100%);
+    border: 1px solid #1f6d82;
+    color: #a8efff;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.kg-toggle:hover {
+    border-color: #00d5ff;
+    color: #ffffff;
 }
 
 .kb-list {
@@ -1239,6 +1265,10 @@ function closeKbPanel() {
     const panel = document.getElementById('kb-list');
     if (panel) panel.style.display = 'none';
     document.removeEventListener('click', handleKbOutsideClick);
+}
+
+function openKnowledgeGraphPage() {
+    window.open('/knowledge', '_blank', 'noopener,noreferrer');
 }
 
 function openKbPreview(doc) {

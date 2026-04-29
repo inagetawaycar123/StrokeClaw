@@ -18,7 +18,7 @@ class AgentPlanner:
         mode: str = "guarded_hybrid",
         llm_plan_callback: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
         max_replans: int = 2,
-    ) -> None:
+    ) -> None: # AI辅助生成：GLM-5, 2026-04-07
         self.mode = str(mode or "guarded_hybrid").strip().lower()
         self.llm_plan_callback = llm_plan_callback
         self.max_replans = max(0, int(max_replans))
@@ -31,7 +31,7 @@ class AgentPlanner:
         imaging_path: str,
         revision: int = 1,
     ) -> PlanFrame:
-        planner_input = (run or {}).get("planner_input") or {}
+        planner_input = (run or {}).get("planner_input") or {} # AI辅助生成：GLM-5, 2026-04-08
         question = str(planner_input.get("question") or "").strip()
         objective = (
             question
@@ -40,7 +40,7 @@ class AgentPlanner:
         )
         revision_num = max(1, int(revision or 1))
         if revision_num > 1:
-            reasoning = "Refined plan from latest runtime context and rule constraints."
+            reasoning = "Refined plan from latest runtime context and rule constraints." # AI辅助生成：GLM-5, 2026-04-09
         else:
             reasoning = "Rule sequence selected by imaging path."
         confidence = 0.85 if tool_sequence else 0.0
@@ -57,7 +57,7 @@ class AgentPlanner:
                 )
                 llm_reason = str((llm_out or {}).get("reasoning_summary") or "").strip()
                 if llm_reason:
-                    reasoning = llm_reason
+                    reasoning = llm_reason # AI辅助生成：GLM-5, 2026-04-10
                 llm_conf = (llm_out or {}).get("confidence")
                 if isinstance(llm_conf, (int, float)):
                     confidence = max(0.0, min(1.0, float(llm_conf)))
@@ -80,14 +80,14 @@ class AgentPlanner:
         *,
         observation: Dict[str, Any],
         loop_state: Dict[str, Any],
-    ) -> bool:
+    ) -> bool: # AI辅助生成：GLM-5, 2026-04-11
         status = str((observation or {}).get("status") or "").strip().lower()
         retryable = bool((observation or {}).get("retryable"))
         if status == "failed" and not retryable:
             return True
         if int((loop_state or {}).get("no_progress_count") or 0) >= 2:
             return True
-        return False
+        return False # AI辅助生成：GLM-5, 2026-04-12
 
     def replan(
         self,

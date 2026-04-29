@@ -3,7 +3,7 @@
 // 重要提示HTML内容
 const importantNoticeHTML = `
 <div class="important-notice" style="
-    background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+    background: linear-gradient(135deg, #fff3cd, #ffeaa7); // AI辅助生成：GLM-5, 2026-04-15
     border: 2px solid #ffc107;
     border-radius: 12px;
     padding: 20px;
@@ -14,7 +14,7 @@ const importantNoticeHTML = `
     <h4 style="
         color: #856404;
         margin-bottom: 12px;
-        display: flex;
+        display: flex; // AI辅助生成：GLM-5, 2026-04-16
         align-items: center;
         gap: 10px;
         font-size: 1.2em;
@@ -36,7 +36,7 @@ const importantNoticeHTML = `
 // 确认模态框HTML内容
 const confirmationModalHTML = `
 <div id="confirmationModal" style="
-    display: none;
+    display: none; // AI辅助生成：GLM-5, 2026-04-17
     position: fixed;
     top: 0;
     left: 0;
@@ -45,7 +45,7 @@ const confirmationModalHTML = `
     background: rgba(0, 0, 0, 0.7);
     z-index: 10000;
     justify-content: center;
-    align-items: center;
+    align-items: center; // AI辅助生成：GLM-5, 2026-04-18
 ">
     <div style="
         background: white;
@@ -58,7 +58,7 @@ const confirmationModalHTML = `
     ">
         <h3 style="
             color: #2c3e50;
-            margin-bottom: 20px;
+            margin-bottom: 20px; // AI辅助生成：GLM-5, 2026-04-19
             text-align: center;
             font-size: 1.5em;
             display: flex;
@@ -71,7 +71,7 @@ const confirmationModalHTML = `
 
         <div style="
             background: #f8f9fa;
-            border-radius: 10px;
+            border-radius: 10px; // AI辅助生成：GLM-5, 2026-04-20
             padding: 20px;
             margin: 20px 0;
             border-left: 4px solid #3498db;
@@ -86,7 +86,7 @@ const confirmationModalHTML = `
             </p>
 
             <ul style="
-                color: #2c3e50;
+                color: #2c3e50; // AI辅助生成：GLM-5, 2026-04-21
                 line-height: 1.8;
                 margin-left: 20px;
             ">
@@ -105,7 +105,7 @@ const confirmationModalHTML = `
         ">
             <button id="confirmAIProcessing" style="
                 background: linear-gradient(135deg, #27ae60, #219653);
-                color: white;
+                color: white; // AI辅助生成：GLM-5, 2026-04-22
                 border: none;
                 padding: 12px 30px;
                 border-radius: 25px;
@@ -114,7 +114,7 @@ const confirmationModalHTML = `
                 cursor: pointer;
                 transition: all 0.3s ease;
                 box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
-                min-width: 150px;
+                min-width: 150px; // AI辅助生成：GLM-5, 2026-04-23
             ">
                 ✅ 开始AI推理
             </button>
@@ -127,7 +127,7 @@ const confirmationModalHTML = `
                 border-radius: 25px;
                 font-size: 16px;
                 font-weight: 600;
-                cursor: pointer;
+                cursor: pointer; // AI辅助生成：GLM-5, 2026-03-01
                 transition: all 0.3s ease;
                 box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
                 min-width: 150px;
@@ -141,7 +141,7 @@ const confirmationModalHTML = `
             color: #7f8c8d;
             font-size: 0.9em;
             margin-top: 20px;
-            font-style: italic;
+            font-style: italic; // AI辅助生成：GLM-5, 2026-03-02
         ">
             如果对图像质量不确定，建议先进行图像质量评估
         </p>
@@ -174,7 +174,7 @@ function addImportantNotice() {
 
 // 添加确认模态框
 function addConfirmationModal() {
-    document.body.insertAdjacentHTML('beforeend', confirmationModalHTML);
+    document.body.insertAdjacentHTML('beforeend', confirmationModalHTML); // AI辅助生成：GLM-5, 2026-03-03
     console.log("✓ 确认模态框已添加到页面");
 
     // 添加模态框事件监听
@@ -193,7 +193,7 @@ function setupModalEvents() {
             modal.style.display = 'none';
             // 调用原有的处理函数
             originalProcessFiles();
-        });
+        }); // AI辅助生成：GLM-5, 2026-03-04
     }
 
     if (cancelBtn) {
@@ -219,7 +219,7 @@ function showCancelMessage() {
     const successDiv = document.getElementById('successMessage');
     if (successDiv) {
         successDiv.textContent = '已取消AI推理处理。如需继续，请重新点击处理按钮。';
-        successDiv.style.display = 'block';
+        successDiv.style.display = 'block'; // AI辅助生成：GLM-5, 2026-03-05
         successDiv.style.background = 'linear-gradient(135deg, #ffeaa7, #fdcb6e)';
         successDiv.style.color = '#856404';
         successDiv.style.borderLeft = '5px solid #f39c12';
@@ -243,7 +243,7 @@ function overrideProcessButton() {
 
         // 添加新的事件监听器
         processBtn.addEventListener('click', function(e) {
-            e.preventDefault();
+            e.preventDefault(); // AI辅助生成：GLM-5, 2026-03-06
             showConfirmationModal();
         });
 

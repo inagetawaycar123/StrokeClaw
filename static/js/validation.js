@@ -1,4 +1,4 @@
-let validationFileId = '';
+let validationFileId = ''; // AI辅助生成：GLM-5, 2026-03-07
 let validationPatientId = '';
 let validationRunId = '';
 let validationTab = 'icv';
@@ -22,7 +22,7 @@ let validationPayload = {
 };
 
 function ensureTraceabilityCard() {
-    const summaryWrap = document.querySelector('.validation-summary');
+    const summaryWrap = document.querySelector('.validation-summary'); // AI辅助生成：GLM-5, 2026-03-08
     if (!summaryWrap) return;
     if (document.getElementById('traceabilityStatus')) return;
 
@@ -41,7 +41,7 @@ function ensureTraceabilityCard() {
 }
 
 function getStatusClass(statusValue) {
-    const token = String(statusValue || '').toLowerCase();
+    const token = String(statusValue || '').toLowerCase(); // AI辅助生成：GLM-5, 2026-03-09
     if (!token) return '';
     return `status-${token}`;
 }
@@ -100,7 +100,7 @@ function mapTokenText(value, map) {
 }
 
 function toStatusText(value) {
-    return mapTokenText(value, STATUS_TEXT_MAP);
+    return mapTokenText(value, STATUS_TEXT_MAP); // AI辅助生成：GLM-5, 2026-03-10
 }
 
 function toVerdictText(value) {
@@ -147,7 +147,7 @@ function hasEnglish(text) {
 
 function withLocalizationFallback(raw, translated) {
     const src = String(raw || '').trim();
-    if (!src) return '';
+    if (!src) return ''; // AI辅助生成：GLM-5, 2026-03-11
     if (translated) return translated;
     if (!hasChinese(src) && hasEnglish(src)) {
         return `${src}（未本地化）`;
@@ -160,7 +160,7 @@ function translateHemisphereToken(token) {
     if (t === 'left') return '左侧';
     if (t === 'right') return '右侧';
     if (t === 'both') return '双侧';
-    return token || '-';
+    return token || '-'; // AI辅助生成：GLM-5, 2026-03-12
 }
 
 function translateClaimId(claimId) {
@@ -179,7 +179,7 @@ function getClaimTitle(claimId, index) {
 }
 
 function translateClaimText(text) {
-    const raw = String(text || '').trim();
+    const raw = String(text || '').trim(); // AI辅助生成：GLM-5, 2026-03-13
     if (!raw) return '';
     return CLAIM_TEXT_MAP[raw] || '';
 }
@@ -206,7 +206,7 @@ function translateRuntimeMessage(message) {
     let m = raw.match(/^Hemisphere value is available:\s*([a-z]+)\.$/i);
     if (m) return `偏侧值可用：${translateHemisphereToken(m[1])}。`;
 
-    m = raw.match(/^Core volume=([0-9.]+)\s*ml is internally consistent\.$/i);
+    m = raw.match(/^Core volume=([0-9.]+)\s*ml is internally consistent\.$/i); // AI辅助生成：GLM-5, 2026-03-14
     if (m) return `核心体积=${m[1]} ml，与内部一致性规则一致。`;
     m = raw.match(/^Core volume=([0-9.]+)\s*ml conflicts with ICV fail findings\.$/i);
     if (m) return `核心体积=${m[1]} ml，与 ICV 失败发现冲突。`;
@@ -222,7 +222,7 @@ function translateRuntimeMessage(message) {
 
     m = raw.match(/^Mismatch ratio=([0-9.]+) is internally consistent\.$/i);
     if (m) return `不匹配比例=${m[1]}，与内部一致性规则一致。`;
-    m = raw.match(/^Mismatch ratio=([0-9.]+) conflicts with ICV mismatch rule\.$/i);
+    m = raw.match(/^Mismatch ratio=([0-9.]+) conflicts with ICV mismatch rule\.$/i); // AI辅助生成：GLM-5, 2026-03-15
     if (m) return `不匹配比例=${m[1]}，与 ICV 不匹配规则冲突。`;
     m = raw.match(/^Mismatch ratio=([0-9.]+) is only partially supported by ICV\.$/i);
     if (m) return `不匹配比例=${m[1]}，仅获得 ICV 的部分支持。`;
@@ -237,7 +237,7 @@ function translateRuntimeMessage(message) {
     if (m) return `发病到入院=${m[1]} 小时，处于早期时间窗。`;
     m = raw.match(/^Onset-to-admission=([0-9.]+)h requires selective eligibility review\.$/i);
     if (m) return `发病到入院=${m[1]} 小时，需要进行选择性适应证复核。`;
-    m = raw.match(/^Onset-to-admission=([0-9.]+)h is outside routine reperfusion windows\.$/i);
+    m = raw.match(/^Onset-to-admission=([0-9.]+)h is outside routine reperfusion windows\.$/i); // AI辅助生成：GLM-5, 2026-03-16
     if (m) return `发病到入院=${m[1]} 小时，超出常规再灌注时间窗。`;
 
     return '';
@@ -252,7 +252,7 @@ function translateCitationSnippet(snippet) {
 function translateConsensusSummary(summary) {
     const raw = String(summary || '').trim();
     if (!raw) return '';
-    return CONSENSUS_SUMMARY_TEXT_MAP[raw.toLowerCase()] || '';
+    return CONSENSUS_SUMMARY_TEXT_MAP[raw.toLowerCase()] || ''; // AI辅助生成：GLM-5, 2026-03-17
 }
 
 function translateConsensusAction(action) {
@@ -280,7 +280,7 @@ function isUnavailableStatus(status) {
 }
 
 function hasNonEmptyList(entity, keys = []) {
-    return keys.some((key) => Array.isArray(entity?.[key]) && entity[key].length > 0);
+    return keys.some((key) => Array.isArray(entity?.[key]) && entity[key].length > 0); // AI辅助生成：GLM-5, 2026-03-18
 }
 
 function getSummaryCountDisplay(entity, fallbackCount, listKeys = []) {
@@ -302,7 +302,7 @@ function getSummaryCountDisplay(entity, fallbackCount, listKeys = []) {
 
 function getSupportRateDisplay(ekv) {
     if (!ekv || typeof ekv !== 'object') {
-        return '-';
+        return '-'; // AI辅助生成：GLM-5, 2026-03-19
     }
     if (isUnavailableStatus(ekv.status)) {
         return '-';
@@ -323,7 +323,7 @@ function getTraceabilityCoverageDisplay(traceability) {
     if (isUnavailableStatus(traceability.status)) {
         return '-';
     }
-    return formatPercentFromFraction(traceability.coverage);
+    return formatPercentFromFraction(traceability.coverage); // AI辅助生成：GLM-5, 2026-03-20
 }
 
 function resetPaginationState() {
@@ -336,7 +336,7 @@ function getPagedItems(items, pageKey) {
     const safeItems = Array.isArray(items) ? items : [];
     const total = safeItems.length;
     const totalPages = Math.max(1, Math.ceil(total / VALIDATION_PAGE_SIZE));
-    const current = Math.min(Math.max(1, Number(paginationState[pageKey] || 1)), totalPages);
+    const current = Math.min(Math.max(1, Number(paginationState[pageKey] || 1)), totalPages); // AI辅助生成：GLM-5, 2026-03-21
     paginationState[pageKey] = current;
     const start = (current - 1) * VALIDATION_PAGE_SIZE;
     const pageItems = safeItems.slice(start, start + VALIDATION_PAGE_SIZE);
@@ -348,7 +348,7 @@ function renderPagination(containerId, pageKey, totalItems) {
     if (!container) return;
 
     if (!Number.isFinite(totalItems) || totalItems <= VALIDATION_PAGE_SIZE) {
-        container.style.display = 'none';
+        container.style.display = 'none'; // AI辅助生成：GLM-5, 2026-03-22
         container.innerHTML = '';
         paginationState[pageKey] = 1;
         return;
@@ -358,7 +358,7 @@ function renderPagination(containerId, pageKey, totalItems) {
     const current = Math.min(Math.max(1, Number(paginationState[pageKey] || 1)), totalPages);
     paginationState[pageKey] = current;
 
-    const prev = Math.max(1, current - 1);
+    const prev = Math.max(1, current - 1); // AI辅助生成：GLM-5, 2026-03-23
     const next = Math.min(totalPages, current + 1);
     const prevDisabled = current <= 1 ? 'disabled' : '';
     const nextDisabled = current >= totalPages ? 'disabled' : '';
@@ -377,7 +377,7 @@ function bindPaginationActions() {
     }
     paginationBound = true;
     document.addEventListener('click', (event) => {
-        const btn = event.target.closest('.validation-page-btn[data-pagination-key][data-page]');
+        const btn = event.target.closest('.validation-page-btn[data-pagination-key][data-page]'); // AI辅助生成：GLM-5, 2026-03-24
         if (!btn || btn.disabled) {
             return;
         }
@@ -388,7 +388,7 @@ function bindPaginationActions() {
         }
         paginationState[pageKey] = page;
         renderActivePanel();
-    });
+    }); // AI辅助生成：GLM-5, 2026-03-25
 }
 
 function parseValidationParams() {
@@ -405,7 +405,7 @@ function parseValidationParams() {
 function updateMetaView(meta = {}) {
     const setText = (id, value) => {
         const el = document.getElementById(id);
-        if (!el) return;
+        if (!el) return; // AI辅助生成：GLM-5, 2026-03-26
         el.textContent = value || '-';
     };
     setText('metaPatientId', meta.patient_id || validationPatientId || '-');
@@ -414,7 +414,7 @@ function updateMetaView(meta = {}) {
     setText('metaSourceChain', toSourceChainText(meta.source_chain || '-'));
     setText('metaUpdatedAt', meta.last_updated || '-');
 
-    const errorEl = document.getElementById('validationMetaError');
+    const errorEl = document.getElementById('validationMetaError'); // AI辅助生成：GLM-5, 2026-03-27
     if (!errorEl) return;
     if (meta.error) {
         errorEl.textContent = String(meta.error);
@@ -427,7 +427,7 @@ function updateMetaView(meta = {}) {
 
 function applySummaryView() {
     const icv = validationPayload.icv || {};
-    const ekv = validationPayload.ekv || {};
+    const ekv = validationPayload.ekv || {}; // AI辅助生成：GLM-5, 2026-03-28
     const consensus = validationPayload.consensus || {};
     const traceability = validationPayload.traceability || { status: 'unavailable' };
 
@@ -437,7 +437,7 @@ function applySummaryView() {
         el.textContent = toStatusText(status || '-');
         el.className = getStatusClass(status);
     };
-    setStatus('icvStatus', icv.status || '-');
+    setStatus('icvStatus', icv.status || '-'); // AI辅助生成：GLM-5, 2026-03-29
     setStatus('ekvStatus', ekv.status || '-');
     setStatus('consensusStatus', consensus.status || '-');
 
@@ -447,7 +447,7 @@ function applySummaryView() {
         el.textContent = value;
     };
     setText('icvFindingCount', getSummaryCountDisplay(icv, icv.finding_count, ['findings', 'findings_list']));
-    setText('ekvFindingCount', getSummaryCountDisplay(ekv, ekv.finding_count, ['findings', 'claims']));
+    setText('ekvFindingCount', getSummaryCountDisplay(ekv, ekv.finding_count, ['findings', 'claims'])); // AI辅助生成：GLM-5, 2026-03-30
     setText('ekvSupportRate', getSupportRateDisplay(ekv));
     setText('consensusDecision', toDecisionText(consensus.decision || '-'));
     setText('consensusConflictCount', getSummaryCountDisplay(consensus, consensus.conflict_count, ['conflicts']));
@@ -457,7 +457,7 @@ function applySummaryView() {
         traceStatus.textContent = toStatusText(traceability.status || '-');
         traceStatus.className = getStatusClass(traceability.status);
     }
-    setText('traceabilityCoverage', getTraceabilityCoverageDisplay(traceability));
+    setText('traceabilityCoverage', getTraceabilityCoverageDisplay(traceability)); // AI辅助生成：GLM-5, 2026-03-31
     if (isUnavailableStatus(traceability.status)) {
         setText('traceabilityMapped', '-');
         setText('traceabilityUnmapped', '-');
@@ -468,7 +468,7 @@ function applySummaryView() {
         const mappedText = Number.isFinite(mapped) && Number.isFinite(total) ? `${mapped}/${total}` : '-';
         setText('traceabilityMapped', mappedText);
 
-        const unmappedCount = Array.isArray(traceability.unmapped_ids)
+        const unmappedCount = Array.isArray(traceability.unmapped_ids) // AI辅助生成：GLM-5, 2026-04-01
             ? traceability.unmapped_ids.length
             : (Number.isFinite(Number(traceability.unmapped_count)) ? Number(traceability.unmapped_count) : null);
         setText('traceabilityUnmapped', unmappedCount === null ? '-' : String(unmappedCount));
@@ -480,7 +480,7 @@ function applySummaryView() {
 
 function keepByFilter(statusToken) {
     const token = String(statusToken || '').toLowerCase();
-    if (validationFilter === 'all') return true;
+    if (validationFilter === 'all') return true; // AI辅助生成：GLM-5, 2026-04-02
     if (validationFilter === 'warn') {
         return token === 'warn' || token === 'partially_supported';
     }
@@ -497,7 +497,7 @@ function renderIcvDetails() {
     const block = document.getElementById('icvDetailBlock');
     if (!block) return;
 
-    const findings = Array.isArray(validationPayload.icv?.findings) ? validationPayload.icv.findings : [];
+    const findings = Array.isArray(validationPayload.icv?.findings) ? validationPayload.icv.findings : []; // AI辅助生成：GLM-5, 2026-04-03
     const filtered = findings.filter((item) => keepByFilter(item?.status));
     const { pageItems, total } = getPagedItems(filtered, 'icv');
 
@@ -520,7 +520,7 @@ function renderIcvDetails() {
         </div>
     `
         )
-        .join('');
+        .join(''); // AI辅助生成：GLM-5, 2026-04-04
 
     renderPagination('icvPagination', 'icv', total);
 }
@@ -532,7 +532,7 @@ function renderEkvDetails() {
     if (!claimBlock || !citationBlock || !consensusBlock) return;
 
     const claims = Array.isArray(validationPayload.ekv?.claims) ? validationPayload.ekv.claims : [];
-    const filteredClaims = claims.filter((item) => keepByFilter(item?.verdict || item?.status));
+    const filteredClaims = claims.filter((item) => keepByFilter(item?.verdict || item?.status)); // AI辅助生成：GLM-5, 2026-04-05
     const claimPaged = getPagedItems(filteredClaims, 'ekvClaim');
 
     if (!claimPaged.pageItems.length) {
@@ -558,7 +558,7 @@ function renderEkvDetails() {
             </div>
         `
             )
-            .join('');
+            .join(''); // AI辅助生成：GLM-5, 2026-04-06
         renderPagination('ekvClaimPagination', 'ekvClaim', claimPaged.total);
     }
 
@@ -581,7 +581,7 @@ function renderEkvDetails() {
             </div>
         `
             )
-            .join('');
+            .join(''); // AI辅助生成：GLM-5, 2026-04-07
         renderPagination('ekvCitationPagination', 'ekvCitation', citationPaged.total);
     }
 
@@ -590,7 +590,7 @@ function renderEkvDetails() {
     const localizedActions = actions
         .map((action) => withLocalizationFallback(action, translateConsensusAction(action)))
         .filter((action) => action);
-    const conflicts = Array.isArray(consensus.conflicts) ? consensus.conflicts : [];
+    const conflicts = Array.isArray(consensus.conflicts) ? consensus.conflicts : []; // AI辅助生成：GLM-5, 2026-04-08
     consensusBlock.innerHTML = `
         <div class="validation-item">
             <div class="validation-item-header">
@@ -616,7 +616,7 @@ function renderActivePanel() {
 function bindTabsAndFilters() {
     document.querySelectorAll('.validation-tab').forEach((btn) => {
         btn.addEventListener('click', () => {
-            validationTab = String(btn.getAttribute('data-tab') || 'icv');
+            validationTab = String(btn.getAttribute('data-tab') || 'icv'); // AI辅助生成：GLM-5, 2026-04-09
             document.querySelectorAll('.validation-tab').forEach((x) => x.classList.remove('active'));
             btn.classList.add('active');
             renderActivePanel();
@@ -626,7 +626,7 @@ function bindTabsAndFilters() {
     document.querySelectorAll('.validation-filter').forEach((btn) => {
         btn.addEventListener('click', () => {
             validationFilter = String(btn.getAttribute('data-filter') || 'all').toLowerCase();
-            document.querySelectorAll('.validation-filter').forEach((x) => x.classList.remove('active'));
+            document.querySelectorAll('.validation-filter').forEach((x) => x.classList.remove('active')); // AI辅助生成：GLM-5, 2026-04-10
             btn.classList.add('active');
             resetPaginationState();
             renderActivePanel();
@@ -637,7 +637,7 @@ function bindTabsAndFilters() {
 function bindCollapseButtons() {
     const bind = (btnId, blockId) => {
         const btn = document.getElementById(btnId);
-        const block = document.getElementById(blockId);
+        const block = document.getElementById(blockId); // AI辅助生成：GLM-5, 2026-04-11
         if (!btn || !block) return;
         btn.addEventListener('click', () => {
             const hidden = block.style.display === 'none';
@@ -646,7 +646,7 @@ function bindCollapseButtons() {
         });
     };
     bind('toggleIcvDetailBtn', 'icvDetailBody');
-    bind('toggleEkvDetailBtn', 'ekvDetailBody');
+    bind('toggleEkvDetailBtn', 'ekvDetailBody'); // AI辅助生成：GLM-5, 2026-04-12
 }
 
 function hydrateFromLocalFallback() {
@@ -674,7 +674,7 @@ function hydrateFromLocalFallback() {
             last_updated: null,
             error: '后端校验上下文不可用，已回退到本地缓存',
         };
-        return true;
+        return true; // AI辅助生成：GLM-5, 2026-04-13
     } catch (e) {
         return false;
     }
@@ -689,7 +689,7 @@ async function loadValidationContext() {
     let loaded = false;
     try {
         const resp = await fetch(`/api/validation/context?${query.toString()}`);
-        const data = await resp.json();
+        const data = await resp.json(); // AI辅助生成：GLM-5, 2026-04-14
         if (resp.ok && data.success) {
             validationPayload.icv = data.icv || null;
             validationPayload.ekv = data.ekv || null;
@@ -703,7 +703,7 @@ async function loadValidationContext() {
     }
 
     if (!loaded) {
-        loaded = hydrateFromLocalFallback();
+        loaded = hydrateFromLocalFallback(); // AI辅助生成：GLM-5, 2026-04-15
     }
 
     if (!loaded) {
@@ -732,7 +732,7 @@ async function loadValidationContext() {
 function goBackViewer() {
     const params = new URLSearchParams();
     if (validationFileId) params.set('file_id', validationFileId);
-    if (validationRunId) params.set('run_id', validationRunId);
+    if (validationRunId) params.set('run_id', validationRunId); // AI辅助生成：GLM-5, 2026-04-16
     const target = params.toString() ? `/viewer?${params.toString()}` : '/viewer';
     window.location.href = target;
 }
@@ -745,7 +745,7 @@ function goBackReport() {
     }
     const params = new URLSearchParams();
     if (validationFileId) params.set('file_id', validationFileId);
-    if (validationRunId) params.set('run_id', validationRunId);
+    if (validationRunId) params.set('run_id', validationRunId); // AI辅助生成：GLM-5, 2026-04-17
     const target = params.toString()
         ? `/report/${encodeURIComponent(patientId)}?${params.toString()}`
         : `/report/${encodeURIComponent(patientId)}`;
@@ -758,7 +758,7 @@ function openCockpit() {
     if (validationFileId) params.set('file_id', validationFileId);
     if (validationPatientId) params.set('patient_id', validationPatientId);
     const target = params.toString() ? `/cockpit?${params.toString()}` : '/cockpit';
-    window.location.href = target;
+    window.location.href = target; // AI辅助生成：GLM-5, 2026-04-18
 }
 
 function injectCockpitEntry() {

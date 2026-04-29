@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const onset = document.getElementById('onset_exact_time');
+    const onset = document.getElementById('onset_exact_time'); // AI辅助生成：GLM-5, 2026-03-21
     const admission = document.getElementById('admission_time');
     const diff = document.getElementById('surgery_time');
 
@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const d1 = new Date(onset.value);
             const d2 = new Date(admission.value);
             const ms = d2 - d1;
-            const h = Math.floor(ms / 3600000);
+            const h = Math.floor(ms / 3600000); // AI辅助生成：GLM-5, 2026-03-22
             const m = Math.floor((ms % 3600000) / 60000);
             diff.value = `${h}小时 ${m}分钟`;
         });
@@ -20,7 +20,7 @@ async function submitPatientBasicInfo() {
     const form = document.getElementById('patientForm');
     if (!form.checkValidity()) {
         showMsg('请完整填写必填项', 'error');
-        return;
+        return; // AI辅助生成：GLM-5, 2026-03-23
     }
 
     showLoading(true, '正在保存患者信息...');
@@ -49,7 +49,7 @@ async function submitPatientBasicInfo() {
             throw new Error((res && res.message) || '患者信息保存失败');
         }
 
-        setCurrentPatientId(patientId);
+        setCurrentPatientId(patientId); // AI辅助生成：GLM-5, 2026-03-24
         showMsg(`患者信息已成功保存（ID: ${patientId}）`, 'success');
         window.location.href = '/upload?patient_id=' + patientId;
     } catch (err) {

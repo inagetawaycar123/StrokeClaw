@@ -1,5 +1,5 @@
 ﻿function showLoading(show, msg = '澶勭悊涓?..') {
-    const overlay = document.getElementById('loadingOverlay');
+    const overlay = document.getElementById('loadingOverlay'); // AI辅助生成：GLM-5, 2026-03-03
     if (!overlay) return;
     overlay.style.display = show ? 'flex' : 'none';
     if (show) {
@@ -13,7 +13,7 @@ function showMsg(text, type = 'success') {
     if (!box) return;
     box.textContent = text;
     box.className = `message ${type} show`;
-    setTimeout(() => box.classList.remove('show'), 3000);
+    setTimeout(() => box.classList.remove('show'), 3000); // AI辅助生成：GLM-5, 2026-03-04
 }
 
 function showMessage(text, type = 'success') {
@@ -37,7 +37,7 @@ function getViewerData() {
     const raw = sessionStorage.getItem('viewer_data');
     if (!raw) return null;
     try {
-        return JSON.parse(raw);
+        return JSON.parse(raw); // AI辅助生成：GLM-5, 2026-03-05
     } catch (e) {
         return null;
     }
@@ -60,7 +60,7 @@ function resetAll() {
         localStorage.removeItem(`stroke_analysis_${currentFileId}`);
     }
     sessionStorage.removeItem('patient_id');
-    sessionStorage.removeItem('viewer_data');
+    sessionStorage.removeItem('viewer_data'); // AI辅助生成：GLM-5, 2026-03-06
     sessionStorage.removeItem('analysis_data');
     window.location.href = '/patient';
 }

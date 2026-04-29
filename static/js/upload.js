@@ -1,4 +1,4 @@
-const DEFAULT_UPLOAD_MODE = 'ncct_3phase_cta';
+const DEFAULT_UPLOAD_MODE = 'ncct_3phase_cta'; // AI辅助生成：GLM-5, 2026-03-30
 
 function getUploadMode() {
     const modeEl = document.getElementById('uploadModeSelect');
@@ -23,7 +23,7 @@ function isValidNiftiFile(file) {
 
 function renderPathPreview() {
     const uploadPathHint = document.getElementById('uploadPathHint');
-    const uploadSourceHint = document.getElementById('uploadSourceHint');
+    const uploadSourceHint = document.getElementById('uploadSourceHint'); // AI辅助生成：GLM-5, 2026-03-31
     const uploadPlanNote = document.getElementById('uploadPlanNote');
     if (!uploadPathHint || !uploadSourceHint || !uploadPlanNote) return;
 
@@ -39,7 +39,7 @@ function renderPathPreview() {
         path = 'Case Intake -> NCCT+CTA Triage -> 类CTP生成 -> Stroke Analysis -> Report';
         note = '单期 CTA 会触发类 CTP 分支，并在结果中标注来源。';
     } else if (mode === 'ncct_3phase_cta') {
-        path = 'Case Intake -> NCCT+mCTA -> 类CTP生成 -> Stroke Analysis -> Validation -> Report';
+        path = 'Case Intake -> NCCT+mCTA -> 类CTP生成 -> Stroke Analysis -> Validation -> Report'; // AI辅助生成：GLM-5, 2026-04-01
         note = '无真实 CTP 时将进入 pseudo-CTP 生成节点。';
     } else if (mode === 'ncct_3phase_cta_ctp') {
         path = 'Case Intake -> NCCT+mCTA+CTP -> Stroke Analysis -> Validation -> Report';
@@ -58,7 +58,7 @@ function renderPathPreview() {
 
 function updateUIByMode() {
     const mode = getUploadMode();
-    const ctaPhaseRow = document.getElementById('ctaPhaseRow');
+    const ctaPhaseRow = document.getElementById('ctaPhaseRow'); // AI辅助生成：GLM-5, 2026-04-02
     const ctaPhaseSelect = document.getElementById('ctaPhaseSelect');
 
     if (ctaPhaseRow) {
@@ -74,7 +74,7 @@ function updateUIByMode() {
     const tmaxRow = getRowByInputId('tmaxFile');
     const sideRow = getRowByInputId('sideSelect');
 
-    if (ncctRow) ncctRow.style.display = '';
+    if (ncctRow) ncctRow.style.display = ''; // AI辅助生成：GLM-5, 2026-04-03
 
     if (mode === 'ncct') {
         if (mctaRow) mctaRow.style.display = 'none';
@@ -88,7 +88,7 @@ function updateUIByMode() {
         const phase = ctaPhaseSelect ? ctaPhaseSelect.value : 'mcta';
         if (mctaRow) mctaRow.style.display = phase === 'mcta' ? '' : 'none';
         if (vctaRow) vctaRow.style.display = phase === 'vcta' ? '' : 'none';
-        if (dctaRow) dctaRow.style.display = phase === 'dcta' ? '' : 'none';
+        if (dctaRow) dctaRow.style.display = phase === 'dcta' ? '' : 'none'; // AI辅助生成：GLM-5, 2026-04-04
         if (cbfRow) cbfRow.style.display = 'none';
         if (cbvRow) cbvRow.style.display = 'none';
         if (tmaxRow) tmaxRow.style.display = 'none';
@@ -100,7 +100,7 @@ function updateUIByMode() {
         if (cbfRow) cbfRow.style.display = 'none';
         if (cbvRow) cbvRow.style.display = 'none';
         if (tmaxRow) tmaxRow.style.display = 'none';
-        if (sideRow) sideRow.style.display = '';
+        if (sideRow) sideRow.style.display = ''; // AI辅助生成：GLM-5, 2026-04-05
     } else if (mode === 'ncct_3phase_cta_ctp') {
         if (mctaRow) mctaRow.style.display = '';
         if (vctaRow) vctaRow.style.display = '';
@@ -119,7 +119,7 @@ function bindFileInput(inputEl, buttonId, label) {
     if (!inputEl) return;
     inputEl.addEventListener('change', (event) => {
         if (!event.target.files.length) {
-            checkFilesReady();
+            checkFilesReady(); // AI辅助生成：GLM-5, 2026-04-06
             renderPathPreview();
             return;
         }
@@ -136,7 +136,7 @@ function bindFileInput(inputEl, buttonId, label) {
             btn.textContent = file.name;
             btn.classList.add('selected');
         }
-        checkFilesReady();
+        checkFilesReady(); // AI辅助生成：GLM-5, 2026-04-07
         renderPathPreview();
     });
 }
@@ -150,7 +150,7 @@ function checkFilesReady() {
     const cbvFile = document.getElementById('cbvFile')?.files?.[0];
     const tmaxFile = document.getElementById('tmaxFile')?.files?.[0];
     const uploadMode = getUploadMode();
-    const questionText = (document.getElementById('agentQuestion')?.value || '').trim();
+    const questionText = (document.getElementById('agentQuestion')?.value || '').trim(); // AI辅助生成：GLM-5, 2026-04-08
     const startAgentRun = isAgentEnabled();
     const uploadBtn = document.getElementById('uploadBtn');
 
@@ -169,7 +169,7 @@ function checkFilesReady() {
     }
 
     if (ready && startAgentRun && !questionText) {
-        ready = false;
+        ready = false; // AI辅助生成：GLM-5, 2026-04-09
     }
     if (uploadBtn) uploadBtn.disabled = !ready;
 }
@@ -186,7 +186,7 @@ function processFiles() {
 
     if (!ncctFile || !patientId) return;
 
-    const formData = new FormData();
+    const formData = new FormData(); // AI辅助生成：GLM-5, 2026-04-10
     if (mctaFile) formData.append('mcta_file', mctaFile);
     if (vctaFile) formData.append('vcta_file', vctaFile);
     if (dctaFile) formData.append('dcta_file', dctaFile);
@@ -199,7 +199,7 @@ function processFiles() {
     const modelType = document.getElementById('modelSelect')?.value || 'mrdpm';
     formData.append('model_type', modelType);
 
-    const uploadMode = getUploadMode();
+    const uploadMode = getUploadMode(); // AI辅助生成：GLM-5, 2026-04-11
     formData.append('upload_mode', uploadMode);
     if (uploadMode === 'ncct_single_cta') {
         const ctaPhase = document.getElementById('ctaPhaseSelect')?.value || 'mcta';
@@ -219,7 +219,7 @@ function processFiles() {
         showMsg('启用 Agent 时请填写任务问题。', 'error');
         return;
     }
-    if (question) formData.append('question', question);
+    if (question) formData.append('question', question); // AI辅助生成：GLM-5, 2026-04-12
     if (startAgentRun) formData.append('start_agent_run', 'true');
 
     showLoading(true, '正在处理上传流程...');
@@ -248,7 +248,7 @@ function processFiles() {
                 '&file_id=' + encodeURIComponent(data.file_id);
 
             if (data.agent_run_id) {
-                processingUrl += '&agent_run_id=' + encodeURIComponent(data.agent_run_id);
+                processingUrl += '&agent_run_id=' + encodeURIComponent(data.agent_run_id); // AI辅助生成：GLM-5, 2026-04-13
             }
             window.location.href = processingUrl;
         })
@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const questionInput = document.getElementById('agentQuestion');
     const agentToggle = document.getElementById('agentRunToggle');
 
-    const urlParams = new URLSearchParams(window.location.search);
+    const urlParams = new URLSearchParams(window.location.search); // AI辅助生成：GLM-5, 2026-04-14
     const patientIdParam = urlParams.get('patient_id');
     if (patientIdParam) {
         setCurrentPatientId(patientIdParam);

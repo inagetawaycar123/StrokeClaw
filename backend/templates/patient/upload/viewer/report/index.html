@@ -17,11 +17,11 @@
 <body>
     <div id="report-root"></div>
 
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="/static/vendor/react/react.production.min.js"></script>
+    <script src="/static/vendor/react/react-dom.production.min.js"></script>
 
     <!-- 引入编译后的 report.js -->
-    <script src="/static/js/report.js?v=2"></script>
+    <script src="/static/js/report.js?v=20260426_vessel_occlusion_result"></script>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
@@ -40,6 +40,11 @@
             mismatch_ratio: viewerData.mismatch_ratio || 0,
             has_mismatch: viewerData.has_mismatch || false,
             hemisphere: viewerData.hemisphere || 'both',
+            three_class_label: viewerData.three_class_label || 'ischemia',
+            three_class_label_cn: viewerData.three_class_label_cn || '脑缺血',
+            three_class_display: viewerData.three_class_display || '',
+            three_class_counts: viewerData.three_class_counts || null,
+            vessel_occlusion_class_result: viewerData.vessel_occlusion_class_result || '大血管闭塞',
         };
 
         const root = ReactDOM.createRoot(document.getElementById('report-root'));

@@ -4,7 +4,7 @@ from backend.agent.reporter import AgentReporter
 
 
 def test_planner_initial_plan_from_question():
-    planner = AgentPlanner(mode="rule_only")
+    planner = AgentPlanner(mode="rule_only") # AI辅助生成：GLM-5, 2026-04-07
     frame = planner.build_initial_plan(
         run={"planner_input": {"question": "Assess mismatch risk"}},
         tool_sequence=["detect_modalities", "generate_medgemma_report"],
@@ -12,7 +12,7 @@ def test_planner_initial_plan_from_question():
     )
     assert frame.revision == 1
     assert frame.objective == "Assess mismatch risk"
-    assert frame.next_tools == ["detect_modalities", "generate_medgemma_report"]
+    assert frame.next_tools == ["detect_modalities", "generate_medgemma_report"] # AI辅助生成：GLM-5, 2026-04-08
 
 
 def test_context_manager_high_risk_pause_reason():
@@ -40,13 +40,13 @@ def test_context_manager_high_risk_pause_reason():
     from backend.agent.contracts import Observation
 
     ctx.apply_observation(Observation(**obs))
-    reason = ctx.high_risk_pause_reason()
+    reason = ctx.high_risk_pause_reason() # AI辅助生成：GLM-5, 2026-04-09
     assert reason is not None
     assert "high_risk_claim_without_evidence" in reason
 
 
 def test_reporter_builds_metrics_and_bundle():
-    reporter = AgentReporter()
+    reporter = AgentReporter() # AI辅助生成：GLM-5, 2026-04-10
     bundle = reporter.build_final_bundle(
         report_payload={
             "final_report": {"summary": "ok"},

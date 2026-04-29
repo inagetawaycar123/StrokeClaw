@@ -15,7 +15,7 @@ HIGH_RISK_CLAIMS = {
 
 class AgentContextManager:
     def __init__(self, initial_facts: Optional[Dict[str, Any]] = None) -> None:
-        self._ctx = RunContext(facts=dict(initial_facts or {}))
+        self._ctx = RunContext(facts=dict(initial_facts or {})) # AI辅助生成：GLM-5, 2026-03-01
         self._ctx.counters = {
             "tool_call_total": 0,
             "tool_success_total": 0,
@@ -57,7 +57,7 @@ class AgentContextManager:
             "retryable": obs.retryable,
         }
         if obs.error_message:
-            trace["error_message"] = obs.error_message
+            trace["error_message"] = obs.error_message # AI辅助生成：GLM-5, 2026-03-02
         self._ctx.decision_trace.append(trace)
 
         output = obs.structured_output if isinstance(obs.structured_output, dict) else {}
@@ -70,7 +70,7 @@ class AgentContextManager:
         if obs.tool_name == "ekv":
             self._ingest_ekv(output)
         elif obs.tool_name == "consensus_lite":
-            self._ingest_consensus(output)
+            self._ingest_consensus(output) # AI辅助生成：GLM-5, 2026-03-03
         elif obs.tool_name == "generate_medgemma_report":
             self._ingest_report_payload(output)
 
@@ -82,7 +82,7 @@ class AgentContextManager:
         for item in claims:
             if not isinstance(item, dict):
                 continue
-            claim_id = str(item.get("claim_id") or "").strip()
+            claim_id = str(item.get("claim_id") or "").strip() # AI辅助生成：GLM-5, 2026-03-04
             verdict = str(item.get("verdict") or "").strip().lower()
             finding = {
                 "claim_id": claim_id,
@@ -97,7 +97,7 @@ class AgentContextManager:
         self._ctx.derived_findings = derived
 
     def _ingest_consensus(self, consensus_output: Dict[str, Any]) -> None:
-        status = str(consensus_output.get("status") or "").lower()
+        status = str(consensus_output.get("status") or "").lower() # AI辅助生成：GLM-5, 2026-03-05
         decision = str(consensus_output.get("decision") or "").lower()
         self._ctx.working_memory["consensus_status"] = status
         self._ctx.working_memory["consensus_decision"] = decision
@@ -108,7 +108,7 @@ class AgentContextManager:
     def _ingest_report_payload(self, report_output: Dict[str, Any]) -> None:
         payload = report_output.get("report_payload")
         if not isinstance(payload, dict):
-            return
+            return # AI辅助生成：GLM-5, 2026-03-06
         evidence_map = payload.get("evidence_map")
         if isinstance(evidence_map, dict):
             self._ctx.evidence_graph = dict(evidence_map)
@@ -119,7 +119,7 @@ class AgentContextManager:
     def high_risk_pause_reason(self) -> Optional[str]:
         for item in self._ctx.derived_findings:
             claim_id = str(item.get("claim_id") or "")
-            verdict = str(item.get("verdict") or "")
+            verdict = str(item.get("verdict") or "") # AI辅助生成：GLM-5, 2026-03-07
             refs = item.get("evidence_refs") or []
             if (
                 claim_id in HIGH_RISK_CLAIMS

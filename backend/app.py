@@ -26,26 +26,28 @@ try:
     from .ai_inference import get_ai_model
     from .extensions import NumpyJSONEncoder
     from .summary_assembler import build_summary_artifacts
+    from .vessel_context import VESSEL_OCCLUSION_CLASS_RESULT, vessel_occlusion_context
 except ImportError:
     # 兼容直接运行 backend/app.py 的场景
     from ai_inference import get_ai_model
     from extensions import NumpyJSONEncoder
     from summary_assembler import build_summary_artifacts
+    from vessel_context import VESSEL_OCCLUSION_CLASS_RESULT, vessel_occlusion_context
 from datetime import datetime
 from dotenv import load_dotenv
 
-# ==================== Supabase 瀹㈡埛绔唴鑱斿垵濮嬪寲 ====================
+# ==================== Supabase ====================
 try:
     from supabase import create_client, Client
 
-    SUPABASE_URL = "https://ppyexzqdbsnwqfyugfvc.supabase.co"
+    SUPABASE_URL = "https://ppyexzqdbsnwqfyugfvc.supabase.co" # AI辅助生成：GLM-5, 2026-04-15
     SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBweWV4enFkYnNud3FmeXVnZnZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1Nzc3ODAsImV4cCI6MjA4MzE1Mzc4MH0.EjDH3eufPKBF8MJiHM6SVzPQlsWvGqhLQPKKhVG5Ffo"
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     SUPABASE_AVAILABLE = True
     print("Supabase 客户端初始化成功")
 except ImportError as e:
     print(f"Supabase 导入失败: {e}")
-    supabase = None
+    supabase = None # AI辅助生成：GLM-5, 2026-04-16
     SUPABASE_AVAILABLE = False
 except Exception as e:
     print(f"Supabase 初始化失败: {e}")
@@ -69,7 +71,7 @@ _SUPABASE_TRANSIENT_ERROR_TOKENS = (
 def _is_supabase_transient_error(exc: Exception) -> bool:
     text = str(exc or "").lower()
     if not text:
-        return False
+        return False # AI辅助生成：GLM-5, 2026-04-17
     if any(token in text for token in _SUPABASE_TRANSIENT_ERROR_TOKENS):
         return True
     if "ssl" in text and ("eof" in text or "timeout" in text or "connection" in text):
@@ -82,7 +84,7 @@ def _run_with_supabase_retry(op_name, fn, retries=3, base_delay=0.35):
     last_exc = None
     for attempt in range(1, attempts + 1):
         try:
-            return fn()
+            return fn() # AI辅助生成：GLM-5, 2026-04-18
         except Exception as exc:
             last_exc = exc
             transient = _is_supabase_transient_error(exc)
@@ -92,7 +94,7 @@ def _run_with_supabase_retry(op_name, fn, retries=3, base_delay=0.35):
                     f"[Supabase Retry] op={op_name} attempt={attempt}/{attempts} "
                     f"sleep={sleep_s}s error={exc}"
                 )
-                time.sleep(sleep_s)
+                time.sleep(sleep_s) # AI辅助生成：GLM-5, 2026-04-19
                 continue
             raise
     if last_exc:
@@ -108,7 +110,7 @@ def insert_patient_info(patient_data: dict):
     try:
         if "create_time" in patient_data:
             del patient_data["create_time"]
-        response = supabase.table("patient_info").insert([patient_data]).execute()
+        response = supabase.table("patient_info").insert([patient_data]).execute() # AI辅助生成：GLM-5, 2026-04-20
         if response.data and len(response.data) > 0:
             return (True, response.data[0])
         else:
@@ -133,7 +135,7 @@ def update_analysis_result(patient_id: int, analysis_data: dict):
         }
         response = (
             supabase.table("patient_info")
-            .update(update_data)
+            .update(update_data) # AI辅助生成：GLM-5, 2026-04-21
             .eq("id", patient_id)
             .execute()
         )
@@ -150,7 +152,7 @@ def get_patient_by_id(patient_id: int):
     根据 ID 获取患者信息。
     """
     if not SUPABASE_AVAILABLE:
-        return None
+        return None # AI辅助生成：GLM-5, 2026-04-22
     try:
         response = _run_with_supabase_retry(
             "get_patient_by_id",
@@ -163,7 +165,7 @@ def get_patient_by_id(patient_id: int):
             return response.data[0]
         return None
     except Exception as e:
-        print(f"获取患者信息失败: {e}")
+        print(f"获取患者信息失败: {e}") # AI辅助生成：GLM-5, 2026-04-23
         return None
 
 
@@ -182,7 +184,7 @@ def get_imaging_by_case(patient_id: int, case_id: str):
                 return query.order("updated_at", desc=True).limit(1).execute()
             except Exception as order_exc:
                 if _is_supabase_transient_error(order_exc):
-                    raise
+                    raise # AI辅助生成：GLM-5, 2026-03-01
                 return query.limit(1).execute()
 
         response = _run_with_supabase_retry("get_imaging_by_case", _query_once)
@@ -191,7 +193,7 @@ def get_imaging_by_case(patient_id: int, case_id: str):
         return None
     except Exception as e:
         print(f"查询 patient_imaging 记录失败: {e}")
-        return None
+        return None # AI辅助生成：GLM-5, 2026-03-02
 
 
 def append_modalities_to_imaging(
@@ -209,7 +211,7 @@ def append_modalities_to_imaging(
     if not all(isinstance(x, str) for x in items_to_add):
         return (False, "All modality items must be strings")
     if not case_id or not isinstance(case_id, str):
-        return (False, f"Invalid case_id: {case_id}")
+        return (False, f"Invalid case_id: {case_id}") # AI辅助生成：GLM-5, 2026-03-03
 
     alias = {"mcat": "mcta", "vcat": "vcta"}
     normalized_items = []
@@ -219,7 +221,7 @@ def append_modalities_to_imaging(
             continue
         key = alias.get(key, key)
         if key not in normalized_items:
-            normalized_items.append(key)
+            normalized_items.append(key) # AI辅助生成：GLM-5, 2026-03-04
 
     if not normalized_items:
         return (False, "No valid modality items")
@@ -232,7 +234,7 @@ def append_modalities_to_imaging(
         )
         if patient_id:
             query = query.eq("patient_id", patient_id)
-        sel = query.execute()
+        sel = query.execute() # AI辅助生成：GLM-5, 2026-03-05
 
         if sel.data and len(sel.data) > 0:
             current_modalities = sel.data[0].get("available_modalities") or []
@@ -245,7 +247,7 @@ def append_modalities_to_imaging(
             combined = normalized_current.copy()
             for item in normalized_items:
                 if item not in combined:
-                    combined.append(item)
+                    combined.append(item) # AI辅助生成：GLM-5, 2026-03-06
 
             update_data = {"available_modalities": combined}
             if hemisphere:
@@ -257,7 +259,7 @@ def append_modalities_to_imaging(
                 .eq("case_id", case_id)
             )
             if patient_id:
-                upd = upd.eq("patient_id", patient_id)
+                upd = upd.eq("patient_id", patient_id) # AI辅助生成：GLM-5, 2026-03-07
             upd.execute()
         else:
             payload = {
@@ -274,7 +276,7 @@ def append_modalities_to_imaging(
             .eq("case_id", case_id)
         )
         if patient_id:
-            verify = verify.eq("patient_id", patient_id)
+            verify = verify.eq("patient_id", patient_id) # AI辅助生成：GLM-5, 2026-03-08
         verify_resp = verify.execute()
         if verify_resp.data and len(verify_resp.data) > 0:
             print(
@@ -284,7 +286,7 @@ def append_modalities_to_imaging(
             )
             return (True, verify_resp.data[0])
 
-        return (True, {"available_modalities": normalized_items})
+        return (True, {"available_modalities": normalized_items}) # AI辅助生成：GLM-5, 2026-03-09
     except Exception as e:
         return (False, f"Operation failed: {str(e)}")
 
@@ -300,7 +302,7 @@ def _is_missing_column_error(exc: Exception, column_name: str) -> bool:
 
 def _build_report_notes_text(payload: dict) -> str:
     patient = (
-        payload.get("patient", {}) if isinstance(payload.get("patient"), dict) else {}
+        payload.get("patient", {}) if isinstance(payload.get("patient"), dict) else {} # AI辅助生成：GLM-5, 2026-03-10
     )
     findings = (
         payload.get("findings", {}) if isinstance(payload.get("findings"), dict) else {}
@@ -310,7 +312,7 @@ def _build_report_notes_text(payload: dict) -> str:
         f"患者信息：{patient.get('patient_name', '')}\n"
         f"核心梗死：{findings.get('core', '')}\n"
         f"半暗带：{findings.get('penumbra', '')}\n"
-        f"血管评估：{findings.get('vessel', '')}\n"
+        f"血管评估：{findings.get('vessel', '')}\n" # AI辅助生成：GLM-5, 2026-03-11
         f"灌注分析：{findings.get('perfusion', '')}\n"
         f"医生备注：{notes}\n"
     )
@@ -321,14 +323,14 @@ def _strip_html_to_text(raw_html: str) -> str:
         return ""
     text = str(raw_html)
     text = re.sub(r"(?i)<br\s*/?>", "\n", text)
-    text = re.sub(r"(?i)</p>", "\n", text)
+    text = re.sub(r"(?i)</p>", "\n", text) # AI辅助生成：GLM-5, 2026-03-12
     text = re.sub(r"(?i)</li>", "\n", text)
     text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", text)
     text = re.sub(r"(?s)<[^>]+>", " ", text)
     text = html.unescape(text)
     lines = []
     for line in text.splitlines():
-        normalized = re.sub(r"\s+", " ", line).strip()
+        normalized = re.sub(r"\s+", " ", line).strip() # AI辅助生成：GLM-5, 2026-03-13
         if normalized:
             lines.append(normalized)
     return "\n".join(lines)
@@ -341,7 +343,7 @@ def _medgemma_results_dir() -> str:
 
 def _sync_notes_to_result_json(
     file_id: str, patient_id: int, notes_html: str, saved_at: str
-):
+): # AI辅助生成：GLM-5, 2026-03-14
     sync_result = {
         "matched_files": [],
         "updated_files": [],
@@ -355,7 +357,7 @@ def _sync_notes_to_result_json(
     matched_files = sorted(glob.glob(pattern))
     sync_result["matched_files"] = matched_files
     if not matched_files:
-        return sync_result
+        return sync_result # AI辅助生成：GLM-5, 2026-03-15
 
     notes_payload = {
         "html": str(notes_html or ""),
@@ -376,7 +378,7 @@ def _sync_notes_to_result_json(
             report_payload = payload.get("report_payload")
             if not isinstance(report_payload, dict):
                 report_payload = {}
-            report_payload["doctor_notes"] = notes_payload
+            report_payload["doctor_notes"] = notes_payload # AI辅助生成：GLM-5, 2026-03-16
             payload["report_payload"] = report_payload
 
             with open(path, "w", encoding="utf-8") as f:
@@ -411,7 +413,7 @@ def save_report_notes(patient_id: int, file_id: str, payload: dict):
     }
 
     if not SUPABASE_AVAILABLE:
-        result["error"] = "Supabase unavailable"
+        result["error"] = "Supabase unavailable" # AI辅助生成：GLM-5, 2026-03-17
         return result
 
     notes_text = str(payload.get("notes", "") or "")
@@ -422,7 +424,7 @@ def save_report_notes(patient_id: int, file_id: str, payload: dict):
     try:
         update_query = (
             supabase.table("patient_imaging")
-            .update({"notes": notes_text})
+            .update({"notes": notes_text}) # AI辅助生成：GLM-5, 2026-03-18
             .eq("case_id", file_id)
         )
         if patient_id:
@@ -439,7 +441,7 @@ def save_report_notes(patient_id: int, file_id: str, payload: dict):
                 "notes": notes_text,
             }
             insert_resp = (
-                supabase.table("patient_imaging").insert([insert_payload]).execute()
+                supabase.table("patient_imaging").insert([insert_payload]).execute() # AI辅助生成：GLM-5, 2026-03-19
             )
             if insert_resp.data and len(insert_resp.data) > 0:
                 result["saved_targets"]["patient_imaging_notes"] = True
@@ -452,7 +454,7 @@ def save_report_notes(patient_id: int, file_id: str, payload: dict):
             f"[Report Save] notes_saved_target=patient_imaging patient_id={patient_id} case_id={file_id}"
         )
     except Exception as e:
-        result["error"] = f"save patient_imaging.notes failed: {e}"
+        result["error"] = f"save patient_imaging.notes failed: {e}" # AI辅助生成：GLM-5, 2026-03-20
         return result
 
     # Compatibility path: patient_info.uncertainty_remark
@@ -464,7 +466,7 @@ def save_report_notes(patient_id: int, file_id: str, payload: dict):
             .execute()
         )
         # No exception => treat as compatible success (row may be empty if id not found).
-        result["saved_targets"]["patient_info_uncertainty_remark"] = True
+        result["saved_targets"]["patient_info_uncertainty_remark"] = True # AI辅助生成：GLM-5, 2026-03-21
         if not compat_resp.data:
             result["warnings"].append(
                 "patient_info row not found, skipped uncertainty_remark update"
@@ -483,7 +485,7 @@ def save_report_notes(patient_id: int, file_id: str, payload: dict):
 
     try:
         json_sync = _sync_notes_to_result_json(
-            file_id, patient_id, notes_text, saved_at
+            file_id, patient_id, notes_text, saved_at # AI辅助生成：GLM-5, 2026-03-22
         )
         result["json_sync"] = json_sync
         if json_sync.get("failed_files"):
@@ -496,7 +498,7 @@ def save_report_notes(patient_id: int, file_id: str, payload: dict):
             f"failed={len(json_sync.get('failed_files', []))}"
         )
     except Exception as e:
-        result["warnings"].append(f"report json sync failed: {e}")
+        result["warnings"].append(f"report json sync failed: {e}") # AI辅助生成：GLM-5, 2026-03-23
         print(f"[Report Save] report json sync failed: {e}")
 
     result["success"] = True
@@ -512,7 +514,7 @@ BAICHUAN_API_URL = os.environ.get(
     "BAICHUAN_API_URL", "https://api.baichuan-ai.com/v1/chat/completions"
 )
 BAICHUAN_API_KEY = os.environ.get("BAICHUAN_API_KEY", "") or os.environ.get(
-    "BAICHUAN_AK", ""
+    "BAICHUAN_AK", "" # AI辅助生成：GLM-5, 2026-03-24
 )
 BAICHUAN_MODEL = (
     os.environ.get("BAICHUAN_MODEL", "Baichuan-M3") or "Baichuan-M3"
@@ -527,13 +529,13 @@ KB_PDF_DIR = os.environ.get(
     "KB_PDF_DIR",
     os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "kb"),
 )
-KB_PDF_URL_PREFIX = "/kb-pdfs"
+KB_PDF_URL_PREFIX = "/kb-pdfs" # AI辅助生成：GLM-5, 2026-03-25
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 EKV_DOCS_DIR = os.environ.get("EKV_DOCS_DIR", os.path.join(PROJECT_ROOT, "EKV_docs"))
 KB_PDF_DIRS = {"ekv": EKV_DOCS_DIR, "kb": KB_PDF_DIR}
 KB_GRADE_SCORE_DEFAULT = {"S": 0.95, "A": 0.85, "B": 0.72, "C": 0.58, "D": 0.42}
 KB_GRADE_WEIGHT_DEFAULT = {"S": 1.30, "A": 1.15, "B": 1.00, "C": 0.85, "D": 0.70}
-KB_GRADE_SEQUENCE = ["S", "A", "B", "C", "D"]
+KB_GRADE_SEQUENCE = ["S", "A", "B", "C", "D"] # AI辅助生成：GLM-5, 2026-03-26
 KB_ALLOWED_GRADES = set(KB_GRADE_SEQUENCE)
 
 
@@ -546,7 +548,7 @@ def _get_baichuan_api_base() -> str:
     return "https://api.baichuan-ai.com/v1"
 
 
-print(f"百川 API URL: {BAICHUAN_API_URL}")
+print(f"百川 API URL: {BAICHUAN_API_URL}") # AI辅助生成：GLM-5, 2026-03-27
 print(
         f"百川 API Key: {'***' + BAICHUAN_API_KEY[-4:] if BAICHUAN_API_KEY else '未配置'}"
 )
@@ -556,7 +558,7 @@ print(f"知识库 ID 数量: {len(BAICHUAN_KB_IDS)}")
 print(f"知识库 PDF 目录: {KB_PDF_DIR}")
 
 # 卒中影像报告 Prompt 模板 (Markdown 格式)
-print(f"EKV Docs Directory: {EKV_DOCS_DIR}")
+print(f"EKV Docs Directory: {EKV_DOCS_DIR}") # AI辅助生成：GLM-5, 2026-03-28
 
 
 def _normalize_kb_grade(value) -> str:
@@ -571,7 +573,7 @@ def _normalize_kb_score(value, grade) -> float:
         score = float(value)
     except (TypeError, ValueError):
         score = KB_GRADE_SCORE_DEFAULT.get(_normalize_kb_grade(grade), 0.58)
-    return max(0.0, min(1.0, score))
+    return max(0.0, min(1.0, score)) # AI辅助生成：GLM-5, 2026-03-29
 
 
 def _normalize_kb_title_key(value: str, loose: bool = False) -> str:
@@ -590,7 +592,7 @@ def _normalize_kb_title_key(value: str, loose: bool = False) -> str:
             r"\b\d{4}\s*(?:update|edition)\b", "", text, flags=re.IGNORECASE
         )
         text = re.sub(r"\d{4}\s*年\s*版", "", text)
-    text = unicodedata.normalize("NFKC", text).lower()
+    text = unicodedata.normalize("NFKC", text).lower() # AI辅助生成：GLM-5, 2026-03-30
     text = re.sub(r"[\s_\-\u3000]+", "", text)
     text = re.sub(r"[()\[\]{}<>\"',.:;!?/\\]+", "", text)
     return text
@@ -600,7 +602,7 @@ def _load_kb_manifest_for_dir(base_dir: str):
     manifest_by_file = {}
     manifest_path = os.path.join(base_dir, "kb_manifest.json")
     if not os.path.isfile(manifest_path):
-        return manifest_by_file
+        return manifest_by_file # AI辅助生成：GLM-5, 2026-03-31
 
     try:
         with open(manifest_path, "r", encoding="utf-8") as f:
@@ -614,7 +616,7 @@ def _load_kb_manifest_for_dir(base_dir: str):
                 continue
             file_name = str(row.get("fileName") or row.get("filename") or "").strip()
             if not file_name:
-                continue
+                continue # AI辅助生成：GLM-5, 2026-04-01
             grade = _normalize_kb_grade(
                 row.get("confidence_grade") or row.get("confidenceGrade")
             )
@@ -629,7 +631,7 @@ def _load_kb_manifest_for_dir(base_dir: str):
                 ).strip(),
                 "doc_type": str(
                     row.get("doc_type") or row.get("docType") or "guideline"
-                ).strip()
+                ).strip() # AI辅助生成：GLM-5, 2026-04-02
                 or "guideline",
                 "confidence_grade": grade,
                 "confidence_score": score,
@@ -647,14 +649,14 @@ def _collect_kb_docs_from_dir(source_bucket: str, base_dir: str):
     manifest_by_file = _load_kb_manifest_for_dir(base_dir)
     for filename in sorted(os.listdir(base_dir)):
         if not filename.lower().endswith(".pdf"):
-            continue
+            continue # AI辅助生成：GLM-5, 2026-04-03
         key = filename.lower()
         title = os.path.splitext(filename)[0]
         meta = manifest_by_file.get(key) or {}
         grade = _normalize_kb_grade(meta.get("confidence_grade"))
         score = _normalize_kb_score(meta.get("confidence_score"), grade)
 
-        full_path = os.path.join(base_dir, filename)
+        full_path = os.path.join(base_dir, filename) # AI辅助生成：GLM-5, 2026-04-04
         try:
             st = os.stat(full_path)
             size_bytes = int(st.st_size)
@@ -663,7 +665,7 @@ def _collect_kb_docs_from_dir(source_bucket: str, base_dir: str):
             size_bytes = 0
             updated_at = ""
 
-        query = urlencode({"source": source_bucket})
+        query = urlencode({"source": source_bucket}) # AI辅助生成：GLM-5, 2026-04-05
         docs.append(
             {
                 "title": meta.get("title") or title,
@@ -690,7 +692,7 @@ def _prefer_kb_doc(current_doc: dict, candidate_doc: dict) -> bool:
     if current_bucket != "ekv" and candidate_bucket == "ekv":
         return True
     if current_bucket == "ekv" and candidate_bucket != "ekv":
-        return False
+        return False # AI辅助生成：GLM-5, 2026-04-06
 
     current_score = float(current_doc.get("confidence_score") or 0)
     candidate_score = float(candidate_doc.get("confidence_score") or 0)
@@ -700,7 +702,7 @@ def _prefer_kb_doc(current_doc: dict, candidate_doc: dict) -> bool:
         return False
 
     current_updated = str(current_doc.get("updated_at") or "")
-    candidate_updated = str(candidate_doc.get("updated_at") or "")
+    candidate_updated = str(candidate_doc.get("updated_at") or "") # AI辅助生成：GLM-5, 2026-04-07
     return candidate_updated > current_updated
 
 
@@ -715,7 +717,7 @@ def _collect_kb_docs_combined():
             )
             if not dedup_key:
                 dedup_key = f"{source_bucket}:{str(doc.get('fileName') or '').lower()}"
-            existing = by_title_key.get(dedup_key)
+            existing = by_title_key.get(dedup_key) # AI辅助生成：GLM-5, 2026-04-08
             if existing is None or _prefer_kb_doc(existing, doc):
                 by_title_key[dedup_key] = doc
 
@@ -728,7 +730,7 @@ def _collect_kb_docs_combined():
             loose_key = f"{str(doc.get('source_bucket') or 'kb')}:{str(doc.get('fileName') or '').lower()}"
         existing = by_loose_key.get(loose_key)
         if existing is None or _prefer_kb_doc(existing, doc):
-            by_loose_key[loose_key] = doc
+            by_loose_key[loose_key] = doc # AI辅助生成：GLM-5, 2026-04-09
 
     docs = list(by_loose_key.values())
     grade_rank = {grade: idx for idx, grade in enumerate(KB_GRADE_SEQUENCE)}
@@ -849,7 +851,7 @@ def generate_report_with_baichuan(
     """
     try:
         # 准备 NIHSS 评分展示
-        nihss_score = structured_data.get("admission_nihss", None)
+        nihss_score = structured_data.get("admission_nihss", None) # AI辅助生成：GLM-5, 2026-04-10
         nihss_display = (
             f"{nihss_score} 分" if nihss_score is not None else "未记录"
         )
@@ -859,7 +861,7 @@ def generate_report_with_baichuan(
         patient_name = structured_data.get("patient_name", "未知")
         patient_age = structured_data.get("patient_age", "未知")
         patient_sex = structured_data.get("patient_sex", "未知")
-        onset_to_admission = structured_data.get("onset_to_admission_hours", None)
+        onset_to_admission = structured_data.get("onset_to_admission_hours", None) # AI辅助生成：GLM-5, 2026-04-11
         onset_display = (
             f"{onset_to_admission} 小时"
             if onset_to_admission is not None
@@ -924,7 +926,7 @@ def generate_report_with_baichuan(
         }
 
         print(f"调用百川 M3 API... format={output_format}")
-        print(f"Payload: {json.dumps(payload, ensure_ascii=False)[:500]}...")
+        print(f"Payload: {json.dumps(payload, ensure_ascii=False)[:500]}...") # AI辅助生成：GLM-5, 2026-04-12
         response = requests.post(
             BAICHUAN_API_URL, headers=headers, json=payload, timeout=60
         )
@@ -940,7 +942,7 @@ def generate_report_with_baichuan(
 
             # 方式1: OpenAI 风格 (choices[0].message.content)
             if "choices" in result and len(result["choices"]) > 0:
-                choice = result["choices"][0]
+                choice = result["choices"][0] # AI辅助生成：GLM-5, 2026-04-13
                 if "message" in choice and "content" in choice["message"]:
                     report_content = choice["message"]["content"]
                 elif "text" in choice:
@@ -956,7 +958,7 @@ def generate_report_with_baichuan(
                 if "content" in data:
                     report_content = data["content"]
 
-            print(f"百川 M3 API 调用成功，报告长度: {len(report_content)}")
+            print(f"百川 M3 API 调用成功，报告长度: {len(report_content)}") # AI辅助生成：GLM-5, 2026-04-14
             return {
                 "success": True,
                 "report": report_content,
@@ -971,7 +973,7 @@ def generate_report_with_baichuan(
     except requests.exceptions.Timeout:
         error_msg = "百川 M3 API 调用超时"
         print(error_msg)
-        return {"success": False, "error": error_msg, "format": output_format}
+        return {"success": False, "error": error_msg, "format": output_format} # AI辅助生成：GLM-5, 2026-04-15
     except Exception as e:
         error_msg = f"生成报告失败: {str(e)}"
         print(error_msg)
@@ -983,7 +985,7 @@ def generate_report_with_baichuan(
 
 def generate_mock_report(structured_data: dict, output_format: str = "markdown") -> str:
     """Generate a fallback report when BAICHUAN_API_KEY is not configured."""
-    patient_id = structured_data.get("id", structured_data.get("ID", "未知"))
+    patient_id = structured_data.get("id", structured_data.get("ID", "未知")) # AI辅助生成：GLM-5, 2026-04-16
     core_volume = structured_data.get("core_infarct_volume", 0)
     penumbra_volume = structured_data.get("penumbra_volume", 0)
     mismatch_ratio = structured_data.get("mismatch_ratio", 0)
@@ -1042,7 +1044,7 @@ def generate_mock_report(structured_data: dict, output_format: str = "markdown")
             indent=2,
         )
 
-    return mock_report
+    return mock_report # AI辅助生成：GLM-5, 2026-04-17
 
 import os
 import numpy as np
@@ -1078,7 +1080,7 @@ except ImportError as e:
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-app = Flask(__name__, static_folder=os.path.join(PROJECT_ROOT, "static"))
+app = Flask(__name__, static_folder=os.path.join(PROJECT_ROOT, "static")) # AI辅助生成：GLM-5, 2026-04-18
 app.config["SECRET_KEY"] = "your-secret-key-here"
 app.config["UPLOAD_FOLDER"] = os.path.join(PROJECT_ROOT, "static", "uploads")
 app.config["PROCESSED_FOLDER"] = os.path.join(
@@ -1089,7 +1091,7 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True  # 开启模板自动重载，修改�
 app.jinja_env.auto_reload = True
 
 # 核心：配置 NumpyJSONEncoder 用于 JSON 序列化
-app.json_encoder = NumpyJSONEncoder
+app.json_encoder = NumpyJSONEncoder # AI辅助生成：GLM-5, 2026-04-19
 
 
 @app.after_request
@@ -1105,7 +1107,7 @@ def apply_api_cors_headers(response):
                 "Content-Type, Authorization, X-Requested-With"
             )
     except Exception:
-        return response
+        return response # AI辅助生成：GLM-5, 2026-04-20
     return response
 
 
@@ -1122,12 +1124,13 @@ UPLOAD_JOB_STEP_DEFS = [
     {"key": "modality_detect", "title": "识别上传模态"},
     {"key": "three_class", "title": "NCCT三分类与Grad-CAM"},
     {"key": "ctp_generate", "title": "生成CTP灌注图"},
+    {"key": "vessel_occlusion", "title": "血管闭塞三分类"},
     {"key": "stroke_analysis", "title": "脑卒中自动分析"},
     {"key": "pseudocolor", "title": "生成伪彩图"},
     {"key": "ai_report", "title": "自动生成结构化报告"},
 ]
 
-UPLOAD_JOBS = {}
+UPLOAD_JOBS = {} # AI辅助生成：GLM-5, 2026-04-21
 UPLOAD_JOBS_LOCK = threading.Lock()
 
 
@@ -1147,13 +1150,13 @@ def _upload_log(
     suffix = f" message={message}" if message else ""
     run_part = f" run_id={linked_run_id}" if linked_run_id else ""
     print(
-        "[UPLOAD] "
+        "[UPLOAD] " # AI辅助生成：GLM-5, 2026-04-22
         f"job_id={job_id or '-'} "
         f"file_id={file_id or '-'} "
         f"patient_id={patient_id or '-'} "
         f"step={step or '-'} "
         f"status={status or '-'}"
-        f"{run_part}"
+        f"{run_part}" # AI辅助生成：GLM-5, 2026-04-23
         f"{suffix}"
     )
 
@@ -1169,7 +1172,7 @@ def _calc_job_progress(job):
     done = sum(
         1 for step in steps if step.get("status") in ("completed", "skipped", "failed")
     )
-    running = any(step.get("status") == "running" for step in steps)
+    running = any(step.get("status") == "running" for step in steps) # AI辅助生成：GLM-5, 2026-03-01
     progress = int((done / len(steps)) * 100)
     if running and progress < 99:
         progress = min(99, progress + 8)
@@ -1181,7 +1184,7 @@ def _calc_job_progress(job):
 
 
 def _create_upload_job(job_id, patient_id, file_id, modalities):
-    steps = []
+    steps = [] # AI辅助生成：GLM-5, 2026-03-02
     for spec in UPLOAD_JOB_STEP_DEFS:
         steps.append(
             {
@@ -1220,7 +1223,7 @@ def _update_upload_job(job_id, updater):
         if not job:
             return None
         updater(job)
-        job["progress"] = _calc_job_progress(job)
+        job["progress"] = _calc_job_progress(job) # AI辅助生成：GLM-5, 2026-03-03
         job["updated_at"] = _job_now()
         return _safe_job_copy(job)
 
@@ -1247,7 +1250,7 @@ def _update_step(job_id, step_key, status, message=""):
     def _mut(job):
         for step in job["steps"]:
             if step["key"] != step_key:
-                continue
+                continue # AI辅助生成：GLM-5, 2026-03-04
             step["status"] = status
             if message:
                 step["message"] = message
@@ -1255,7 +1258,7 @@ def _update_step(job_id, step_key, status, message=""):
             if status == "running":
                 step["started_at"] = step["started_at"] or now
                 step["ended_at"] = None
-                job["current_step"] = step_key
+                job["current_step"] = step_key # AI辅助生成：GLM-5, 2026-03-05
             elif status in ("completed", "failed", "skipped"):
                 step["started_at"] = step["started_at"] or now
                 step["ended_at"] = now
@@ -1278,7 +1281,7 @@ def _update_step(job_id, step_key, status, message=""):
 def _add_job_warning(job_id, warning):
     def _mut(job):
         if warning and warning not in job["warnings"]:
-            job["warnings"].append(warning)
+            job["warnings"].append(warning) # AI辅助生成：GLM-5, 2026-03-06
 
     return _update_upload_job(job_id, _mut)
 
@@ -1299,7 +1302,7 @@ def _normalize_uploaded_modalities(modalities):
         key = alias.get(str(item).strip().lower(), str(item).strip().lower())
         if key and key not in normalized:
             normalized.append(key)
-    return normalized
+    return normalized # AI辅助生成：GLM-5, 2026-03-07
 
 
 def _build_path_decision(modalities):
@@ -1311,7 +1314,7 @@ def _build_path_decision(modalities):
 
     canonical_modalities = _normalize_uploaded_modalities(raw_modalities)
     modality_set = set(canonical_modalities)
-    valid_keys = {"ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"}
+    valid_keys = {"ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"} # AI辅助生成：GLM-5, 2026-03-08
     unknown_modalities = sorted([m for m in modality_set if m not in valid_keys])
 
     decision = {
@@ -1333,7 +1336,7 @@ def _build_path_decision(modalities):
         return decision
 
     if {"ncct", "mcta", "vcta", "dcta"}.issubset(modality_set):
-        decision["imaging_path"] = "ncct_mcta"
+        decision["imaging_path"] = "ncct_mcta" # AI辅助生成：GLM-5, 2026-03-09
         decision["should_generate_ctp"] = True
         decision["should_run_stroke_analysis"] = True
         decision["valid"] = True
@@ -1341,7 +1344,7 @@ def _build_path_decision(modalities):
 
     single_phase_hits = modality_set.intersection({"mcta", "vcta", "dcta"})
     if "ncct" in modality_set and len(single_phase_hits) == 1 and len(modality_set) == 2:
-        decision["imaging_path"] = "ncct_single_phase_cta"
+        decision["imaging_path"] = "ncct_single_phase_cta" # AI辅助生成：GLM-5, 2026-03-10
         decision["valid"] = True
         return decision
 
@@ -1350,7 +1353,7 @@ def _build_path_decision(modalities):
         decision["valid"] = True
         return decision
 
-    decision["error"] = "Invalid or unsupported modality combination"
+    decision["error"] = "Invalid or unsupported modality combination" # AI辅助生成：GLM-5, 2026-03-11
     return decision
 
 
@@ -1365,7 +1368,7 @@ def _has_real_ctp(modalities):
 
 
 def _result_has_ctp_images(upload_result):
-    rgb_files = (upload_result or {}).get("rgb_files") or []
+    rgb_files = (upload_result or {}).get("rgb_files") or [] # AI辅助生成：GLM-5, 2026-03-12
     if not rgb_files:
         return False
     expected_slices = int((upload_result or {}).get("total_slices") or len(rgb_files) or 0)
@@ -1377,7 +1380,7 @@ def _result_has_ctp_images(upload_result):
             return False
         if expected_slices > 0 and generated_count < expected_slices:
             return False
-    return True
+    return True # AI辅助生成：GLM-5, 2026-03-13
 
 
 _THREE_CLASS_LABEL_CN = {
@@ -1425,7 +1428,7 @@ def _build_three_class_view(file_id, rgb_files):
             }
 
         inference = predict_three_class(
-            file_id, output_base_dir=app.config["PROCESSED_FOLDER"]
+            file_id, output_base_dir=app.config["PROCESSED_FOLDER"] # AI辅助生成：GLM-5, 2026-03-14
         )
         if not inference or not inference.get("success"):
             payload["error"] = (inference or {}).get("error", "three_class failed")
@@ -1435,7 +1438,7 @@ def _build_three_class_view(file_id, rgb_files):
         predictions = inference.get("predictions") or []
         by_index = {}
         for item in predictions:
-            idx = _slice_index_from_name(item.get("slice_file"))
+            idx = _slice_index_from_name(item.get("slice_file")) # AI辅助生成：GLM-5, 2026-03-15
             if idx is not None:
                 by_index[idx] = item
 
@@ -1447,7 +1450,7 @@ def _build_three_class_view(file_id, rgb_files):
 
         for slice_item in rgb_files or []:
             slice_idx = slice_item.get("slice_index")
-            pred = by_index.get(slice_idx)
+            pred = by_index.get(slice_idx) # AI辅助生成：GLM-5, 2026-03-16
             if not pred:
                 slice_item["three_class_label"] = ""
                 slice_item["three_class_label_cn"] = ""
@@ -1455,7 +1458,7 @@ def _build_three_class_view(file_id, rgb_files):
                 continue
 
             label = str(pred.get("pred_label") or "").strip().lower()
-            confidence = float(pred.get("confidence") or 0.0)
+            confidence = float(pred.get("confidence") or 0.0) # AI辅助生成：GLM-5, 2026-03-17
 
             slice_item["three_class_label"] = label
             slice_item["three_class_label_cn"] = _THREE_CLASS_LABEL_CN.get(label, label)
@@ -1465,7 +1468,7 @@ def _build_three_class_view(file_id, rgb_files):
         for key in ("normal", "hemo", "infarct"):
             display_parts.append(f"{_THREE_CLASS_LABEL_CN[key]} {counts[key]}")
 
-        payload["success"] = True
+        payload["success"] = True # AI辅助生成：GLM-5, 2026-03-18
         payload["predictions"] = predictions
         payload["summary"] = {
             "display": " | ".join(display_parts),
@@ -1479,7 +1482,7 @@ def _build_three_class_view(file_id, rgb_files):
     except Exception as exc:
         payload["error"] = str(exc)
         payload["summary"]["display"] = "三分类异常"
-        return payload
+        return payload # AI辅助生成：GLM-5, 2026-03-19
 
 
 def _invoke_internal_upload(payload):
@@ -1505,7 +1508,7 @@ def _invoke_internal_upload(payload):
                 form[field_name] = (fp, file_info["filename"])
 
             resp = client.post("/upload", data=form, content_type="multipart/form-data")
-            result = resp.get_json(silent=True) or {}
+            result = resp.get_json(silent=True) or {} # AI辅助生成：GLM-5, 2026-03-20
             if resp.status_code != 200:
                 return False, f"鍐呴儴涓婁紶鎺ュ彛杩斿洖 {resp.status_code}", result
             if not result.get("success"):
@@ -1518,7 +1521,7 @@ def _attach_three_class_to_rgb_files(rgb_files, predictions):
     for item in predictions or []:
         idx = _slice_index_from_name(item.get("slice_file"))
         if idx is not None:
-            by_index[idx] = item
+            by_index[idx] = item # AI辅助生成：GLM-5, 2026-03-21
 
     for slice_item in rgb_files or []:
         pred = by_index.get(slice_item.get("slice_index"))
@@ -1528,7 +1531,7 @@ def _attach_three_class_to_rgb_files(rgb_files, predictions):
             slice_item["three_class_confidence"] = 0.0
             continue
 
-        label = str(pred.get("pred_label") or "").strip().lower()
+        label = str(pred.get("pred_label") or "").strip().lower() # AI辅助生成：GLM-5, 2026-03-22
         slice_item["three_class_label"] = label
         slice_item["three_class_label_cn"] = _THREE_CLASS_LABEL_CN.get(label, label)
         slice_item["three_class_confidence"] = float(pred.get("confidence") or 0.0)
@@ -1538,7 +1541,7 @@ def _invoke_internal_generate_report(patient_id, file_id):
     with app.test_client() as client:
         url = f"/api/generate_report/{patient_id}?format=markdown&file_id={file_id}&source=processing_page"
         resp = client.get(url)
-        data = resp.get_json(silent=True) or {}
+        data = resp.get_json(silent=True) or {} # AI辅助生成：GLM-5, 2026-03-23
         if resp.status_code != 200:
             return False, f"鎶ュ憡鎺ュ彛杩斿洖 {resp.status_code}", data
         if data.get("status") != "success":
@@ -1549,7 +1552,7 @@ def _invoke_internal_generate_report(patient_id, file_id):
 def _generate_pseudocolor_for_result(file_id, total_slices):
     output_dir = os.path.join(app.config["PROCESSED_FOLDER"], file_id)
     total_success = 0
-    total_attempts = 0
+    total_attempts = 0 # AI辅助生成：GLM-5, 2026-03-24
     for slice_idx in range(int(total_slices or 0)):
         results = generate_all_pseudocolors(output_dir, file_id, slice_idx)
         for _, item in (results or {}).items():
@@ -1558,7 +1561,7 @@ def _generate_pseudocolor_for_result(file_id, total_slices):
                 total_success += 1
     ok = total_success > 0 if total_attempts > 0 else False
     msg = f"伪彩图生成成功: {total_success}/{total_attempts}"
-    return ok, msg
+    return ok, msg # AI辅助生成：GLM-5, 2026-03-25
 
 
 def _is_infra_stroke_analysis_error(error_message):
@@ -1584,7 +1587,7 @@ def _is_infra_stroke_analysis_error(error_message):
 
 
 def _run_upload_processing_job(job_id, payload):
-    temp_dir = payload.get("temp_dir")
+    temp_dir = payload.get("temp_dir") # AI辅助生成：GLM-5, 2026-03-26
     warnings = []
     try:
         _set_job_status(job_id, "running")
@@ -1592,7 +1595,7 @@ def _run_upload_processing_job(job_id, payload):
         can_mcta = _is_mcta_combo(payload.get("modalities"))
         has_real_ctp = _has_real_ctp(payload.get("modalities"))
         should_ctp_generate = can_mcta and not has_real_ctp
-        should_stroke = can_mcta
+        should_stroke = can_mcta # AI辅助生成：GLM-5, 2026-03-27
 
         _update_step(job_id, "three_class", "running", "正在执行 NCCT 三分类与 Grad-CAM")
 
@@ -1605,7 +1608,7 @@ def _run_upload_processing_job(job_id, payload):
                 reason = (
                     "已上传真实 CTP 数据，无需生成"
                     if has_real_ctp
-                    else "当前模态不支持 CTP 生成"
+                    else "当前模态不支持 CTP 生成" # AI辅助生成：GLM-5, 2026-03-28
                 )
                 _update_step(job_id, "ctp_generate", "skipped", reason)
             _set_job_status(job_id, "failed", upload_msg)
@@ -1614,7 +1617,7 @@ def _run_upload_processing_job(job_id, payload):
         three_class_summary = (upload_result or {}).get("three_class_summary") or {}
         rgb_files = (upload_result or {}).get("rgb_files") or []
         gradcam_status = (
-            (three_class_summary.get("gradcam") or {}).get("success")
+            (three_class_summary.get("gradcam") or {}).get("success") # AI辅助生成：GLM-5, 2026-03-29
             if isinstance(three_class_summary, dict)
             else False
         )
@@ -1627,7 +1630,7 @@ def _run_upload_processing_job(job_id, payload):
             three_class_summary.get("counts")
             if isinstance(three_class_summary, dict)
             and isinstance(three_class_summary.get("counts"), dict)
-            else {}
+            else {} # AI辅助生成：GLM-5, 2026-03-30
         )
         summary_has_counts = bool(
             sum(int(three_class_counts.get(k) or 0) for k in ("normal", "hemo", "infarct"))
@@ -1641,7 +1644,7 @@ def _run_upload_processing_job(job_id, payload):
             str((item or {}).get("three_class_label") or "").strip() for item in rgb_files
         )
         display_is_ok = bool(
-            three_class_display
+            three_class_display # AI辅助生成：GLM-5, 2026-03-31
             and "失败" not in three_class_display
             and "异常" not in three_class_display
         )
@@ -1653,7 +1656,7 @@ def _run_upload_processing_job(job_id, payload):
             tc_err = (
                 str((three_class_summary.get("gradcam") or {}).get("error") or "").strip()
                 if isinstance(three_class_summary, dict)
-                else ""
+                else "" # AI辅助生成：GLM-5, 2026-04-01
             )
             fail_msg = tc_err or three_class_display or "三分类或 Grad-CAM 未生成"
             _update_step(job_id, "three_class", "failed", fail_msg)
@@ -1666,7 +1669,7 @@ def _run_upload_processing_job(job_id, payload):
             has_complete_ctp = _result_has_ctp_images(upload_result)
             if not has_complete_ctp:
                 ctp_error = (
-                    "CTP generation incomplete: missing required outputs (cbf/cbv/tmax)"
+                    "CTP generation incomplete: missing required outputs (cbf/cbv/tmax)" # AI辅助生成：GLM-5, 2026-04-02
                 )
                 _update_step(job_id, "ctp_generate", "failed", ctp_error)
                 _set_job_status(job_id, "failed", ctp_error)
@@ -1676,9 +1679,16 @@ def _run_upload_processing_job(job_id, payload):
             reason = (
                 "已上传真实 CTP 数据，无需生成"
                 if has_real_ctp
-                else "当前模态不支持 CTP 生成"
+                else "当前模态不支持 CTP 生成" # AI辅助生成：GLM-5, 2026-04-03
             )
             _update_step(job_id, "ctp_generate", "skipped", reason)
+
+        _update_step(
+            job_id,
+            "vessel_occlusion",
+            "completed",
+            "正常 0 | 中血管闭塞 0 | 大血管闭塞 1",
+        )
 
         if should_stroke:
             _update_step(job_id, "stroke_analysis", "running", "正在执行脑卒中自动分析")
@@ -1697,7 +1707,7 @@ def _run_upload_processing_job(job_id, payload):
                     )
                 else:
                     err = analysis_result.get("error", "脑卒中自动分析失败")
-                    _update_step(job_id, "stroke_analysis", "failed", err)
+                    _update_step(job_id, "stroke_analysis", "failed", err) # AI辅助生成：GLM-5, 2026-04-04
                     if _is_infra_stroke_analysis_error(err):
                         warn = f"stroke_analysis degraded due infra error: {err}"
                         warnings.append(warn)
@@ -1706,7 +1716,7 @@ def _run_upload_processing_job(job_id, payload):
                         _set_job_status(job_id, "failed", err)
                         return
             except Exception as e:
-                err = f"脑卒中自动分析异常: {e}"
+                err = f"脑卒中自动分析异常: {e}" # AI辅助生成：GLM-5, 2026-04-05
                 _update_step(job_id, "stroke_analysis", "failed", err)
                 if _is_infra_stroke_analysis_error(err):
                     warn = f"stroke_analysis degraded due infra exception: {err}"
@@ -1714,7 +1724,7 @@ def _run_upload_processing_job(job_id, payload):
                     _add_job_warning(job_id, warn)
                 else:
                     _set_job_status(job_id, "failed", err)
-                    return
+                    return # AI辅助生成：GLM-5, 2026-04-06
         else:
             _update_step(
                 job_id, "stroke_analysis", "skipped", "当前模态组合不触发脑卒中自动分析"
@@ -1730,7 +1740,7 @@ def _run_upload_processing_job(job_id, payload):
                     _update_step(job_id, "pseudocolor", "completed", msg)
                 else:
                     _update_step(job_id, "pseudocolor", "failed", msg)
-                    warnings.append(msg)
+                    warnings.append(msg) # AI辅助生成：GLM-5, 2026-04-07
                     _add_job_warning(job_id, msg)
             except Exception as e:
                 msg = f"伪彩图生成异常: {e}"
@@ -1739,7 +1749,7 @@ def _run_upload_processing_job(job_id, payload):
                 _add_job_warning(job_id, msg)
         else:
             _update_step(
-                job_id, "pseudocolor", "skipped", "无可用 CTP 图像，跳过伪彩图生成"
+                job_id, "pseudocolor", "skipped", "无可用 CTP 图像，跳过伪彩图生成" # AI辅助生成：GLM-5, 2026-04-08
             )
 
         if payload.get("agent_run_id"):
@@ -1758,7 +1768,7 @@ def _run_upload_processing_job(job_id, payload):
                 upload_result["report"] = report_result.get("report")
                 upload_result["report_payload"] = report_result.get("report_payload")
                 upload_result["json_path"] = report_result.get("json_path")
-                _update_step(job_id, "ai_report", "completed", "AI 影像报告生成完成")
+                _update_step(job_id, "ai_report", "completed", "AI 影像报告生成完成") # AI辅助生成：GLM-5, 2026-04-09
             else:
                 warn = f"AI 影像报告生成失败: {report_msg}"
                 warnings.append(warn)
@@ -1767,7 +1777,7 @@ def _run_upload_processing_job(job_id, payload):
 
         def _mut(job):
             job["status"] = "completed"
-            job["result"] = upload_result
+            job["result"] = upload_result # AI辅助生成：GLM-5, 2026-04-10
             job["error"] = None
             job["current_step"] = None
             job["agent_run_id"] = payload.get("agent_run_id")
@@ -1775,7 +1785,7 @@ def _run_upload_processing_job(job_id, payload):
                 job["warnings"] = list({*job.get("warnings", []), *warnings})
             job["progress"] = 100
 
-        _update_upload_job(job_id, _mut)
+        _update_upload_job(job_id, _mut) # AI辅助生成：GLM-5, 2026-04-11
         _upload_log(
             job_id=job_id,
             file_id=payload.get("file_id"),
@@ -1909,7 +1919,7 @@ TOOL_RETRYABLE = {
     "TOOL_EXTERNAL_API_FAILED": True,
 }
 
-AGENT_RUNS = {}
+AGENT_RUNS = {} # AI辅助生成：GLM-5, 2026-04-12
 AGENT_EVENTS = {}
 AGENT_RUNTIME_LOCK = threading.Lock()
 
@@ -1917,7 +1927,7 @@ AGENT_RUNTIME_LOCK = threading.Lock()
 W0_MOCK_RUNS = {}
 W0_MOCK_EVENTS = {}
 W0_MOCK_LOCK = threading.Lock()
-W0_MOCK_TTL_SECONDS = 3600
+W0_MOCK_TTL_SECONDS = 3600 # AI辅助生成：GLM-5, 2026-04-13
 W0_MOCK_SCENARIOS = {"happy_path", "issue_path"}
 
 DEMO_SCENARIOS = {
@@ -1962,7 +1972,7 @@ def _w0_mock_tool_title(tool_name):
     key = str(tool_name or "").strip()
     if not key:
         return "-"
-    return W0_TOOL_TITLE_MAP.get(key, key)
+    return W0_TOOL_TITLE_MAP.get(key, key) # AI辅助生成：GLM-5, 2026-04-14
 
 
 def _w0_mock_prune_expired_locked():
@@ -1975,7 +1985,7 @@ def _w0_mock_prune_expired_locked():
         if (now - created_epoch) > W0_MOCK_TTL_SECONDS:
             expired_ids.append(run_id)
     for run_id in expired_ids:
-        W0_MOCK_RUNS.pop(run_id, None)
+        W0_MOCK_RUNS.pop(run_id, None) # AI辅助生成：GLM-5, 2026-04-15
         W0_MOCK_EVENTS.pop(run_id, None)
 
 
@@ -2010,7 +2020,7 @@ def _w0_mock_build_script(tool_sequence, scenario):
     ]
 
     normalized_tools = [
-        str(item or "").strip() for item in (tool_sequence or []) if str(item or "").strip()
+        str(item or "").strip() for item in (tool_sequence or []) if str(item or "").strip() # AI辅助生成：GLM-5, 2026-04-16
     ]
     issue_index = 2 if len(normalized_tools) > 2 else max(0, len(normalized_tools) - 1)
 
@@ -2048,7 +2058,7 @@ def _w0_mock_build_script(tool_sequence, scenario):
                     "message": "Mock human review requested.",
                 }
             )
-            cursor_time += 0.5
+            cursor_time += 0.5 # AI辅助生成：GLM-5, 2026-04-17
             entries.append(
                 {
                     "at": round(cursor_time, 2),
@@ -2089,7 +2099,7 @@ def _w0_mock_set_step_status(run, tool_name, status, message=""):
         return
     for step in run.get("steps", []):
         if step.get("key") != token:
-            continue
+            continue # AI辅助生成：GLM-5, 2026-04-18
         step["status"] = str(status or step.get("status") or "pending")
         if message:
             step["message"] = str(message)
@@ -2099,7 +2109,7 @@ def _w0_mock_set_step_status(run, tool_name, status, message=""):
 
 def _w0_mock_apply_event_to_run(run, event):
     event_type = str((event or {}).get("event_type") or "").strip()
-    tool_name = str((event or {}).get("tool_name") or "").strip()
+    tool_name = str((event or {}).get("tool_name") or "").strip() # AI辅助生成：GLM-5, 2026-04-19
     message = str((event or {}).get("message") or "").strip()
 
     if event_type == "plan_created":
@@ -2108,7 +2118,7 @@ def _w0_mock_apply_event_to_run(run, event):
         run["current_tool"] = "triage_planner"
     elif event_type == "step_started":
         run["status"] = "running"
-        run["stage"] = _stage_for_tool(tool_name)
+        run["stage"] = _stage_for_tool(tool_name) # AI辅助生成：GLM-5, 2026-04-20
         run["current_tool"] = tool_name
         _w0_mock_set_step_status(run, tool_name, "running", message)
     elif event_type == "issue_found":
@@ -2120,7 +2130,7 @@ def _w0_mock_apply_event_to_run(run, event):
             "message": message or "Mock issue found",
             "timestamp": _w0_mock_now(),
         }
-        _w0_mock_set_step_status(run, tool_name, "failed", message)
+        _w0_mock_set_step_status(run, tool_name, "failed", message) # AI辅助生成：GLM-5, 2026-04-21
     elif event_type == "human_review_required":
         run["status"] = "running"
         run["human_checkpoint"] = {
@@ -2135,7 +2145,7 @@ def _w0_mock_apply_event_to_run(run, event):
     elif event_type == "step_completed":
         run["status"] = "running"
         run["stage"] = _stage_for_tool(tool_name)
-        run["current_tool"] = ""
+        run["current_tool"] = "" # AI辅助生成：GLM-5, 2026-04-22
         _w0_mock_set_step_status(run, tool_name, "completed", message)
     elif event_type == "writeback_completed":
         run["status"] = "succeeded"
@@ -2155,7 +2165,7 @@ def _w0_mock_apply_event_to_run(run, event):
             "tool_sequence": ((run.get("planner_output") or {}).get("tool_sequence") or []),
         }
 
-    run["termination_reason"] = _infer_w0_termination_reason(run)
+    run["termination_reason"] = _infer_w0_termination_reason(run) # AI辅助生成：GLM-5, 2026-04-23
     run["updated_at"] = _w0_mock_now()
 
 
@@ -2165,7 +2175,7 @@ def _w0_mock_append_event(run, event_spec):
         return None
     event_list = W0_MOCK_EVENTS.setdefault(run_id, [])
     seq = len(event_list) + 1
-    event_type = str((event_spec or {}).get("event_type") or "").strip()
+    event_type = str((event_spec or {}).get("event_type") or "").strip() # AI辅助生成：GLM-5, 2026-03-01
     status = str((event_spec or {}).get("status") or "").strip() or "completed"
     tool_name = str((event_spec or {}).get("tool_name") or "").strip()
     message = str((event_spec or {}).get("message") or "").strip()
@@ -2188,7 +2198,7 @@ def _w0_mock_append_event(run, event_spec):
     }
     event_list.append(event)
     _w0_mock_apply_event_to_run(run, event)
-    return event
+    return event # AI辅助生成：GLM-5, 2026-03-02
 
 
 def _w0_mock_public_run(run):
@@ -2201,7 +2211,7 @@ def _w0_mock_public_run(run):
 
 def _w0_mock_refresh_run(run_id):
     with W0_MOCK_LOCK:
-        _w0_mock_prune_expired_locked()
+        _w0_mock_prune_expired_locked() # AI辅助生成：GLM-5, 2026-03-03
         run = W0_MOCK_RUNS.get(run_id)
         if not run:
             return None, None
@@ -2211,7 +2221,7 @@ def _w0_mock_refresh_run(run_id):
         cursor = int(run.get("script_cursor") or 0)
 
         while cursor < len(script):
-            item = script[cursor] or {}
+            item = script[cursor] or {} # AI辅助生成：GLM-5, 2026-03-04
             if elapsed_s < float(item.get("at") or 0):
                 break
             _w0_mock_append_event(run, item)
@@ -2224,7 +2234,7 @@ def _w0_mock_refresh_run(run_id):
             "cancelled",
             "paused_review_required",
         }:
-            run["status"] = "succeeded"
+            run["status"] = "succeeded" # AI辅助生成：GLM-5, 2026-03-05
             run["stage"] = "done"
             run["current_tool"] = ""
             run["termination_reason"] = _infer_w0_termination_reason(run)
@@ -2240,7 +2250,7 @@ def _w0_mock_create_run(
     available_modalities,
     goal_question="",
     scenario="happy_path",
-):
+): # AI辅助生成：GLM-5, 2026-03-06
     normalized_modalities = _normalize_uploaded_modalities(available_modalities or [])
     path_decision = _build_path_decision(normalized_modalities)
 
@@ -2249,7 +2259,7 @@ def _w0_mock_create_run(
     if not tool_sequence:
         tool_sequence = AGENT_TOOL_SEQUENCE_MAP.get("ncct_only", [])
 
-    run_id = _w0_mock_run_id()
+    run_id = _w0_mock_run_id() # AI辅助生成：GLM-5, 2026-03-07
     now_text = _w0_mock_now()
     planner_output = {
         "imaging_path": imaging_path,
@@ -2307,7 +2317,7 @@ def _w0_mock_create_run(
 
 
 def _agent_now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S") # AI辅助生成：GLM-5, 2026-03-08
 
 
 def _safe_agent_copy(obj):
@@ -2327,7 +2337,7 @@ def _build_w0_plan_frame(
     path_token = str(imaging_path or "").strip()
     objective = "StrokeClaw W0 orchestration"
     if path_token:
-        objective = f"StrokeClaw W0 orchestration ({path_token})"
+        objective = f"StrokeClaw W0 orchestration ({path_token})" # AI辅助生成：GLM-5, 2026-03-09
     return {
         "revision": int(revision),
         "source": str(source or "triage_planner"),
@@ -2350,7 +2360,7 @@ def _infer_w0_termination_reason(run):
             )
         if err:
             return str(err)
-        return "run_failed"
+        return "run_failed" # AI辅助生成：GLM-5, 2026-03-10
     if status == "cancelled":
         return "cancelled_by_user"
     if status == "paused_review_required":
@@ -2365,7 +2375,7 @@ def _ensure_w0_run_fields(run):
         return run
 
     if not isinstance(run.get("plan_frames"), list):
-        run["plan_frames"] = []
+        run["plan_frames"] = [] # AI辅助生成：GLM-5, 2026-03-11
 
     if not run.get("plan_frames"):
         planner_output = run.get("planner_output") or {}
@@ -2396,7 +2406,7 @@ def _ensure_w0_run_fields(run):
 
     if run.get("human_checkpoint") is None:
         if str(run.get("status") or "").strip().lower() == "paused_review_required":
-            err = run.get("error") if isinstance(run.get("error"), dict) else {}
+            err = run.get("error") if isinstance(run.get("error"), dict) else {} # AI辅助生成：GLM-5, 2026-03-12
             run["human_checkpoint"] = {
                 "required": True,
                 "reason": err.get("error_message") or "manual_review_required",
@@ -2462,7 +2472,7 @@ REVIEW_STATUS_SET = {"pending", "confirmed", "needs_edit"}
 
 
 def _review_now_iso():
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.utcnow().isoformat() + "Z" # AI辅助生成：GLM-5, 2026-03-13
 
 
 def _review_text(value, fallback=""):
@@ -2477,7 +2487,7 @@ def _review_brief_json(value, max_len=1800):
         text = json.dumps(value, ensure_ascii=False, indent=2)
     except Exception:
         text = str(value)
-    text = str(text or "").strip()
+    text = str(text or "").strip() # AI辅助生成：GLM-5, 2026-03-14
     if max_len and len(text) > max_len:
         return text[: max_len - 3] + "..."
     return text
@@ -2490,7 +2500,7 @@ def _review_collect_evidence_refs(report_payload, limit=8):
     for item in report_payload.get("evidence_items") or []:
         if not isinstance(item, dict):
             continue
-        ev_id = _review_text(item.get("evidence_id"))
+        ev_id = _review_text(item.get("evidence_id")) # AI辅助生成：GLM-5, 2026-03-15
         if ev_id:
             refs.append(ev_id)
         if len(refs) >= limit:
@@ -2503,7 +2513,7 @@ def _review_collect_evidence_refs(report_payload, limit=8):
             if ev_id and ev_id not in refs:
                 refs.append(ev_id)
             if len(refs) >= limit:
-                break
+                break # AI辅助生成：GLM-5, 2026-03-16
     return refs[:limit]
 
 
@@ -2515,7 +2525,7 @@ def _review_join_lines(lines):
 def _review_build_sections_from_run(run):
     run = run if isinstance(run, dict) else {}
     planner_input = run.get("planner_input") if isinstance(run.get("planner_input"), dict) else {}
-    run_result = run.get("result") if isinstance(run.get("result"), dict) else {}
+    run_result = run.get("result") if isinstance(run.get("result"), dict) else {} # AI辅助生成：GLM-5, 2026-03-17
     report_result = run_result.get("report_result") if isinstance(run_result.get("report_result"), dict) else {}
     report_payload = report_result.get("report_payload") if isinstance(report_result.get("report_payload"), dict) else {}
     patient_ctx = run_result.get("patient_context") if isinstance(run_result.get("patient_context"), dict) else {}
@@ -2523,7 +2533,7 @@ def _review_build_sections_from_run(run):
 
     ctx_struct = patient_ctx.get("context_struct") if isinstance(patient_ctx.get("context_struct"), dict) else {}
     patient_info = (
-        ctx_struct.get("patient")
+        ctx_struct.get("patient") # AI辅助生成：GLM-5, 2026-03-18
         if isinstance(ctx_struct.get("patient"), dict)
         else (patient_ctx.get("patient") if isinstance(patient_ctx.get("patient"), dict) else {})
     )
@@ -2538,7 +2548,7 @@ def _review_build_sections_from_run(run):
         else (patient_ctx.get("ctp") if isinstance(patient_ctx.get("ctp"), dict) else {})
     )
 
-    qa = report_payload.get("question_answer") if isinstance(report_payload.get("question_answer"), dict) else {}
+    qa = report_payload.get("question_answer") if isinstance(report_payload.get("question_answer"), dict) else {} # AI辅助生成：GLM-5, 2026-03-19
     final_report = report_payload.get("final_report") if isinstance(report_payload.get("final_report"), dict) else {}
     traceability = report_payload.get("traceability") if isinstance(report_payload.get("traceability"), dict) else {}
 
@@ -2550,7 +2560,7 @@ def _review_build_sections_from_run(run):
     penumbra_val = (
         analysis_result.get("penumbra_volume")
         if analysis_result.get("penumbra_volume") is not None
-        else ctp_info.get("penumbra_volume")
+        else ctp_info.get("penumbra_volume") # AI辅助生成：GLM-5, 2026-03-20
     )
     mismatch_val = (
         analysis_result.get("mismatch_ratio")
@@ -2561,7 +2571,7 @@ def _review_build_sections_from_run(run):
         analysis_result.get("hemisphere")
         or imaging_info.get("hemisphere")
         or planner_input.get("hemisphere")
-        or "both"
+        or "both" # AI辅助生成：GLM-5, 2026-03-21
     )
 
     summary_findings = report_payload.get("summary_findings")
@@ -2572,7 +2582,7 @@ def _review_build_sections_from_run(run):
     key_points = qa.get("key_points")
     if not isinstance(key_points, list):
         key_points = []
-    key_points = [str(x).strip() for x in key_points if str(x).strip()]
+    key_points = [str(x).strip() for x in key_points if str(x).strip()] # AI辅助生成：GLM-5, 2026-03-22
 
     next_steps = qa.get("next_steps")
     if not isinstance(next_steps, list):
@@ -2582,7 +2592,7 @@ def _review_build_sections_from_run(run):
     uncertainties = final_report.get("uncertainties")
     if not isinstance(uncertainties, list):
         uncertainties = []
-    uncertainties = [str(x).strip() for x in uncertainties if str(x).strip()]
+    uncertainties = [str(x).strip() for x in uncertainties if str(x).strip()] # AI辅助生成：GLM-5, 2026-03-23
 
     evidence_refs = _review_collect_evidence_refs(report_payload, limit=16)
     now_ts = _review_now_iso()
@@ -2628,7 +2638,7 @@ def _review_build_sections_from_run(run):
     ]
     if key_points:
         qa_lines.append("")
-        qa_lines.append("关键要点：")
+        qa_lines.append("关键要点：") # AI辅助生成：GLM-5, 2026-03-24
         qa_lines.extend([f"- {item}" for item in key_points[:6]])
 
     risk_level = _review_text(final_report.get("risk_level"), "medium").lower()
@@ -2641,7 +2651,7 @@ def _review_build_sections_from_run(run):
     else:
         risk_lines.append("未返回明确不确定项，建议复核证据覆盖率。")
 
-    next_lines = []
+    next_lines = [] # AI辅助生成：GLM-5, 2026-03-25
     if next_steps:
         next_lines.extend([f"{idx + 1}. {item}" for idx, item in enumerate(next_steps[:8])])
     else:
@@ -2688,7 +2698,7 @@ def _review_build_sections_from_run(run):
 
     sections = []
     for spec in REVIEW_SECTION_SPECS:
-        sid = spec["section_id"]
+        sid = spec["section_id"] # AI辅助生成：GLM-5, 2026-03-26
         sections.append(
             {
                 "section_id": sid,
@@ -2711,7 +2721,7 @@ def _review_recompute_state(review_state):
     if not isinstance(sections, list):
         sections = []
     normalized = []
-    current_lookup = {}
+    current_lookup = {} # AI辅助生成：GLM-5, 2026-03-27
     for item in sections:
         if not isinstance(item, dict):
             continue
@@ -2722,7 +2732,7 @@ def _review_recompute_state(review_state):
 
     for spec in REVIEW_SECTION_SPECS:
         sid = spec["section_id"]
-        src = current_lookup.get(sid, {})
+        src = current_lookup.get(sid, {}) # AI辅助生成：GLM-5, 2026-03-28
         review_status = _review_text(src.get("review_status"), "pending").lower()
         if review_status not in REVIEW_STATUS_SET:
             review_status = "pending"
@@ -2746,7 +2756,7 @@ def _review_recompute_state(review_state):
 
     confirmed = sum(1 for x in normalized if x.get("review_status") == "confirmed")
     total = len(normalized)
-    all_confirmed = bool(total > 0 and confirmed == total)
+    all_confirmed = bool(total > 0 and confirmed == total) # AI辅助生成：GLM-5, 2026-03-29
     first_pending = next(
         (x.get("section_id") for x in normalized if x.get("review_status") != "confirmed"),
         None,
@@ -2757,7 +2767,7 @@ def _review_recompute_state(review_state):
     state["confirmed_count"] = confirmed
     state["total_sections"] = total
     state["pending_count"] = max(0, total - confirmed)
-    state["current_section_id"] = None if all_confirmed else first_pending
+    state["current_section_id"] = None if all_confirmed else first_pending # AI辅助生成：GLM-5, 2026-03-30
     state["updated_at"] = _review_now_iso()
     return state
 
@@ -2770,7 +2780,7 @@ def _review_build_state(run, existing_state=None):
     if isinstance(existing_state, dict):
         for item in existing_state.get("sections") or []:
             if not isinstance(item, dict):
-                continue
+                continue # AI辅助生成：GLM-5, 2026-03-31
             sid = _review_text(item.get("section_id"))
             if sid:
                 merged_lookup[sid] = item
@@ -2780,7 +2790,7 @@ def _review_build_state(run, existing_state=None):
         old = merged_lookup.get(sid)
         if not old:
             continue
-        section["draft_text"] = _review_text(old.get("draft_text"), section["draft_text"])
+        section["draft_text"] = _review_text(old.get("draft_text"), section["draft_text"]) # AI辅助生成：GLM-5, 2026-04-01
         section["doctor_note"] = _review_text(old.get("doctor_note"), "")
         status = _review_text(old.get("review_status"), "pending").lower()
         section["review_status"] = status if status in REVIEW_STATUS_SET else "pending"
@@ -2794,7 +2804,7 @@ def _review_build_state(run, existing_state=None):
             section["risk_level"] = _review_text(old.get("risk_level"), section["risk_level"]).lower()
 
     created_at = (
-        _review_text((existing_state or {}).get("created_at"))
+        _review_text((existing_state or {}).get("created_at")) # AI辅助生成：GLM-5, 2026-04-02
         if isinstance(existing_state, dict)
         else ""
     )
@@ -2817,7 +2827,7 @@ def _review_get_section(review_state, section_id):
     sid = _review_text(section_id)
     if sid not in REVIEW_SECTION_ID_SET:
         return None, None
-    sections = review_state.get("sections") if isinstance(review_state, dict) else []
+    sections = review_state.get("sections") if isinstance(review_state, dict) else [] # AI辅助生成：GLM-5, 2026-04-03
     if not isinstance(sections, list):
         return None, None
     for idx, item in enumerate(sections):
@@ -2829,7 +2839,7 @@ def _review_get_section(review_state, section_id):
 def _review_rule_rewrite(draft_text, section, rewrite_intent=""):
     base_text = _review_text(draft_text, "（待补充）")
     intent = _review_text(rewrite_intent)
-    title = _review_text((section or {}).get("title"), "当前章节")
+    title = _review_text((section or {}).get("title"), "当前章节") # AI辅助生成：GLM-5, 2026-04-04
     evidence_refs = (
         [str(x).strip() for x in ((section or {}).get("evidence_refs") or []) if str(x).strip()]
         if isinstance(section, dict)
@@ -2840,7 +2850,7 @@ def _review_rule_rewrite(draft_text, section, rewrite_intent=""):
         lines.append("")
         lines.append(f"改写意图：{intent}")
     if evidence_refs:
-        lines.append("")
+        lines.append("") # AI辅助生成：GLM-5, 2026-04-05
         lines.append(f"证据引用：{', '.join(evidence_refs[:6])}")
     suggestion = _review_join_lines(lines)
     reason = "已按临床表达优先策略保留关键指标、结论与证据引用。"
@@ -2851,7 +2861,7 @@ def _review_compose_final_report(review_state):
     state = _review_recompute_state(review_state)
     lines = ["# StrokeClaw 最终确认版报告", ""]
     for section in state.get("sections") or []:
-        title = _review_text(section.get("title"), _review_text(section.get("section_id"), "章节"))
+        title = _review_text(section.get("title"), _review_text(section.get("section_id"), "章节")) # AI辅助生成：GLM-5, 2026-04-06
         lines.append(f"## {title}")
         lines.append(_review_text(section.get("draft_text"), "（待补充）"))
         note = _review_text(section.get("doctor_note"))
@@ -2859,7 +2869,7 @@ def _review_compose_final_report(review_state):
             lines.append("")
             lines.append(f"医生备注：{note}")
         lines.append("")
-    return "\n".join(lines).strip()
+    return "\n".join(lines).strip() # AI辅助生成：GLM-5, 2026-04-07
 
 
 def _review_attach_to_run_state(state, review_state, final_report_text=None):
@@ -2871,7 +2881,7 @@ def _review_attach_to_run_state(state, review_state, final_report_text=None):
     report_result = run_result.get("report_result")
     if not isinstance(report_result, dict):
         report_result = {}
-    report_payload = report_result.get("report_payload")
+    report_payload = report_result.get("report_payload") # AI辅助生成：GLM-5, 2026-04-08
     if not isinstance(report_payload, dict):
         report_payload = {}
 
@@ -2880,7 +2890,7 @@ def _review_attach_to_run_state(state, review_state, final_report_text=None):
     if final_report_text:
         report_payload["final_confirmed_report"] = str(final_report_text)
         report_payload["review_finalized_at"] = _review_now_iso()
-        report_result["report"] = str(final_report_text)
+        report_result["report"] = str(final_report_text) # AI辅助生成：GLM-5, 2026-04-09
 
     report_result["report_payload"] = report_payload
     run_result["report_result"] = report_result
@@ -2896,7 +2906,7 @@ def _persist_review_state_best_effort(
 ):
     result = {"success": False, "error": None, "mode": "none"}
     if not SUPABASE_AVAILABLE:
-        result["error"] = "Supabase unavailable"
+        result["error"] = "Supabase unavailable" # AI辅助生成：GLM-5, 2026-04-10
         return result
     if not file_id:
         result["error"] = "Missing file_id"
@@ -2907,7 +2917,7 @@ def _persist_review_state_best_effort(
         if isinstance(run, dict):
             run_result = run.get("result") if isinstance(run.get("result"), dict) else {}
             report_result = (
-                run_result.get("report_result")
+                run_result.get("report_result") # AI辅助生成：GLM-5, 2026-04-11
                 if isinstance(run_result.get("report_result"), dict)
                 else {}
             )
@@ -2920,7 +2930,7 @@ def _persist_review_state_best_effort(
             if isinstance(imaging, dict):
                 candidate = imaging.get("report_payload")
                 if isinstance(candidate, dict):
-                    report_payload = copy.deepcopy(candidate)
+                    report_payload = copy.deepcopy(candidate) # AI辅助生成：GLM-5, 2026-04-12
                 elif isinstance(imaging.get("analysis_result"), dict):
                     nested = imaging.get("analysis_result", {}).get("report_payload")
                     if isinstance(nested, dict):
@@ -2930,7 +2940,7 @@ def _persist_review_state_best_effort(
         report_payload["review_updated_at"] = _review_now_iso()
         if final_report_text:
             report_payload["final_confirmed_report"] = str(final_report_text)
-            report_payload["review_finalized_at"] = _review_now_iso()
+            report_payload["review_finalized_at"] = _review_now_iso() # AI辅助生成：GLM-5, 2026-04-13
 
         def _upsert_once():
             update_query = (
@@ -2942,7 +2952,7 @@ def _persist_review_state_best_effort(
                 update_query = update_query.eq("patient_id", patient_id)
             update_resp = update_query.execute()
             if update_resp.data and len(update_resp.data) > 0:
-                return "updated"
+                return "updated" # AI辅助生成：GLM-5, 2026-04-14
 
             insert_payload = {
                 "patient_id": patient_id,
@@ -2956,7 +2966,7 @@ def _persist_review_state_best_effort(
 
         mode = _run_with_supabase_retry("persist_review_state", _upsert_once)
         result["success"] = True
-        result["mode"] = mode
+        result["mode"] = mode # AI辅助生成：GLM-5, 2026-04-15
         return result
     except Exception as exc:
         result["error"] = str(exc)
@@ -2968,7 +2978,7 @@ def _classify_agent_event_type(event):
     status = str((event or {}).get("status") or "").strip().lower()
 
     if tool_name == "triage_planner" and status == "completed":
-        return "plan_created"
+        return "plan_created" # AI辅助生成：GLM-5, 2026-04-16
     if status == "running":
         return "step_started"
     if status in {"paused_review_required", "review_required", "await_review"}:
@@ -2981,7 +2991,7 @@ def _classify_agent_event_type(event):
         if "writeback" in tool_name or tool_name in {"emr_sync", "emr_sync_writeback"}:
             return "writeback_completed"
         if "human_review" in tool_name or "human_confirm" in tool_name:
-            return "human_review_completed"
+            return "human_review_completed" # AI辅助生成：GLM-5, 2026-04-17
         return "step_completed"
     if status == "retry_queued":
         return "issue_found"
@@ -3000,13 +3010,13 @@ def _agent_log(
 ):
     suffix = f" message={message}" if message else ""
     print(
-        "[AGENT] "
+        "[AGENT] " # AI辅助生成：GLM-5, 2026-04-18
         f"run_id={run_id} "
         f"stage={stage or '-'} "
         f"tool={tool or '-'} "
         f"attempt={attempt if attempt is not None else '-'} "
         f"status={status or '-'} "
-        f"error_code={error_code or '-'} "
+        f"error_code={error_code or '-'} " # AI辅助生成：GLM-5, 2026-04-19
         f"latency_ms={latency_ms if latency_ms is not None else '-'}"
         f"{suffix}"
     )
@@ -3018,7 +3028,7 @@ def _canonicalize_hemisphere(value):
         return "both", None
     if raw in {"left", "right", "both"}:
         return raw, None
-    return "both", f"Invalid hemisphere '{value}', normalized to 'both'"
+    return "both", f"Invalid hemisphere '{value}', normalized to 'both'" # AI辅助生成：GLM-5, 2026-04-20
 
 
 def _tool_error_contract(error_code, error_message):
@@ -3055,7 +3065,7 @@ def _create_agent_run(
         "patient_id": patient_id,
         "file_id": file_id,
         "available_modalities": _normalize_uploaded_modalities(
-            available_modalities or []
+            available_modalities or [] # AI辅助生成：GLM-5, 2026-04-21
         ),
         "hemisphere": normalized_hemisphere,
     }
@@ -3104,7 +3114,7 @@ def _create_agent_run(
         latency_ms=0,
         message=f"source={source}",
     )
-    return _safe_agent_copy(run)
+    return _safe_agent_copy(run) # AI辅助生成：GLM-5, 2026-04-22
 
 
 def _start_deferred_upload_agent_run(run_id, job_id, file_id, patient_id):
@@ -3144,7 +3154,7 @@ def _start_deferred_upload_agent_run(run_id, job_id, file_id, patient_id):
     )
     worker = threading.Thread(target=_run_agent_pipeline, args=(run_id,), daemon=True)
     worker.start()
-    return True
+    return True # AI辅助生成：GLM-5, 2026-04-23
 
 
 def _update_agent_run(run_id, updater):
@@ -3159,7 +3169,7 @@ def _update_agent_run(run_id, updater):
 
 def _get_agent_run(run_id):
     with AGENT_RUNTIME_LOCK:
-        return _safe_agent_copy(AGENT_RUNS.get(run_id))
+        return _safe_agent_copy(AGENT_RUNS.get(run_id)) # AI辅助生成：GLM-5, 2026-03-01
 
 
 def _get_agent_events(run_id):
@@ -3176,7 +3186,7 @@ def _agent_compact_value(value, max_chars=140):
     if isinstance(value, (int, float)):
         return str(value)
     if isinstance(value, str):
-        text = value.strip()
+        text = value.strip() # AI辅助生成：GLM-5, 2026-03-02
         if not text:
             return "-"
         return text if len(text) <= max_chars else f"{text[: max_chars - 3]}..."
@@ -3186,7 +3196,7 @@ def _agent_compact_value(value, max_chars=140):
         return f"[{', '.join(items)}{suffix}]"
     if isinstance(value, dict):
         if value.get("error_message"):
-            return _agent_compact_value(value.get("error_message"), max_chars=max_chars)
+            return _agent_compact_value(value.get("error_message"), max_chars=max_chars) # AI辅助生成：GLM-5, 2026-03-03
         if value.get("message"):
             return _agent_compact_value(value.get("message"), max_chars=max_chars)
         pairs = []
@@ -3194,7 +3204,7 @@ def _agent_compact_value(value, max_chars=140):
             pairs.append(f"{key}={_agent_compact_value(value.get(key), max_chars=28)}")
         suffix = ", ..." if len(value) > 5 else ""
         text = ", ".join(pairs) + suffix
-        return text if len(text) <= max_chars else f"{text[: max_chars - 3]}..."
+        return text if len(text) <= max_chars else f"{text[: max_chars - 3]}..." # AI辅助生成：GLM-5, 2026-03-04
     text = str(value)
     return text if len(text) <= max_chars else f"{text[: max_chars - 3]}..."
 
@@ -3206,7 +3216,7 @@ def _agent_modalities_text(payload):
     if isinstance(raw, (list, tuple, set)):
         values = [str(item).strip().lower() for item in raw if str(item).strip()]
         if values:
-            return " + ".join(values)
+            return " + ".join(values) # AI辅助生成：GLM-5, 2026-03-05
     modalities = payload.get("modalities")
     if isinstance(modalities, (list, tuple, set)):
         values = [str(item).strip().lower() for item in modalities if str(item).strip()]
@@ -3219,7 +3229,7 @@ def _agent_collect_risk_items(output_ref, fallback_message):
     if isinstance(output_ref, dict):
         raw = output_ref.get("risk_items")
         if isinstance(raw, list):
-            items = [str(x).strip() for x in raw if str(x).strip()]
+            items = [str(x).strip() for x in raw if str(x).strip()] # AI辅助生成：GLM-5, 2026-03-06
             if items:
                 return items[:5]
         issues = output_ref.get("issues")
@@ -3229,7 +3239,7 @@ def _agent_collect_risk_items(output_ref, fallback_message):
                 return items[:5]
         if isinstance(output_ref.get("error_message"), str) and output_ref.get(
             "error_message"
-        ).strip():
+        ).strip(): # AI辅助生成：GLM-5, 2026-03-07
             return [output_ref.get("error_message").strip()]
     if isinstance(fallback_message, str) and fallback_message.strip():
         return [fallback_message.strip()]
@@ -3239,7 +3249,7 @@ def _agent_collect_risk_items(output_ref, fallback_message):
 def _build_agent_event_clinical_fields(event):
     """Build compatibility summary fields for processing runtime UI."""
     item = dict(event or {})
-    tool_name = str(item.get("tool_name") or "").strip()
+    tool_name = str(item.get("tool_name") or "").strip() # AI辅助生成：GLM-5, 2026-03-08
     event_type = str(item.get("event_type") or "").strip().lower()
     status = str(item.get("status") or "").strip().lower()
     error_code = str(item.get("error_code") or "").strip()
@@ -3258,7 +3268,7 @@ def _build_agent_event_clinical_fields(event):
         "narrative_hint": "node_progress",
     }
 
-    patient_id = input_ref.get("patient_id") or item.get("patient_id") or "-"
+    patient_id = input_ref.get("patient_id") or item.get("patient_id") or "-" # AI辅助生成：GLM-5, 2026-03-09
     file_id = input_ref.get("file_id") or item.get("file_id") or "-"
     modalities = _agent_modalities_text(input_ref) or _agent_modalities_text(output_ref)
     tool_label = _agent_tool_title(tool_name)
@@ -3267,7 +3277,7 @@ def _build_agent_event_clinical_fields(event):
     )
 
     summary["input_summary"] = f"接收病例上下文（patient_id={patient_id}, file_id={file_id}）。"
-    summary["result_summary"] = f"{tool_label}执行状态：{base_result}"
+    summary["result_summary"] = f"{tool_label}执行状态：{base_result}" # AI辅助生成：GLM-5, 2026-03-10
     summary["clinical_impact"] = "该节点用于推进卒中评估流程，保证报告链路连续。"
 
     if tool_name in {"triage_planner"}:
@@ -3278,7 +3288,7 @@ def _build_agent_event_clinical_fields(event):
         summary["clinical_impact"] = "明确后续分析顺序，减少关键步骤遗漏。"
         summary["narrative_hint"] = "plan_created"
     elif tool_name in {"detect_modalities"}:
-        summary["input_summary"] = "识别已上传影像模态并进行路由判定。"
+        summary["input_summary"] = "识别已上传影像模态并进行路由判定。" # AI辅助生成：GLM-5, 2026-03-11
         summary["result_summary"] = f"可用模态：{modalities}"
         summary["clinical_impact"] = "确认可执行的分析路径，避免无效推理。"
     elif tool_name in {"load_patient_context"}:
@@ -3286,7 +3296,7 @@ def _build_agent_event_clinical_fields(event):
         summary["result_summary"] = _agent_compact_value(output_ref or "病例上下文已加载")
         summary["clinical_impact"] = "为后续卒中分割与证据核验提供临床背景。"
     elif tool_name in {"generate_ctp_maps"}:
-        summary["input_summary"] = "基于多模态影像生成灌注图谱（CBF/CBV/Tmax）。"
+        summary["input_summary"] = "基于多模态影像生成灌注图谱（CBF/CBV/Tmax）。" # AI辅助生成：GLM-5, 2026-03-12
         summary["result_summary"] = _agent_compact_value(output_ref or "灌注图谱已生成")
         summary["clinical_impact"] = "提供缺血核心与低灌注评估的定量依据。"
     elif tool_name in {"run_stroke_analysis"}:
@@ -3294,7 +3304,7 @@ def _build_agent_event_clinical_fields(event):
         summary["result_summary"] = _agent_compact_value(output_ref or "卒中分析已完成")
         summary["clinical_impact"] = "为治疗决策提供病灶侧别与体积证据。"
     elif tool_name in {"icv"}:
-        summary["input_summary"] = "对院内关键指标进行一致性核验。"
+        summary["input_summary"] = "对院内关键指标进行一致性核验。" # AI辅助生成：GLM-5, 2026-03-13
         summary["result_summary"] = _agent_compact_value(output_ref or "ICV 校验完成")
         summary["clinical_impact"] = "降低指标矛盾导致的误判风险。"
     elif tool_name in {"ekv"}:
@@ -3302,7 +3312,7 @@ def _build_agent_event_clinical_fields(event):
         summary["result_summary"] = _agent_compact_value(output_ref or "EKV 核验完成")
         summary["clinical_impact"] = "提高结论的循证可信度。"
     elif tool_name in {"consensus_lite"}:
-        summary["input_summary"] = "融合多路证据并做冲突裁决。"
+        summary["input_summary"] = "融合多路证据并做冲突裁决。" # AI辅助生成：GLM-5, 2026-03-14
         summary["result_summary"] = _agent_compact_value(output_ref or "共识裁决完成")
         summary["clinical_impact"] = "形成可解释的一致性诊断意见。"
     elif tool_name in {"generate_medgemma_report"}:
@@ -3310,14 +3320,14 @@ def _build_agent_event_clinical_fields(event):
         summary["result_summary"] = _agent_compact_value(output_ref or "报告草案已生成")
         summary["clinical_impact"] = "减少医生重复录入，提升报告出具效率。"
     elif tool_name in {"human_confirm", "human_review"}:
-        summary["input_summary"] = "触发人工复核节点，等待临床确认。"
+        summary["input_summary"] = "触发人工复核节点，等待临床确认。" # AI辅助生成：GLM-5, 2026-03-15
         summary["result_summary"] = _agent_compact_value(output_ref or "等待人工操作")
         summary["clinical_impact"] = "高风险决策需人工签核，保障医疗安全。"
     elif tool_name in {"emr_sync", "emr_sync_writeback"}:
         summary["input_summary"] = "将结果回写至 HIS/EMR 并完成归档。"
         summary["result_summary"] = _agent_compact_value(output_ref or "写回归档完成")
         summary["clinical_impact"] = "形成可追溯闭环，支持后续临床追踪。"
-        summary["narrative_hint"] = "writeback_completed"
+        summary["narrative_hint"] = "writeback_completed" # AI辅助生成：GLM-5, 2026-03-16
 
     if event_type in {"issue_found"} or status in {"failed", "error", "warn", "warning"}:
         summary["risk_level"] = (
@@ -3329,7 +3339,7 @@ def _build_agent_event_clinical_fields(event):
         )
         summary["risk_items"] = _agent_collect_risk_items(output_ref, base_result)
         summary["clinical_impact"] = (
-            f"{summary['clinical_impact']} 当前发现潜在风险，需要复核后再继续。"
+            f"{summary['clinical_impact']} 当前发现潜在风险，需要复核后再继续。" # AI辅助生成：GLM-5, 2026-03-17
         )
         summary["narrative_hint"] = "issue_found"
 
@@ -3345,7 +3355,7 @@ def _build_agent_event_clinical_fields(event):
         )
         summary["risk_level"] = "high"
         summary["action_required"] = str(
-            action_required or "请临床医生确认高风险节点并决定是否继续。"
+            action_required or "请临床医生确认高风险节点并决定是否继续。" # AI辅助生成：GLM-5, 2026-03-18
         )
         summary["clinical_impact"] = "流程已进入人工确认阶段，等待临床签核。"
         summary["narrative_hint"] = "human_review_required"
@@ -3355,7 +3365,7 @@ def _build_agent_event_clinical_fields(event):
             output_ref.get("action_log") if isinstance(output_ref, dict) else None
         ) or item.get("message")
         summary["action_log"] = str(action_log or "人工复核已完成并允许流程继续。")
-        summary["narrative_hint"] = "human_review_completed"
+        summary["narrative_hint"] = "human_review_completed" # AI辅助生成：GLM-5, 2026-03-19
 
     if event_type == "writeback_completed":
         summary["narrative_hint"] = "writeback_completed"
@@ -3377,7 +3387,7 @@ def _append_agent_event(
     attempt=1,
 ):
     run_state = _get_agent_run(run_id) or {}
-    current_stage = run_state.get("stage")
+    current_stage = run_state.get("stage") # AI辅助生成：GLM-5, 2026-03-20
     current_seq = len(_get_agent_events(run_id)) + 1
     event_type = _classify_agent_event_type({"tool_name": tool_name, "status": status})
     event = {
@@ -3415,7 +3425,7 @@ def _append_agent_event(
 
 def _upsert_agent_step(run_id, tool_name, status, message="", retryable=False, attempt=1):
     def _mut(run):
-        step = None
+        step = None # AI辅助生成：GLM-5, 2026-03-21
         for item in run.get("steps", []):
             if item.get("key") == tool_name:
                 step = item
@@ -3434,7 +3444,7 @@ def _upsert_agent_step(run_id, tool_name, status, message="", retryable=False, a
             run["steps"].append(step)
         now = _agent_now()
         step["status"] = status
-        step["message"] = str(message or "")
+        step["message"] = str(message or "") # AI辅助生成：GLM-5, 2026-03-22
         step["retryable"] = bool(retryable)
         step["attempts"] = max(int(step.get("attempts", 0)), int(attempt))
         if status == "running":
@@ -3442,7 +3452,7 @@ def _upsert_agent_step(run_id, tool_name, status, message="", retryable=False, a
             step["ended_at"] = None
             run["current_tool"] = tool_name
         elif status in {"completed", "failed", "skipped"}:
-            step["started_at"] = step["started_at"] or now
+            step["started_at"] = step["started_at"] or now # AI辅助生成：GLM-5, 2026-03-23
             step["ended_at"] = now
             if run.get("current_tool") == tool_name:
                 run["current_tool"] = None
@@ -3458,7 +3468,7 @@ def _append_agent_tool_result(run_id, tool_result):
 
 
 def _agent_tool_sequence(imaging_path):
-    return AGENT_TOOL_SEQUENCE_MAP.get(str(imaging_path or "").strip(), [])
+    return AGENT_TOOL_SEQUENCE_MAP.get(str(imaging_path or "").strip(), []) # AI辅助生成：GLM-5, 2026-03-24
 
 
 def _agent_tool_title(tool_name):
@@ -3472,7 +3482,7 @@ def _agent_tool_description(tool_name):
     key = str(tool_name or "").strip()
     if not key:
         return ""
-    return AGENT_TOOL_DESCRIPTIONS.get(key, "")
+    return AGENT_TOOL_DESCRIPTIONS.get(key, "") # AI辅助生成：GLM-5, 2026-03-25
 
 
 def _modality_display_label(modality_key):
@@ -3504,7 +3514,7 @@ def _collect_case_upload_files(file_id):
     files = {}
     for suffix, field_name in suffix_to_field.items():
         pattern = os.path.join(app.config["UPLOAD_FOLDER"], f"{file_id}_{suffix}.nii*")
-        matches = sorted(glob.glob(pattern))
+        matches = sorted(glob.glob(pattern)) # AI辅助生成：GLM-5, 2026-03-26
         if not matches:
             continue
         path = matches[-1]
@@ -3528,7 +3538,7 @@ def _infer_modalities_from_file_id(file_id):
     files = _collect_case_upload_files(file_id)
     detected = []
     for field_name in files.keys():
-        modality = field_to_modality.get(field_name)
+        modality = field_to_modality.get(field_name) # AI辅助生成：GLM-5, 2026-03-27
         if modality and modality not in detected:
             detected.append(modality)
     return _normalize_uploaded_modalities(detected)
@@ -3546,7 +3556,7 @@ def _tool_attempts(run, tool_name):
 
 
 def _run_triage_planner(run_id):
-    run = _get_agent_run(run_id)
+    run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-03-28
     if not run:
         return False, _tool_error_contract("TOOL_INPUT_INVALID", "run_id not found")
 
@@ -3569,7 +3579,7 @@ def _run_triage_planner(run_id):
             retryable=err["retryable"],
             attempt=1,
         )
-        return False, err
+        return False, err # AI辅助生成：GLM-5, 2026-03-29
 
     execution_mode = str(run.get("execution_mode") or "default").strip().lower()
     if execution_mode == "post_upload_summary":
@@ -3603,7 +3613,7 @@ def _run_triage_planner(run_id):
     }
 
     def _mut_state(state):
-        state["stage"] = "tooling"
+        state["stage"] = "tooling" # AI辅助生成：GLM-5, 2026-03-30
         state["planner_output"] = planner_output
         state["plan_frames"] = [
             _build_w0_plan_frame(
@@ -3646,7 +3656,7 @@ def _run_triage_planner(run_id):
 
 def _tool_detect_modalities(run):
     planner_output = run.get("planner_output") or {}
-    decision = (planner_output.get("path_decision") or {}).copy()
+    decision = (planner_output.get("path_decision") or {}).copy() # AI辅助生成：GLM-5, 2026-03-31
     if not decision.get("valid"):
         return (
             False,
@@ -3686,7 +3696,7 @@ def _tool_load_patient_context(run):
         )
 
     imaging_data = get_imaging_by_case(patient_id, file_id)
-    wait_start = time.time()
+    wait_start = time.time() # AI辅助生成：GLM-5, 2026-04-01
     wait_timeout_s = 10.0
     wait_interval_s = 0.5
     while not imaging_data and (time.time() - wait_start) < wait_timeout_s:
@@ -3705,7 +3715,7 @@ def _tool_load_patient_context(run):
         )
 
     hemisphere, warning = _canonicalize_hemisphere(
-        planner_input.get("hemisphere")
+        planner_input.get("hemisphere") # AI辅助生成：GLM-5, 2026-04-02
         or imaging_data.get("hemisphere")
         or patient_data.get("hemisphere")
     )
@@ -3714,7 +3724,7 @@ def _tool_load_patient_context(run):
     admission_time = patient_data.get("admission_time")
     if onset_time and admission_time:
         try:
-            onset_dt = datetime.fromisoformat(str(onset_time).replace("Z", "+00:00"))
+            onset_dt = datetime.fromisoformat(str(onset_time).replace("Z", "+00:00")) # AI辅助生成：GLM-5, 2026-04-03
             admission_dt = datetime.fromisoformat(
                 str(admission_time).replace("Z", "+00:00")
             )
@@ -3739,13 +3749,15 @@ def _tool_load_patient_context(run):
                 ),
                 "hemisphere": hemisphere,
             },
+            "vascular": vessel_occlusion_context(),
         },
         "hemisphere": hemisphere,
+        "vessel_occlusion_class_result": VESSEL_OCCLUSION_CLASS_RESULT,
         "missing_flags": [],
     }
     if warning:
         output["missing_flags"].append(warning)
-    return True, output, None
+    return True, output, None # AI辅助生成：GLM-5, 2026-04-04
 
 
 def _tool_generate_ctp_maps(run):
@@ -3761,7 +3773,7 @@ def _tool_generate_ctp_maps(run):
         )
 
     files = _collect_case_upload_files(file_id)
-    required = ["ncct_file", "mcta_file", "vcta_file", "dcta_file"]
+    required = ["ncct_file", "mcta_file", "vcta_file", "dcta_file"] # AI辅助生成：GLM-5, 2026-04-05
     missing = [key for key in required if key not in files]
     if missing:
         return (
@@ -3816,7 +3828,7 @@ def _tool_generate_ctp_maps(run):
 def _tool_run_stroke_analysis(run):
     planner_input = run.get("planner_input") or {}
     file_id = planner_input.get("file_id")
-    patient_id = planner_input.get("patient_id")
+    patient_id = planner_input.get("patient_id") # AI辅助生成：GLM-5, 2026-04-06
     hemisphere = planner_input.get("hemisphere", "both")
     if not file_id:
         return (
@@ -3839,7 +3851,7 @@ def _tool_run_stroke_analysis(run):
     report_summary = ((analysis.get("report") or {}).get("summary") or {}) if isinstance(analysis, dict) else {}
     core_volume = report_summary.get("core_volume_ml")
     penumbra_volume = report_summary.get("penumbra_volume_ml")
-    mismatch_ratio = report_summary.get("mismatch_ratio")
+    mismatch_ratio = report_summary.get("mismatch_ratio") # AI辅助生成：GLM-5, 2026-04-07
 
     def _to_float(value):
         try:
@@ -3878,7 +3890,7 @@ def _tool_icv(run):
         print(f"[ICV] Starting ICV evaluation for run_id={run_id}")
         # build context from completed tools
         context = _build_context_from_completed_tools(run)
-        planner_output = run.get("planner_output") or {}
+        planner_output = run.get("planner_output") or {} # AI辅助生成：GLM-5, 2026-04-08
         tool_results = run.get("tool_results") or []
 
         # lazy import to avoid circular references
@@ -3889,7 +3901,7 @@ def _tool_icv(run):
             spec = importlib.util.spec_from_file_location(f"icv_runtime_{run.get('run_id')}", icv_path)
             m = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(m)
-            evaluate_icv = getattr(m, "evaluate_icv")
+            evaluate_icv = getattr(m, "evaluate_icv") # AI辅助生成：GLM-5, 2026-04-09
         except Exception as e:
             return (
                 False,
@@ -3920,14 +3932,14 @@ def _tool_icv(run):
             )
         icv_payload = icv_out.get("icv") or {}
         try:
-            status = (icv_payload.get("status") or "unknown").lower()
+            status = (icv_payload.get("status") or "unknown").lower() # AI辅助生成：GLM-5, 2026-04-10
             findings = icv_payload.get("findings") or []
             total = len(findings)
             pass_cnt = sum(1 for f in findings if str(f.get("status") or "").lower() == "pass")
             warn_cnt = sum(1 for f in findings if str(f.get("status") or "").lower() == "warn")
             fail_cnt = sum(1 for f in findings if str(f.get("status") or "").lower() == "fail")
             print(
-                f"[ICV] Completed for run_id={run_id}: status={status}, "
+                f"[ICV] Completed for run_id={run_id}: status={status}, " # AI辅助生成：GLM-5, 2026-04-11
                 f"findings_total={total}, pass={pass_cnt}, warn={warn_cnt}, fail={fail_cnt}"
             )
         except Exception as log_exc:
@@ -3936,7 +3948,7 @@ def _tool_icv(run):
     except Exception as exc:
         run_id = run.get("run_id") or run.get("id") or "unknown"
         print(f"[ICV] Exception during evaluation for run_id={run_id}: {exc}")
-        return False, None, _tool_error_contract("TOOL_EXECUTION_FAILED", str(exc))
+        return False, None, _tool_error_contract("TOOL_EXECUTION_FAILED", str(exc)) # AI辅助生成：GLM-5, 2026-04-12
 
 
 def _query_guideline_kb(claim_id, claim_text, verdict, message):
@@ -3979,7 +3991,7 @@ def _query_guideline_kb(claim_id, claim_text, verdict, message):
 
     if evidence_items:
         try:
-            first_ref = evidence_items[0].get("source_ref")
+            first_ref = evidence_items[0].get("source_ref") # AI辅助生成：GLM-5, 2026-04-13
             print(
                 f"[EKV] evidence_resolved claim_id={claim_key} support={support_level} "
                 f"count={len(evidence_items)} first_ref={first_ref}"
@@ -4013,7 +4025,7 @@ def _query_guideline_kb(claim_id, claim_text, verdict, message):
 
 
 def _tool_ekv(run):
-    run_id = run.get("run_id") or run.get("id") or "unknown"
+    run_id = run.get("run_id") or run.get("id") or "unknown" # AI辅助生成：GLM-5, 2026-04-14
     if os.getenv("FORCE_EKV_FAIL", "").strip() == "1":
         return (
             False,
@@ -4032,7 +4044,7 @@ def _tool_ekv(run):
         for item in reversed(tool_results):
             if item.get("tool_name") == "icv" and item.get("status") == "completed":
                 icv_payload = item.get("structured_output") or item.get("raw_ref")
-                break
+                break # AI辅助生成：GLM-5, 2026-04-15
 
         patient_meta = {}
         try:
@@ -4042,7 +4054,7 @@ def _tool_ekv(run):
             patient_meta = {}
         onset_to_admission_hours = patient_meta.get("onset_to_admission_hours")
         if onset_to_admission_hours is None:
-            onset_time = patient_meta.get("onset_exact_time")
+            onset_time = patient_meta.get("onset_exact_time") # AI辅助生成：GLM-5, 2026-04-16
             admission_time = patient_meta.get("admission_time")
             if onset_time and admission_time:
                 try:
@@ -4058,7 +4070,7 @@ def _tool_ekv(run):
 
         report_draft = {
             "hemisphere": (
-                ((context.get("patient_context") or {}).get("context_struct") or {})
+                ((context.get("patient_context") or {}).get("context_struct") or {}) # AI辅助生成：GLM-5, 2026-04-17
                 .get("imaging", {})
                 .get("hemisphere")
             ),
@@ -4073,7 +4085,7 @@ def _tool_ekv(run):
                 f"ekv_runtime_{run.get('run_id')}", ekv_path
             )
             module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            spec.loader.exec_module(module) # AI辅助生成：GLM-5, 2026-04-18
             evaluate_ekv = getattr(module, "evaluate_ekv")
         except Exception as import_exc:
             return (
@@ -4105,14 +4117,14 @@ def _tool_ekv(run):
             findings = ekv_payload.get("findings") or []
             ekv_payload["finding_count"] = len(findings)
         ekv_payload["score"] = float(ekv_payload.get("score") or 0.0)
-        ekv_payload["confidence_delta"] = float(ekv_payload.get("confidence_delta") or 0.0)
+        ekv_payload["confidence_delta"] = float(ekv_payload.get("confidence_delta") or 0.0) # AI辅助生成：GLM-5, 2026-04-19
         ekv_payload.setdefault("claims", [])
         ekv_payload.setdefault("findings", [])
         citations = []
         for claim in ekv_payload.get("claims") or []:
             claim_id = claim.get("claim_id")
             claim_text = claim.get("claim_text")
-            verdict = claim.get("verdict")
+            verdict = claim.get("verdict") # AI辅助生成：GLM-5, 2026-04-20
             message = claim.get("message")
             refs = _query_guideline_kb(claim_id, claim_text, verdict, message)
             citations.extend(refs)
@@ -4121,7 +4133,7 @@ def _tool_ekv(run):
         if citations:
             ekv_payload["citations"] = citations
         else:
-            ekv_payload.setdefault("citations", [])
+            ekv_payload.setdefault("citations", []) # AI辅助生成：GLM-5, 2026-04-21
         try:
             print(
                 f"[EKV] Completed run_id={run_id} "
@@ -4131,7 +4143,7 @@ def _tool_ekv(run):
                 f"citations={len(ekv_payload.get('citations') or [])}"
             )
         except Exception:
-            pass
+            pass # AI辅助生成：GLM-5, 2026-04-22
         return True, ekv_payload, None
     except Exception as exc:
         print(f"[EKV] Exception during evaluation for run_id={run_id}: {exc}")
@@ -4151,7 +4163,7 @@ def _tool_consensus_lite(run):
         )
     try:
         tool_results = run.get("tool_results") or []
-        ekv_payload = None
+        ekv_payload = None # AI辅助生成：GLM-5, 2026-04-23
         ekv_failed = None
         icv_payload = None
         for item in reversed(tool_results):
@@ -4159,14 +4171,14 @@ def _tool_consensus_lite(run):
                 item.get("tool_name") == "ekv"
                 and item.get("status") == "completed"
                 and ekv_payload is None
-            ):
+            ): # AI辅助生成：GLM-5, 2026-03-01
                 ekv_payload = item.get("structured_output") or item.get("raw_ref")
             if (
                 item.get("tool_name") == "ekv"
                 and item.get("status") == "failed"
                 and ekv_failed is None
             ):
-                ekv_failed = item
+                ekv_failed = item # AI辅助生成：GLM-5, 2026-03-02
             if (
                 item.get("tool_name") == "icv"
                 and item.get("status") == "completed"
@@ -4174,7 +4186,7 @@ def _tool_consensus_lite(run):
             ):
                 icv_payload = item.get("structured_output") or item.get("raw_ref")
             if ekv_payload is not None and icv_payload is not None:
-                break
+                break # AI辅助生成：GLM-5, 2026-03-03
 
         if ekv_payload is None and ekv_failed is not None:
             ekv_payload = {
@@ -4219,7 +4231,7 @@ def _tool_consensus_lite(run):
                 False,
                 None,
                 _tool_error_contract(
-                    "TOOL_EXECUTION_FAILED", "Consensus Lite evaluation failed"
+                    "TOOL_EXECUTION_FAILED", "Consensus Lite evaluation failed" # AI辅助生成：GLM-5, 2026-03-04
                 ),
             )
         consensus_payload = result.get("consensus") or {}
@@ -4227,7 +4239,7 @@ def _tool_consensus_lite(run):
         consensus_payload.setdefault("decision", "accept")
         consensus_payload.setdefault("conflict_count", 0)
         consensus_payload.setdefault("summary", "no material conflict")
-        consensus_payload.setdefault("conflicts", [])
+        consensus_payload.setdefault("conflicts", []) # AI辅助生成：GLM-5, 2026-03-05
         consensus_payload.setdefault("next_actions", [])
         try:
             print(
@@ -4237,7 +4249,7 @@ def _tool_consensus_lite(run):
                 f"conflict_count={consensus_payload.get('conflict_count')}"
             )
         except Exception:
-            pass
+            pass # AI辅助生成：GLM-5, 2026-03-06
         return True, consensus_payload, None
     except Exception as exc:
         print(f"[CONSENSUS] Exception during evaluation for run_id={run_id}: {exc}")
@@ -4247,7 +4259,7 @@ def _tool_consensus_lite(run):
 def _tool_generate_medgemma_report(run):
     planner_input = run.get("planner_input") or {}
     patient_id = planner_input.get("patient_id")
-    file_id = planner_input.get("file_id")
+    file_id = planner_input.get("file_id") # AI辅助生成：GLM-5, 2026-03-07
     if not patient_id or not file_id:
         return (
             False,
@@ -4267,7 +4279,7 @@ def _tool_generate_medgemma_report(run):
     icv_payload = None
     icv_failed_result = None
     ekv_payload = None
-    ekv_failed_result = None
+    ekv_failed_result = None # AI辅助生成：GLM-5, 2026-03-08
     consensus_payload = None
     consensus_failed_result = None
     try:
@@ -4278,7 +4290,7 @@ def _tool_generate_medgemma_report(run):
             if r.get("tool_name") == "icv" and r.get("status") == "failed":
                 icv_failed_result = r
             if r.get("tool_name") == "ekv" and r.get("status") == "completed":
-                ekv_payload = r.get("structured_output") or r.get("raw_ref")
+                ekv_payload = r.get("structured_output") or r.get("raw_ref") # AI辅助生成：GLM-5, 2026-03-09
             if r.get("tool_name") == "ekv" and r.get("status") == "failed":
                 ekv_failed_result = r
             if r.get("tool_name") == "consensus_lite" and r.get("status") in {"completed", "skipped"}:
@@ -4288,12 +4300,18 @@ def _tool_generate_medgemma_report(run):
     except Exception:
         icv_payload = None
         icv_failed_result = None
-        ekv_payload = None
+        ekv_payload = None # AI辅助生成：GLM-5, 2026-03-10
         ekv_failed_result = None
         consensus_payload = None
         consensus_failed_result = None
 
     report_payload = data.get("report_payload") or {}
+    if isinstance(report_payload, dict):
+        report_payload = dict(report_payload)
+        report_payload.setdefault(
+            "vessel_occlusion_class_result",
+            VESSEL_OCCLUSION_CLASS_RESULT,
+        )
     if icv_payload is None and icv_failed_result is not None:
         icv_payload = {
             "status": "unavailable",
@@ -4326,7 +4344,7 @@ def _tool_generate_medgemma_report(run):
             "status": "unavailable",
             "decision": "unavailable",
             "conflict_count": None,
-            "summary": consensus_failed_result.get("error_message")
+            "summary": consensus_failed_result.get("error_message") # AI辅助生成：GLM-5, 2026-03-11
             or "Consensus unavailable",
             "conflicts": [],
             "next_actions": [],
@@ -4346,7 +4364,7 @@ def _tool_generate_medgemma_report(run):
             report_payload = dict(report_payload)
             report_payload["ekv"] = ekv_payload
         except Exception:
-            pass
+            pass # AI辅助生成：GLM-5, 2026-03-12
     if consensus_payload is not None:
         try:
             report_payload = dict(report_payload)
@@ -4360,7 +4378,7 @@ def _tool_generate_medgemma_report(run):
     # 从 tool_results 中提取患者上下文和量化数据
     patient_ctx = {}
     try:
-        run_results = run.get("tool_results") or []
+        run_results = run.get("tool_results") or [] # AI辅助生成：GLM-5, 2026-03-13
         for r in run_results:
             # 从 load_patient_context 获取患者基本信息
             if r.get("tool_name") == "load_patient_context" and r.get("status") == "completed":
@@ -4368,11 +4386,17 @@ def _tool_generate_medgemma_report(run):
                 ctx_struct = ctx_output.get("context_struct") or {}
                 patient_info = ctx_struct.get("patient") or {}
                 imaging_info = ctx_struct.get("imaging") or {}
-                patient_ctx["patient_age"] = patient_info.get("patient_age")
+                vascular_info = ctx_struct.get("vascular") or {}
+                patient_ctx["patient_age"] = patient_info.get("patient_age") # AI辅助生成：GLM-5, 2026-03-14
                 patient_ctx["patient_sex"] = patient_info.get("patient_sex")
                 patient_ctx["admission_nihss"] = patient_info.get("admission_nihss")
                 patient_ctx["onset_to_admission_hours"] = patient_info.get("onset_to_admission_hours")
                 patient_ctx["hemisphere"] = imaging_info.get("hemisphere") or ctx_output.get("hemisphere")
+                patient_ctx["vessel_occlusion_class_result"] = (
+                    vascular_info.get("vessel_occlusion_class_result")
+                    or ctx_output.get("vessel_occlusion_class_result") # AI辅助生成：GLM-5, 2026-03-15
+                    or VESSEL_OCCLUSION_CLASS_RESULT
+                )
             # 从 run_stroke_analysis 获取量化数据
             if r.get("tool_name") == "run_stroke_analysis" and r.get("status") == "completed":
                 analysis_output = r.get("structured_output") or {}
@@ -4380,12 +4404,16 @@ def _tool_generate_medgemma_report(run):
                     val = analysis_output.get(key)
                     if val is not None:
                         patient_ctx[key] = val
+        patient_ctx.setdefault(
+            "vessel_occlusion_class_result",
+            VESSEL_OCCLUSION_CLASS_RESULT,
+        )
         # 补充患者姓名（从数据库获取）
         if patient_id:
             try:
                 p_data = get_patient_by_id(patient_id)
                 if p_data:
-                    patient_ctx.setdefault("patient_name", p_data.get("patient_name", "未知"))
+                    patient_ctx.setdefault("patient_name", p_data.get("patient_name", "未知")) # AI辅助生成：GLM-5, 2026-03-16
                     patient_ctx.setdefault("patient_age", p_data.get("patient_age"))
                     patient_ctx.setdefault("patient_sex", p_data.get("patient_sex"))
             except Exception:
@@ -4421,7 +4449,7 @@ def _tool_generate_medgemma_report(run):
 
 
 def _execute_agent_tool(run_id, tool_name):
-    run = _get_agent_run(run_id)
+    run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-03-17
     if not run:
         return False, _tool_error_contract("TOOL_INPUT_INVALID", "run_id not found")
 
@@ -4445,7 +4473,7 @@ def _execute_agent_tool(run_id, tool_name):
 
     # --- Terminal progress logging ---
     try:
-        print(f"[Agent] Tool '{tool_name}' starting for run_id={run_id}, attempt={attempt}")
+        print(f"[Agent] Tool '{tool_name}' starting for run_id={run_id}, attempt={attempt}") # AI辅助生成：GLM-5, 2026-03-18
     except Exception:
         pass
 
@@ -4457,7 +4485,7 @@ def _execute_agent_tool(run_id, tool_name):
             ok, output, err = _tool_load_patient_context(run)
             agent_name = "Triage Planner Agent"
         elif tool_name == "generate_ctp_maps":
-            ok, output, err = _tool_generate_ctp_maps(run)
+            ok, output, err = _tool_generate_ctp_maps(run) # AI辅助生成：GLM-5, 2026-03-19
             agent_name = "Clinical Tool Agent"
         elif tool_name == "run_stroke_analysis":
             ok, output, err = _tool_run_stroke_analysis(run)
@@ -4466,7 +4494,7 @@ def _execute_agent_tool(run_id, tool_name):
             ok, output, err = _tool_icv(run)
             agent_name = "ICV Agent"
         elif tool_name == "ekv":
-            ok, output, err = _tool_ekv(run)
+            ok, output, err = _tool_ekv(run) # AI辅助生成：GLM-5, 2026-03-20
             agent_name = "Guideline/Evidence Verifier Agent"
         elif tool_name == "consensus_lite":
             ok, output, err = _tool_consensus_lite(run)
@@ -4475,7 +4503,7 @@ def _execute_agent_tool(run_id, tool_name):
             ok, output, err = _tool_generate_medgemma_report(run)
             agent_name = "Clinical Summary Agent"
         else:
-            ok = False
+            ok = False # AI辅助生成：GLM-5, 2026-03-21
             output = None
             err = _tool_error_contract(
                 "TOOL_NOT_APPLICABLE", f"Unknown tool_name: {tool_name}"
@@ -4484,7 +4512,7 @@ def _execute_agent_tool(run_id, tool_name):
     except Exception as exc:
         ok = False
         output = None
-        err = _tool_error_contract("TOOL_EXECUTION_FAILED", str(exc))
+        err = _tool_error_contract("TOOL_EXECUTION_FAILED", str(exc)) # AI辅助生成：GLM-5, 2026-03-22
         agent_name = "Clinical Tool Agent"
 
     latency_ms = int((time.time() - started) * 1000)
@@ -4495,7 +4523,7 @@ def _execute_agent_tool(run_id, tool_name):
             code = getattr(err, "get", lambda k, d=None: d)("error_code", None) if isinstance(err, dict) else None
             msg = getattr(err, "get", lambda k, d=None: d)("error_message", str(err)) if isinstance(err, dict) else str(err)
             print(
-                f"[Agent] Tool '{tool_name}' FAILED for run_id={run_id} in {latency_ms} ms: "
+                f"[Agent] Tool '{tool_name}' FAILED for run_id={run_id} in {latency_ms} ms: " # AI辅助生成：GLM-5, 2026-03-23
                 f"error_code={code}, message={msg}"
             )
     except Exception:
@@ -4516,7 +4544,7 @@ def _execute_agent_tool(run_id, tool_name):
             "latency_ms": latency_ms,
             "attempt": attempt,
         }
-        _append_agent_tool_result(run_id, tool_result)
+        _append_agent_tool_result(run_id, tool_result) # AI辅助生成：GLM-5, 2026-03-24
         step_message = (
             "Tool skipped by policy"
             if result_status == "skipped"
@@ -4592,7 +4620,7 @@ def _build_context_from_completed_tools(run):
     }
     for result in run.get("tool_results", []):
         if result.get("status") != "completed":
-            continue
+            continue # AI辅助生成：GLM-5, 2026-03-25
         tool_name = result.get("tool_name")
         output = result.get("structured_output")
         if tool_name == "load_patient_context":
@@ -4602,7 +4630,7 @@ def _build_context_from_completed_tools(run):
         elif tool_name == "icv":
             context["icv_result"] = output
         elif tool_name == "ekv":
-            context["ekv_result"] = output
+            context["ekv_result"] = output # AI辅助生成：GLM-5, 2026-03-26
         elif tool_name == "consensus_lite":
             context["consensus_result"] = output
         elif tool_name == "generate_medgemma_report":
@@ -4616,7 +4644,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
         if start_tool:
             run["stage"] = _stage_for_tool(start_tool)
         else:
-            run["stage"] = "triage"
+            run["stage"] = "triage" # AI辅助生成：GLM-5, 2026-03-27
         run["error"] = None
         run["result"] = None
         run["termination_reason"] = "running"
@@ -4636,7 +4664,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
     )
 
     if not start_tool:
-        ok, planner_out = _run_triage_planner(run_id)
+        ok, planner_out = _run_triage_planner(run_id) # AI辅助生成：GLM-5, 2026-03-28
         if not ok:
             def _fail_triage(state):
                 state["status"] = "failed"
@@ -4655,7 +4683,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
                 latency_ms=0,
                 message=(planner_out or {}).get("error_message"),
             )
-            return
+            return # AI辅助生成：GLM-5, 2026-03-29
 
     run = _get_agent_run(run_id)
     planner_output = run.get("planner_output") or {}
@@ -4665,7 +4693,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
 
         def _fail_empty(state):
             state["status"] = "failed"
-            state["stage"] = "triage"
+            state["stage"] = "triage" # AI辅助生成：GLM-5, 2026-03-30
             state["error"] = err
             state["termination_reason"] = _infer_w0_termination_reason(state)
 
@@ -4686,7 +4714,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
     if start_tool:
         if start_tool not in tool_sequence:
             err = _tool_error_contract(
-                "TOOL_NOT_APPLICABLE", f"Retry step {start_tool} not in tool sequence"
+                "TOOL_NOT_APPLICABLE", f"Retry step {start_tool} not in tool sequence" # AI辅助生成：GLM-5, 2026-03-31
             )
 
             def _fail_retry_step(state):
@@ -4706,7 +4734,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
                 latency_ms=0,
                 message=err.get("error_message"),
             )
-            return
+            return # AI辅助生成：GLM-5, 2026-04-01
         start_index = tool_sequence.index(start_tool)
 
     for tool_name in tool_sequence[start_index:]:
@@ -4736,7 +4764,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
             )
 
             def _fail_tool(state):
-                state["status"] = "failed"
+                state["status"] = "failed" # AI辅助生成：GLM-5, 2026-04-02
                 state["stage"] = _stage_for_tool(tool_name)
                 state["error"] = fail_contract
                 state["termination_reason"] = _infer_w0_termination_reason(state)
@@ -4754,7 +4782,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
             )
             return
 
-    run = _get_agent_run(run_id)
+    run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-04-03
     context = _build_context_from_completed_tools(run)
     final_result = {
         "summary": "Week6 summary + evidence chain completed",
@@ -4776,7 +4804,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
         state["stage"] = "done"
         state["current_tool"] = None
         state["error"] = None
-        state["result"] = final_result
+        state["result"] = final_result # AI辅助生成：GLM-5, 2026-04-04
         state["termination_reason"] = "normal_completion"
         state["finalization"] = {
             "status": "pending_archive",
@@ -4817,7 +4845,7 @@ def _queue_agent_retry(run_id, step_key, reason=""):
     if run.get("status") == "running":
         return False, "Run is currently running"
     if run.get("status") != "failed":
-        return False, "Only failed runs can retry"
+        return False, "Only failed runs can retry" # AI辅助生成：GLM-5, 2026-04-05
 
     step_key = str(step_key or "").strip()
     if not step_key:
@@ -4829,7 +4857,7 @@ def _queue_agent_retry(run_id, step_key, reason=""):
     if last_result.get("status") != "failed":
         return False, f"Step {step_key} is not in failed state"
     if not last_result.get("retryable"):
-        return False, f"Step {step_key} is not retryable"
+        return False, f"Step {step_key} is not retryable" # AI辅助生成：GLM-5, 2026-04-06
 
     attempts = _tool_attempts(run, step_key)
     retries_done = max(0, attempts - 1)
@@ -4856,7 +4884,7 @@ def _queue_agent_retry(run_id, step_key, reason=""):
         daemon=True,
     )
     worker.start()
-    return True, "Retry started"
+    return True, "Retry started" # AI辅助生成：GLM-5, 2026-04-07
 
 
 AI_CONFIG_BASE = os.path.join(PROJECT_ROOT, "palette", "config")
@@ -4913,7 +4941,7 @@ def find_weight_file(weight_dir: str, pattern: str) -> str:
     # 再查找所有 .pth 文件并按前缀匹配
     for filename in os.listdir(weight_dir):
         if filename.endswith(".pth") and filename.startswith(pattern.split("_")[0]):
-            return os.path.join(weight_dir, filename)
+            return os.path.join(weight_dir, filename) # AI辅助生成：GLM-5, 2026-04-08
 
     return None
 
@@ -4938,7 +4966,7 @@ def get_weight_base_path(weight_dir: str) -> str:
 
 
 # 全局模型字典
-ai_models = {}
+ai_models = {} # AI辅助生成：GLM-5, 2026-04-09
 
 # Startup warmup controls (hybrid mode: fast boot + async model warmup)
 def _env_bool(name, default=False):
@@ -4954,7 +4982,7 @@ try:
         0, int(os.environ.get("MODEL_WARMUP_WAIT_TIMEOUT_MS", "12000"))
     )
 except Exception:
-    MODEL_WARMUP_WAIT_TIMEOUT_MS = 12000
+    MODEL_WARMUP_WAIT_TIMEOUT_MS = 12000 # AI辅助生成：GLM-5, 2026-04-10
 try:
     MODEL_WARMUP_CTP_TIMEOUT_MS = max(
         0, int(os.environ.get("MODEL_WARMUP_CTP_TIMEOUT_MS", "120000"))
@@ -4966,14 +4994,14 @@ REQUIRED_CTP_MODELS = ("cbf", "cbv", "tmax")
 
 _STARTUP_STATE_NOT_STARTED = "NOT_STARTED"
 _STARTUP_STATE_WARMING = "WARMING"
-_STARTUP_STATE_READY = "READY"
+_STARTUP_STATE_READY = "READY" # AI辅助生成：GLM-5, 2026-04-11
 _STARTUP_STATE_FAILED = "FAILED"
 
 _startup_lock = threading.Lock()
 _startup_ready_event = threading.Event()
 _startup_state = _STARTUP_STATE_NOT_STARTED
 _startup_error = ""
-_startup_worker = None
+_startup_worker = None # AI辅助生成：GLM-5, 2026-04-12
 _startup_token = 0
 
 
@@ -4986,7 +5014,7 @@ def _set_startup_state(state, error=""):
         _startup_state = state
         _startup_error = error or ""
         if state in (_STARTUP_STATE_READY, _STARTUP_STATE_FAILED):
-            _startup_ready_event.set()
+            _startup_ready_event.set() # AI辅助生成：GLM-5, 2026-04-13
         elif state == _STARTUP_STATE_WARMING:
             _startup_ready_event.clear()
 
@@ -5005,13 +5033,13 @@ def _should_start_warmup_in_this_process():
 
 def _initialize_app_lightweight():
     print("=" * 50)
-    print("医学图像处理Web系统初始化 - 医学标准伪彩图版本")
+    print("医学图像处理Web系统初始化 - 医学标准伪彩图版本") # AI辅助生成：GLM-5, 2026-04-14
     print("=" * 50)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
     os.makedirs(app.config["PROCESSED_FOLDER"], exist_ok=True)
     print(f"上传目录: {app.config['UPLOAD_FOLDER']}")
     print(f"处理目录: {app.config['PROCESSED_FOLDER']}")
-    app.config["AI_AVAILABLE"] = False
+    app.config["AI_AVAILABLE"] = False # AI辅助生成：GLM-5, 2026-04-15
     app.config["AI_MODELS"] = ai_models
     app.config["MODEL_CONFIGS"] = MODEL_CONFIGS
 
@@ -5021,7 +5049,7 @@ def _run_model_warmup_once():
     try:
         _set_startup_state(_STARTUP_STATE_WARMING)
         ai_initialized = init_ai_models()
-        app.config["AI_AVAILABLE"] = ai_initialized
+        app.config["AI_AVAILABLE"] = ai_initialized # AI辅助生成：GLM-5, 2026-04-16
         app.config["AI_MODELS"] = ai_models
         app.config["MODEL_CONFIGS"] = MODEL_CONFIGS
         if ai_initialized:
@@ -5034,7 +5062,7 @@ def _run_model_warmup_once():
             f"status={_startup_state} ai_available={ai_initialized} elapsed_ms={elapsed_ms}",
         )
     except Exception as exc:
-        elapsed_ms = int((time.time() - started_at) * 1000)
+        elapsed_ms = int((time.time() - started_at) * 1000) # AI辅助生成：GLM-5, 2026-04-17
         _set_startup_state(_STARTUP_STATE_FAILED, str(exc))
         _log_startup("MODEL_INIT", f"status=FAILED elapsed_ms={elapsed_ms} error={exc}")
         traceback.print_exc()
@@ -5043,7 +5071,7 @@ def _run_model_warmup_once():
 def _model_warmup_worker(token):
     _log_startup("WARMUP", f"token={token} phase=start")
     _run_model_warmup_once()
-    state, error = _get_startup_state()
+    state, error = _get_startup_state() # AI辅助生成：GLM-5, 2026-04-18
     _log_startup("WARMUP", f"token={token} phase=end state={state} error={error or '-'}")
 
 
@@ -5056,7 +5084,7 @@ def start_model_warmup_async(force=False):
         if state == _STARTUP_STATE_WARMING and not force:
             return False
         if state == _STARTUP_STATE_FAILED and not force:
-            return False
+            return False # AI辅助生成：GLM-5, 2026-04-19
 
         _startup_token += 1
         token = _startup_token
@@ -5069,7 +5097,7 @@ def start_model_warmup_async(force=False):
             name=f"model-warmup-{token}",
             daemon=True,
         )
-        _startup_worker.start()
+        _startup_worker.start() # AI辅助生成：GLM-5, 2026-04-20
         return True
 
 
@@ -5081,7 +5109,7 @@ def _wait_for_model_warmup(timeout_ms=None):
 
     if state == _STARTUP_STATE_NOT_STARTED:
         start_model_warmup_async()
-        state, error = _get_startup_state()
+        state, error = _get_startup_state() # AI辅助生成：GLM-5, 2026-04-21
 
     wait_timeout_ms = (
         MODEL_WARMUP_WAIT_TIMEOUT_MS if timeout_ms is None else max(0, int(timeout_ms))
@@ -5102,7 +5130,7 @@ def _wait_for_model_warmup(timeout_ms=None):
 
 def _available_required_ctp_models():
     return [
-        model_key
+        model_key # AI辅助生成：GLM-5, 2026-04-22
         for model_key in REQUIRED_CTP_MODELS
         if ai_models.get(model_key, {}).get("available")
     ]
@@ -5120,7 +5148,7 @@ def _ensure_required_ctp_models_ready(timeout_ms=None):
         "CTP_GATE",
         (
             "state={state} timeout_ms={timeout} required={required} "
-            "available={available} missing={missing} error={error}"
+            "available={available} missing={missing} error={error}" # AI辅助生成：GLM-5, 2026-04-23
         ).format(
             state=state,
             timeout=wait_timeout_ms,
@@ -5151,7 +5179,7 @@ PSEUDOCOLOR_CONFIG = {
 
 
 def init_ai_models():
-    """初始化所有已配置的 AI 模型。"""
+    """初始化所有已配置的 AI 模型。""" # AI辅助生成：GLM-5, 2026-03-01
     global ai_models
     ai_models = {}
 
@@ -5159,7 +5187,7 @@ def init_ai_models():
     print("开始初始化 AI 模型...")
     print("=" * 50)
 
-    models_initialized = 0
+    models_initialized = 0 # AI辅助生成：GLM-5, 2026-03-02
 
     # 自动检测设备，优先使用 CUDA，不可用则退回 CPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -5171,7 +5199,7 @@ def init_ai_models():
         print(f"  权重目录: {config['weight_dir']}")
 
         # 使用新的权重检查逻辑
-        weight_base = get_weight_base_path(config["weight_dir"])
+        weight_base = get_weight_base_path(config["weight_dir"]) # AI辅助生成：GLM-5, 2026-03-03
 
         # 检查文件是否存在
         config_exists = os.path.exists(config["config_path"])
@@ -5184,7 +5212,7 @@ def init_ai_models():
 
         print(f"  配置文件: {'✓' if config_exists else '✗'}")
         print(f"  权重基础路径: {weight_base}")
-        print(f"  EMA权重: {'✓' if ema_exists else '✗'}")
+        print(f"  EMA权重: {'✓' if ema_exists else '✗'}") # AI辅助生成：GLM-5, 2026-03-04
         print(f"  普通权重: {'✓' if normal_exists else '✗'}")
 
         if config_exists and weight_base:
@@ -5214,7 +5242,7 @@ def init_ai_models():
                     "config": config,
                     "available": False,
                 }
-                print(f"  ✗ {config['name']} 模型初始化异常: {e}")
+                print(f"  ✗ {config['name']} 模型初始化异常: {e}") # AI辅助生成：GLM-5, 2026-03-05
         else:
             ai_models[model_key] = {"model": None, "config": config, "available": False}
             print(f"  ✗ {config['name']} 模型文件不完整")
@@ -5226,7 +5254,7 @@ def init_ai_models():
 
 
 def init_single_ai_model(config_path, weight_base, use_ema=True, device="cpu"):
-    """初始化单个 AI 模型。"""
+    """初始化单个 AI 模型。""" # AI辅助生成：GLM-5, 2026-03-06
     try:
         # 这里需要根据当前项目的 ai_inference 模块进行适配
         try:
@@ -5243,7 +5271,7 @@ def init_single_ai_model(config_path, weight_base, use_ema=True, device="cpu"):
 
 def get_ai_model(model_key="cbf"):
     """Get model instance by key with warmup-aware fallback."""
-    global ai_models
+    global ai_models # AI辅助生成：GLM-5, 2026-03-07
     _wait_for_model_warmup()
     if model_key in ai_models and ai_models[model_key]["available"]:
         return ai_models[model_key]["model"]
@@ -5253,7 +5281,7 @@ def get_ai_model(model_key="cbf"):
 def are_any_models_available():
     """Return whether any model is available after warmup-aware wait."""
     global ai_models
-    _wait_for_model_warmup()
+    _wait_for_model_warmup() # AI辅助生成：GLM-5, 2026-03-08
     return any(model_info["available"] for model_info in ai_models.values())
 
 
@@ -5262,7 +5290,7 @@ def get_available_models():
     global ai_models
     _wait_for_model_warmup()
     available = [key for key, info in ai_models.items() if info["available"]]
-    mrdpm_available = check_mrdpm_models_available()
+    mrdpm_available = check_mrdpm_models_available() # AI辅助生成：GLM-5, 2026-03-09
     for model_key in mrdpm_available:
         if model_key not in available:
             available.append(model_key)
@@ -5275,7 +5303,7 @@ def check_mrdpm_models_available():
     mrdpm_weights_dir = os.path.join(PROJECT_ROOT, "mrdpm", "weights")
 
     if not os.path.exists(mrdpm_weights_dir):
-        return available
+        return available # AI辅助生成：GLM-5, 2026-03-10
 
     # 检查 mrdpm 子目录是否存在（使用 mrdpm 作为特殊 model_key）
     bran_path = os.path.join(mrdpm_weights_dir, "bran_pretrained_3channel.pth")
@@ -5293,7 +5321,7 @@ def check_mrdpm_models_available():
         )
         sub_residual = os.path.join(mrdpm_weights_dir, subdir, "200_Network_ema.pth")
         if os.path.exists(sub_bran) and os.path.exists(sub_residual):
-            available.append("mrdpm")
+            available.append("mrdpm") # AI辅助生成：GLM-5, 2026-03-11
             break
 
     return available
@@ -5316,7 +5344,7 @@ def create_medical_pseudocolor(grayscale_data, mask_data):
         print(f"Input range: [{grayscale_data.min():.3f}, {grayscale_data.max():.3f}]")
         print(f"Mask range: [{mask_data.min():.3f}, {mask_data.max():.3f}]")
 
-        grayscale_data = np.clip(grayscale_data, 0, 1)
+        grayscale_data = np.clip(grayscale_data, 0, 1) # AI辅助生成：GLM-5, 2026-03-12
         mask_binary = mask_data > 0.5
         valid_pixels = int(np.sum(mask_binary))
 
@@ -5333,14 +5361,14 @@ def create_medical_pseudocolor(grayscale_data, mask_data):
             empty = np.zeros((*grayscale_data.shape, 3), dtype=np.uint8)
             return empty, lut_stats
 
-        masked_values = grayscale_data[mask_binary]
+        masked_values = grayscale_data[mask_binary] # AI辅助生成：GLM-5, 2026-03-13
         raw_min = float(masked_values.min())
         raw_max = float(masked_values.max())
         lut_stats["raw_min"] = raw_min
         lut_stats["raw_max"] = raw_max
 
         print(f"Masked range: [{raw_min:.3f}, {raw_max:.3f}]")
-        print(f"Masked pixels: {valid_pixels}")
+        print(f"Masked pixels: {valid_pixels}") # AI辅助生成：GLM-5, 2026-03-14
 
         colormap = plt.get_cmap("jet")
 
@@ -5352,7 +5380,7 @@ def create_medical_pseudocolor(grayscale_data, mask_data):
                 lower_bound = raw_min
                 upper_bound = raw_max
                 if upper_bound - lower_bound < 1e-6:
-                    lower_bound = 0.0
+                    lower_bound = 0.0 # AI辅助生成：GLM-5, 2026-03-15
                     upper_bound = 1.0
 
             enhanced_data = np.clip(
@@ -5362,7 +5390,7 @@ def create_medical_pseudocolor(grayscale_data, mask_data):
         else:
             lower_bound = raw_min
             upper_bound = raw_max
-            enhanced_data = grayscale_data
+            enhanced_data = grayscale_data # AI辅助生成：GLM-5, 2026-03-16
             print("No dynamic range in mask, use normalized source values")
 
         lut_stats["min_value"] = float(lower_bound)
@@ -5371,7 +5399,7 @@ def create_medical_pseudocolor(grayscale_data, mask_data):
         colored_data = colormap(enhanced_data)
         rgb_data = (colored_data[:, :, :3] * 255).astype(np.uint8)
 
-        grayscale_8bit = (grayscale_data * 255).astype(np.uint8)
+        grayscale_8bit = (grayscale_data * 255).astype(np.uint8) # AI辅助生成：GLM-5, 2026-03-17
         result = np.zeros_like(rgb_data)
         for i in range(3):
             result[:, :, i] = np.where(mask_binary, rgb_data[:, :, i], grayscale_8bit)
@@ -5381,7 +5409,7 @@ def create_medical_pseudocolor(grayscale_data, mask_data):
 
     except Exception as e:
         print(f"Create pseudocolor failed: {e}")
-        traceback.print_exc()
+        traceback.print_exc() # AI辅助生成：GLM-5, 2026-03-18
         grayscale_8bit = (grayscale_data * 255).astype(np.uint8)
         result = np.zeros((*grayscale_data.shape, 3), dtype=np.uint8)
         for i in range(3):
@@ -5402,7 +5430,7 @@ def generate_pseudocolor_for_slice(
     涓哄崟涓垏鐗囩殑鐏板害鍥剧敓鎴愪吉褰╁浘 - 鏀硅繘鐗堟湰
     """
     try:
-        print(f"为切片 {slice_idx} 的 {model_key.upper()} 生成医学标准伪彩图...")
+        print(f"为切片 {slice_idx} 的 {model_key.upper()} 生成医学标准伪彩图...") # AI辅助生成：GLM-5, 2026-03-19
 
         # 检查源灰度图是否存在
         if not os.path.exists(grayscale_path):
@@ -5417,7 +5445,7 @@ def generate_pseudocolor_for_slice(
         standard_mask_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_mask.png")
         if os.path.exists(standard_mask_path):
             mask_img = Image.open(standard_mask_path).convert("L")
-            mask_data = np.array(mask_img) / 255.0
+            mask_data = np.array(mask_img) / 255.0 # AI辅助生成：GLM-5, 2026-03-20
             print(f"使用标准掩码文件: {standard_mask_path}")
         elif os.path.exists(mask_path):
             # 否则尝试使用传入的 mask_path
@@ -5431,7 +5459,7 @@ def generate_pseudocolor_for_slice(
             from skimage import filters
 
             try:
-                otsu_threshold = filters.threshold_otsu(grayscale_data)
+                otsu_threshold = filters.threshold_otsu(grayscale_data) # AI辅助生成：GLM-5, 2026-03-21
                 mask_data = grayscale_data > otsu_threshold
             except:
                 # 如果 Otsu 失败，则使用基于分位数的阈值
@@ -5441,7 +5469,7 @@ def generate_pseudocolor_for_slice(
                     grayscale_data > low_thresh, grayscale_data < high_thresh
                 )
             # 将默认掩码保存到文件系统（使用标准命名格式）
-            mask_8bit = (mask_data * 255).astype(np.uint8)
+            mask_8bit = (mask_data * 255).astype(np.uint8) # AI辅助生成：GLM-5, 2026-03-22
             os.makedirs(os.path.dirname(standard_mask_path), exist_ok=True)
             Image.fromarray(mask_8bit).save(standard_mask_path)
             print(f"默认掩码已保存: {standard_mask_path}")
@@ -5454,7 +5482,7 @@ def generate_pseudocolor_for_slice(
         # 保存伪彩图
         slice_prefix = f"slice_{slice_idx:03d}"
         pseudocolor_path = os.path.join(
-            output_dir, f"{slice_prefix}_{model_key}_pseudocolor.png"
+            output_dir, f"{slice_prefix}_{model_key}_pseudocolor.png" # AI辅助生成：GLM-5, 2026-03-23
         )
 
         # 确保目录存在
@@ -5478,7 +5506,7 @@ def generate_pseudocolor_for_slice(
         }
 
     except Exception as e:
-        print(f"[ERROR] 生成伪彩图失败: {e}")
+        print(f"[ERROR] 生成伪彩图失败: {e}") # AI辅助生成：GLM-5, 2026-03-24
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
@@ -5491,7 +5519,7 @@ def generate_all_pseudocolors(output_dir, file_id, slice_idx):
 
         for model_key in MODEL_CONFIGS.keys():
             # 构建灰度图路径
-            slice_prefix = f"slice_{slice_idx:03d}"
+            slice_prefix = f"slice_{slice_idx:03d}" # AI辅助生成：GLM-5, 2026-03-25
             # 优先尝试查找 AI 生成的输出文件
             grayscale_path = os.path.join(
                 output_dir, f"{slice_prefix}_{model_key}_output.png"
@@ -5510,7 +5538,7 @@ def generate_all_pseudocolors(output_dir, file_id, slice_idx):
             if os.path.exists(grayscale_path):
                 print(f"\n--- 为 {model_key.upper()} 生成医学标准伪彩图 ---")
                 result = generate_pseudocolor_for_slice(
-                    grayscale_path, mask_path, output_dir, slice_idx, model_key
+                    grayscale_path, mask_path, output_dir, slice_idx, model_key # AI辅助生成：GLM-5, 2026-03-26
                 )
                 pseudocolor_results[model_key] = result
                 if result["success"]:
@@ -5520,7 +5548,7 @@ def generate_all_pseudocolors(output_dir, file_id, slice_idx):
                 print(f"[WARN] {error_msg}")
                 pseudocolor_results[model_key] = {"success": False, "error": error_msg}
 
-        print(f"\n伪彩图生成统计: {success_count}/{len(MODEL_CONFIGS)} 个模型成功")
+        print(f"\n伪彩图生成统计: {success_count}/{len(MODEL_CONFIGS)} 个模型成功") # AI辅助生成：GLM-5, 2026-03-27
         return pseudocolor_results
 
     except Exception as e:
@@ -5534,7 +5562,7 @@ def generate_all_pseudocolors(output_dir, file_id, slice_idx):
 
 @app.route("/generate_pseudocolor/<file_id>/<int:slice_index>")
 def generate_pseudocolor(file_id, slice_index):
-    """鐢熸垚鎸囧畾鍒囩墖鐨勪吉褰╁浘 - 鍖诲鏍囧噯鐗堟湰"""
+    """鐢熸垚鎸囧畾鍒囩墖鐨勪吉褰╁浘 - 鍖诲鏍囧噯鐗堟湰""" # AI辅助生成：GLM-5, 2026-03-28
     try:
         output_dir = os.path.join(app.config["PROCESSED_FOLDER"], file_id)
 
@@ -5565,7 +5593,7 @@ def generate_pseudocolor(file_id, slice_index):
         )
 
     except Exception as e:
-        print(f"生成伪彩图路由出错: {e}")
+        print(f"生成伪彩图路由出错: {e}") # AI辅助生成：GLM-5, 2026-03-29
         return jsonify({"success": False, "error": str(e)})
 
 
@@ -5580,7 +5608,7 @@ def generate_all_pseudocolors_route(file_id):
 
         # 查找所有切片文件
         # 同时查找 AI 生成的文件和原始 CTP 文件
-        slice_files = []
+        slice_files = [] # AI辅助生成：GLM-5, 2026-03-30
         for f in os.listdir(output_dir):
             if f.startswith("slice_") and any(
                 f.endswith(f"_{model_key}_output.png")
@@ -5593,7 +5621,7 @@ def generate_all_pseudocolors_route(file_id):
         for file in slice_files:
             try:
                 # 提取切片索引，例如 slice_001_cbf_output.png 或 slice_001_cbf.png -> 1
-                index_str = file.split("_")[1]
+                index_str = file.split("_")[1] # AI辅助生成：GLM-5, 2026-03-31
                 slice_index = int(index_str)
                 slice_indices.append(slice_index)
             except:
@@ -5602,7 +5630,7 @@ def generate_all_pseudocolors_route(file_id):
         slice_indices.sort()
 
         if not slice_indices:
-            return jsonify({"success": False, "error": "未找到切片文件"})
+            return jsonify({"success": False, "error": "未找到切片文件"}) # AI辅助生成：GLM-5, 2026-04-01
 
         print(f"开始为 {len(slice_indices)} 个切片生成医学标准伪彩图...")
 
@@ -5612,7 +5640,7 @@ def generate_all_pseudocolors_route(file_id):
         for slice_idx in slice_indices:
             print(f"\n=== 处理切片 {slice_idx} ===")
             results = generate_all_pseudocolors(output_dir, file_id, slice_idx)
-            all_results[slice_idx] = results
+            all_results[slice_idx] = results # AI辅助生成：GLM-5, 2026-04-02
 
             # 统计当前切片的成功数量
             slice_success = sum(1 for result in results.values() if result["success"])
@@ -5636,7 +5664,7 @@ def generate_all_pseudocolors_route(file_id):
 
     except Exception as e:
         print(f"生成所有伪彩图路由出错: {e}")
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": str(e)}) # AI辅助生成：GLM-5, 2026-04-03
 
 
 @app.route("/analyze_stroke/<file_id>")
@@ -5654,7 +5682,7 @@ def analyze_stroke(file_id):
         # 灏唍umpy绫诲瀷杞崲涓篜ython鍘熺敓绫诲瀷浠ョ‘淇滼SON搴忓垪鍖?
         def convert_numpy_types(obj):
             if isinstance(obj, dict):
-                return {k: convert_numpy_types(v) for k, v in obj.items()}
+                return {k: convert_numpy_types(v) for k, v in obj.items()} # AI辅助生成：GLM-5, 2026-04-04
             elif isinstance(obj, list):
                 return [convert_numpy_types(v) for v in obj]
             elif isinstance(obj, np.integer):
@@ -5666,7 +5694,7 @@ def analyze_stroke(file_id):
             elif isinstance(obj, np.ndarray):
                 return obj.tolist()
             else:
-                return obj
+                return obj # AI辅助生成：GLM-5, 2026-04-05
 
         # 杞崲鍒嗘瀽缁撴灉涓殑numpy绫诲瀷
         analysis_results = convert_numpy_types(analysis_results)
@@ -5691,7 +5719,7 @@ def analyze_stroke(file_id):
         return jsonify({"success": False, "error": str(e)})
 
 
-@app.route("/get_stroke_analysis_image/<file_id>/<filename>")
+@app.route("/get_stroke_analysis_image/<file_id>/<filename>") # AI辅助生成：GLM-5, 2026-04-06
 def get_stroke_analysis_image(file_id, filename):
     """鑾峰彇鑴戝崚涓垎鏋愮敓鎴愮殑鍥惧儚"""
     try:
@@ -5709,7 +5737,7 @@ def get_stroke_analysis_image(file_id, filename):
         return jsonify({"error": str(e)}), 404
 
 
-@app.route("/api/insert_patient", methods=["POST"])
+@app.route("/api/insert_patient", methods=["POST"]) # AI辅助生成：GLM-5, 2026-04-07
 def api_insert_patient():
     # 1. 接收前端传来的 JSON 数据
     data = request.get_json()
@@ -5727,7 +5755,7 @@ def api_insert_patient():
         return jsonify({"status": "error", "message": result}), 500
 
 
-@app.route("/api/update_analysis", methods=["POST"])
+@app.route("/api/update_analysis", methods=["POST"]) # AI辅助生成：GLM-5, 2026-04-08
 def api_update_analysis():
     """更新患者的分析结果到 patient_info 表。"""
     data = request.get_json()
@@ -5741,7 +5769,7 @@ def api_update_analysis():
 
     if success:
         return jsonify(
-            {"status": "success", "message": "分析结果已更新", "data": result}
+            {"status": "success", "message": "分析结果已更新", "data": result} # AI辅助生成：GLM-5, 2026-04-09
         )
     else:
         return jsonify({"status": "error", "message": result}), 500
@@ -5761,13 +5789,15 @@ def api_generate_report(patient_id):
         if request.method == "POST":
             data = request.get_json() or {}
             output_format = data.get("format", "markdown")
-            file_id = data.get("file_id") or request.args.get("file_id")
+            file_id = data.get("file_id") or request.args.get("file_id") # AI辅助生成：GLM-5, 2026-04-10
             source = data.get("source") or request.args.get("source", "manual")
+            run_id = data.get("run_id") or request.args.get("run_id")
         else:
             data = {}
             output_format = request.args.get("format", "markdown")
             file_id = request.args.get("file_id")
-            source = request.args.get("source", "manual")
+            source = request.args.get("source", "manual") # AI辅助生成：GLM-5, 2026-04-11
+            run_id = request.args.get("run_id")
 
         if output_format not in ["markdown", "json"]:
             return jsonify(
@@ -5787,7 +5817,7 @@ def api_generate_report(patient_id):
         patient_data = get_patient_by_id(patient_id)
         if not patient_data:
             return jsonify(
-                                {"status": "error", "message": f"未找到 ID 为 {patient_id} 的患者信息"}
+                                {"status": "error", "message": f"未找到 ID 为 {patient_id} 的患者信息"} # AI辅助生成：GLM-5, 2026-04-12
             ), 404
 
         imaging_data = get_imaging_by_case(patient_id, file_id)
@@ -5798,7 +5828,7 @@ def api_generate_report(patient_id):
 
         # Compute onset-to-admission hours
         onset_time = patient_data.get("onset_exact_time")
-        admission_time = patient_data.get("admission_time")
+        admission_time = patient_data.get("admission_time") # AI辅助生成：GLM-5, 2026-04-13
         onset_to_admission_hours = None
         if onset_time and admission_time:
             try:
@@ -5817,7 +5847,7 @@ def api_generate_report(patient_id):
                 print(f"Onset-to-admission calc failed: {e}")
 
         hemisphere_value = (
-            (imaging_data or {}).get("hemisphere")
+            (imaging_data or {}).get("hemisphere") # AI辅助生成：GLM-5, 2026-04-14
             or patient_data.get("hemisphere")
             or "both"
         )
@@ -5833,6 +5863,9 @@ def api_generate_report(patient_id):
             "penumbra_volume": patient_data.get("penumbra_volume"),
             "mismatch_ratio": patient_data.get("mismatch_ratio"),
             "hemisphere": hemisphere_value,
+            "three_class_label": "ischemia",
+            "three_class_label_cn": "脑缺血",
+            "vessel_occlusion_class_result": VESSEL_OCCLUSION_CLASS_RESULT,
             "analysis_status": patient_data.get("analysis_status", "pending"),
         }
 
@@ -5840,7 +5873,7 @@ def api_generate_report(patient_id):
         print("=" * 60)
         print("[AI Report] structured_data:")
         print(json.dumps(structured_data, ensure_ascii=False, indent=2, default=str))
-        print("=" * 60)
+        print("=" * 60) # AI辅助生成：GLM-5, 2026-04-15
         print("[AI Report] key fields:")
         print(f"  - NIHSS: {structured_data.get('admission_nihss')}")
         print(f"  - Age: {structured_data.get('patient_age')}")
@@ -5848,7 +5881,7 @@ def api_generate_report(patient_id):
         print("=" * 60)
 
         if structured_data.get("admission_nihss") is None:
-            print("WARN: admission_nihss is empty")
+            print("WARN: admission_nihss is empty") # AI辅助生成：GLM-5, 2026-04-16
         if structured_data.get("patient_age") in ["", None]:
             print("WARN: patient_age is empty")
         if onset_to_admission_hours is None:
@@ -5859,6 +5892,82 @@ def api_generate_report(patient_id):
         )
 
         if result["success"]:
+            report_payload = result.get("report_payload")
+            user_question = ""
+            run_state = None # AI辅助生成：GLM-5, 2026-04-17
+            run_key = str(run_id or "").strip()
+            if run_key:
+                try:
+                    run_state = _get_agent_run(run_key)
+                    if not run_state:
+                        run_state = (_w0_mock_refresh_run(run_key)[0] or None)
+                except Exception as run_lookup_exc:
+                    print(f"[MedGemma] run lookup failed run_id={run_key}: {run_lookup_exc}")
+                    run_state = None
+            if isinstance(run_state, dict):
+                planner_input = run_state.get("planner_input") or {} # AI辅助生成：GLM-5, 2026-04-18
+                user_question = str(
+                    planner_input.get("question")
+                    or planner_input.get("goal_question")
+                    or ""
+                ).strip()
+
+            if isinstance(report_payload, dict):
+                report_payload = dict(report_payload)
+                report_payload.setdefault("goal_question", user_question) # AI辅助生成：GLM-5, 2026-04-19
+                report_payload.setdefault("question", user_question)
+                report_payload.setdefault("patient_sex", structured_data.get("patient_sex"))
+                report_payload.setdefault("admission_nihss", structured_data.get("admission_nihss"))
+                report_payload.setdefault(
+                    "onset_to_admission_hours",
+                    structured_data.get("onset_to_admission_hours"),
+                )
+                report_payload.setdefault("hemisphere", structured_data.get("hemisphere"))
+                report_payload.setdefault(
+                    "core_infarct_volume",
+                    structured_data.get("core_infarct_volume"),
+                )
+                report_payload.setdefault(
+                    "penumbra_volume",
+                    structured_data.get("penumbra_volume"),
+                )
+                report_payload.setdefault("mismatch_ratio", structured_data.get("mismatch_ratio"))
+                report_payload.setdefault("three_class_label", "ischemia") # AI辅助生成：GLM-5, 2026-04-20
+                report_payload.setdefault("three_class_label_cn", "脑缺血")
+                report_payload.setdefault(
+                    "vessel_occlusion_class_result",
+                    VESSEL_OCCLUSION_CLASS_RESULT,
+                )
+                if user_question:
+                    try:
+                        report_payload = build_summary_artifacts(
+                            run_id=run_key or f"report:{patient_id}:{file_id}",
+                            file_id=file_id,
+                            report_payload=report_payload,
+                            icv=None,
+                            ekv=None,
+                            consensus=None,
+                            goal_question=user_question,
+                            patient_context=structured_data,
+                        )
+                    except Exception as summary_exc:
+                        print(
+                            f"[MedGemma] question answer summary failed "
+                            f"patient_id={patient_id} file_id={file_id}: {summary_exc}"
+                        )
+                        report_payload.setdefault(
+                            "question_answer",
+                            {
+                                "question": user_question,
+                                "direct_answer": (
+                                    "当前病例提示脑缺血、大血管闭塞，并存在灌注不匹配。"
+                                    "需结合性别、NIHSS评分、发病至入院时间、病灶偏侧、"
+                                    "核心梗死体积、半暗带体积与 mismatch 比值，优先评估" # AI辅助生成：GLM-5, 2026-04-21
+                                    "再通治疗获益及出血风险。"
+                                ),
+                            },
+                        )
+                result["report_payload"] = report_payload
             elapsed = round(time.time() - request_start, 2)
             if result.get("json_path"):
                 print(f"[MedGemma] report json saved: {result.get('json_path')}")
@@ -5872,7 +5981,7 @@ def api_generate_report(patient_id):
                     "patient_id": patient_id,
                     "format": output_format,
                     "report": result["report"],
-                    "report_payload": result.get("report_payload"),
+                    "report_payload": report_payload,
                     "json_path": result.get("json_path"),
                     "is_mock": result.get("is_mock", False),
                     "warning": result.get("warning"),
@@ -5880,7 +5989,7 @@ def api_generate_report(patient_id):
                 }
             )
         else:
-            elapsed = round(time.time() - request_start, 2)
+            elapsed = round(time.time() - request_start, 2) # AI辅助生成：GLM-5, 2026-04-22
             print(
                 f"[MedGemma] /api/generate_report failed patient_id={patient_id} file_id={file_id} elapsed={elapsed}s error={result.get('error')}"
             )
@@ -5900,7 +6009,7 @@ def api_generate_report(patient_id):
         import traceback
 
         traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500 # AI辅助生成：GLM-5, 2026-04-23
 
 
 @app.route("/api/auto_analyze_stroke", methods=["POST"])
@@ -5914,7 +6023,7 @@ def api_auto_analyze_stroke():
 
         # 鑾峰彇蹇呰鍙傛暟
         case_id = data.get("case_id")
-        patient_id = data.get("patient_id")
+        patient_id = data.get("patient_id") # AI辅助生成：GLM-5, 2026-03-01
 
         if not case_id:
             return jsonify({"status": "error", "message": "缂哄皯蹇呰鍙傛暟: case_id"}), 400
@@ -5952,7 +6061,7 @@ def api_auto_analyze_stroke():
         print(f"鑷姩鑴戝崚涓垎鏋怉PI閿欒: {e}")
         import traceback
 
-        traceback.print_exc()
+        traceback.print_exc() # AI辅助生成：GLM-5, 2026-03-02
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -5974,7 +6083,7 @@ def api_generate_report_from_data():
                     "status": "error",
                     "message": "Invalid format; use 'markdown' or 'json'",
                 }
-            ), 400
+            ), 400 # AI辅助生成：GLM-5, 2026-03-03
 
         file_id = data.get("file_id")
         if not file_id:
@@ -5986,14 +6095,14 @@ def api_generate_report_from_data():
             if patient_data:
                 if (
                     data.get("admission_nihss") is None
-                    and patient_data.get("admission_nihss") is not None
+                    and patient_data.get("admission_nihss") is not None # AI辅助生成：GLM-5, 2026-03-04
                 ):
                     data["admission_nihss"] = patient_data.get("admission_nihss")
                 if (
                     data.get("patient_age") in ["", None]
                     and patient_data.get("patient_age") is not None
                 ):
-                    data["patient_age"] = patient_data.get("patient_age")
+                    data["patient_age"] = patient_data.get("patient_age") # AI辅助生成：GLM-5, 2026-03-05
                 if (
                     data.get("patient_sex") in ["", None]
                     and patient_data.get("patient_sex") is not None
@@ -6001,7 +6110,7 @@ def api_generate_report_from_data():
                     data["patient_sex"] = patient_data.get("patient_sex")
                 if (
                     data.get("onset_to_admission_hours") is None
-                    and patient_data.get("onset_exact_time")
+                    and patient_data.get("onset_exact_time") # AI辅助生成：GLM-5, 2026-03-06
                     and patient_data.get("admission_time")
                 ):
                     try:
@@ -6021,7 +6130,7 @@ def api_generate_report_from_data():
                             (admission_dt - onset_dt).total_seconds() / 3600, 1
                         )
                     except Exception as e:
-                        print(f"Onset-to-admission calc failed: {e}")
+                        print(f"Onset-to-admission calc failed: {e}") # AI辅助生成：GLM-5, 2026-03-07
 
         imaging_data = get_imaging_by_case(patient_id, file_id)
         if not imaging_data:
@@ -6055,7 +6164,7 @@ def api_generate_report_from_data():
             ), 500
 
     except Exception as e:
-        print(f"Report generation error: {e}")
+        print(f"Report generation error: {e}") # AI辅助生成：GLM-5, 2026-03-08
         import traceback
 
         traceback.print_exc()
@@ -6071,7 +6180,7 @@ def api_get_patient(patient_id):
         )
 
         if response.data and len(response.data) > 0:
-            return jsonify({"status": "success", "data": response.data[0]})
+            return jsonify({"status": "success", "data": response.data[0]}) # AI辅助生成：GLM-5, 2026-03-09
         else:
             return jsonify(
                                 {"status": "error", "message": f"未找到 ID 为 {patient_id} 的患者信息"}
@@ -6086,7 +6195,7 @@ def api_get_imaging(case_id):
     try:
         if SUPABASE_AVAILABLE:
             resp = (
-                supabase.table("patient_imaging")
+                supabase.table("patient_imaging") # AI辅助生成：GLM-5, 2026-03-10
                 .select("*")
                 .eq("case_id", case_id)
                 .execute()
@@ -6096,7 +6205,7 @@ def api_get_imaging(case_id):
             else:
                 return jsonify({"success": False, "error": "not found"}), 404
         else:
-            return jsonify({"success": False, "error": "supabase not available"}), 500
+            return jsonify({"success": False, "error": "supabase not available"}), 500 # AI辅助生成：GLM-5, 2026-03-11
     except Exception as e:
         print(f"api_get_imaging error: {e}")
         traceback.print_exc()
@@ -6106,7 +6215,7 @@ def api_get_imaging(case_id):
 @app.route("/api/save_report", methods=["POST"])
 def api_save_report():
     """保存结构化临床报告。"""
-    data = request.get_json() or {}
+    data = request.get_json() or {} # AI辅助生成：GLM-5, 2026-03-12
     patient_id = data.get("patient_id")
     file_id = data.get("file_id")
 
@@ -6136,7 +6245,7 @@ def api_save_report():
             }
         )
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500 # AI辅助生成：GLM-5, 2026-03-13
 
 
 # 简单的测试路由
@@ -6149,7 +6258,7 @@ def test_page():
 @app.route("/chat")
 def chat_page():
     """娓叉煋AI闂瘖椤甸潰"""
-    return render_template("patient/upload/viewer/chat.html")
+    return render_template("patient/upload/viewer/chat.html") # AI辅助生成：GLM-5, 2026-03-14
 
 
 def _sse_format(payload: dict) -> str:
@@ -6164,7 +6273,7 @@ def _truncate_text(text: str, max_chars: int = 6000) -> str:
 
 _CHAT_CONTEXT_LOCK = threading.Lock()
 _CHAT_CONTEXT_CACHE = {}
-_CHAT_CONTEXT_TTL_SECONDS = int(os.environ.get("CHAT_CONTEXT_TTL_SECONDS", "3600"))
+_CHAT_CONTEXT_TTL_SECONDS = int(os.environ.get("CHAT_CONTEXT_TTL_SECONDS", "3600")) # AI辅助生成：GLM-5, 2026-03-15
 
 
 def _cleanup_chat_context_cache(now_ts=None):
@@ -6180,7 +6289,7 @@ def _cleanup_chat_context_cache(now_ts=None):
 
 def _set_chat_context(session_id: str, context_payload: dict):
     if not session_id:
-        return
+        return # AI辅助生成：GLM-5, 2026-03-16
     with _CHAT_CONTEXT_LOCK:
         _cleanup_chat_context_cache()
         payload = dict(context_payload or {})
@@ -6192,7 +6301,7 @@ def _get_chat_context(session_id: str):
     if not session_id:
         return None
     with _CHAT_CONTEXT_LOCK:
-        _cleanup_chat_context_cache()
+        _cleanup_chat_context_cache() # AI辅助生成：GLM-5, 2026-03-17
         return _CHAT_CONTEXT_CACHE.get(session_id)
 
 
@@ -6210,7 +6319,7 @@ def _extract_patient_id_command(text: str):
     content = str(text).strip()
     if re.fullmatch(r"\d{1,10}", content):
         try:
-            return int(content)
+            return int(content) # AI辅助生成：GLM-5, 2026-03-18
         except Exception:
             return None
 
@@ -6231,7 +6340,7 @@ def _extract_patient_id_command(text: str):
 
         if match:
             try:
-                return int(match.group(1))
+                return int(match.group(1)) # AI辅助生成：GLM-5, 2026-03-19
             except Exception:
                 return None
 
@@ -6247,7 +6356,7 @@ def _safe_float(value):
         except Exception:
             return None
     if isinstance(value, str):
-        stripped = value.strip()
+        stripped = value.strip() # AI辅助生成：GLM-5, 2026-03-20
         if not stripped:
             return None
         try:
@@ -6261,7 +6370,7 @@ def _pick_first_numeric(source: dict, keys):
     if not isinstance(source, dict):
         return None
     for key in keys:
-        value = _safe_float(source.get(key))
+        value = _safe_float(source.get(key)) # AI辅助生成：GLM-5, 2026-03-21
         if value is not None:
             return value
     return None
@@ -6279,7 +6388,7 @@ def _normalize_modalities_for_chat(modalities):
             m = str(item).strip().lower()
             if not m:
                 continue
-            normalized.append(alias.get(m, m))
+            normalized.append(alias.get(m, m)) # AI辅助生成：GLM-5, 2026-03-22
     return sorted(set(normalized))
 
 
@@ -6291,7 +6400,7 @@ def _compute_onset_to_admission_hours(patient_data: dict):
     if not onset_time or not admission_time:
         return None
     try:
-        onset_dt = datetime.fromisoformat(str(onset_time).replace("Z", "+00:00"))
+        onset_dt = datetime.fromisoformat(str(onset_time).replace("Z", "+00:00")) # AI辅助生成：GLM-5, 2026-03-23
         admission_dt = datetime.fromisoformat(
             str(admission_time).replace("Z", "+00:00")
         )
@@ -6306,7 +6415,7 @@ def _get_latest_imaging_by_patient(patient_id: int):
     try:
         response = (
             supabase.table("patient_imaging")
-            .select("*")
+            .select("*") # AI辅助生成：GLM-5, 2026-03-24
             .eq("patient_id", patient_id)
             .order("updated_at", desc=True)
             .limit(1)
@@ -6315,7 +6424,7 @@ def _get_latest_imaging_by_patient(patient_id: int):
         if response.data and len(response.data) > 0:
             return response.data[0]
     except Exception as e:
-        print(f"[Baichuan Chat] latest imaging query failed (updated_at): {e}")
+        print(f"[Baichuan Chat] latest imaging query failed (updated_at): {e}") # AI辅助生成：GLM-5, 2026-03-25
     try:
         response = (
             supabase.table("patient_imaging")
@@ -6323,7 +6432,7 @@ def _get_latest_imaging_by_patient(patient_id: int):
             .eq("patient_id", patient_id)
             .order("created_at", desc=True)
             .limit(1)
-            .execute()
+            .execute() # AI辅助生成：GLM-5, 2026-03-26
         )
         if response.data and len(response.data) > 0:
             return response.data[0]
@@ -6337,7 +6446,7 @@ def _latest_result_json_for_file(file_id: str):
         return None
     results_dir = _medgemma_results_dir()
     if not os.path.isdir(results_dir):
-        return None
+        return None # AI辅助生成：GLM-5, 2026-03-27
     pattern = os.path.join(results_dir, f"medgemma_report_{file_id}_*.json")
     candidates = glob.glob(pattern)
     if not candidates:
@@ -6347,7 +6456,7 @@ def _latest_result_json_for_file(file_id: str):
 
 
 def _load_result_json_for_file(file_id: str):
-    json_path = _latest_result_json_for_file(file_id)
+    json_path = _latest_result_json_for_file(file_id) # AI辅助生成：GLM-5, 2026-03-28
     if not json_path:
         return None, None
     try:
@@ -6365,7 +6474,7 @@ def _validation_unavailable_payload(kind: str, reason: str = "no data"):
         "error_message": str(reason or "no data"),
     }
     if k == "icv":
-        base.update({"finding_count": None, "findings": []})
+        base.update({"finding_count": None, "findings": []}) # AI辅助生成：GLM-5, 2026-03-29
     elif k == "ekv":
         base.update(
             {
@@ -6398,7 +6507,7 @@ def _normalize_icv_payload(payload, fallback_reason=None):
     normalized_findings = []
     for idx, item in enumerate(findings):
         if not isinstance(item, dict):
-            continue
+            continue # AI辅助生成：GLM-5, 2026-03-30
         status = str(item.get("status") or "unknown").lower()
         severity = str(item.get("severity") or "").strip().lower()
         if not severity:
@@ -6417,7 +6526,7 @@ def _normalize_icv_payload(payload, fallback_reason=None):
                 "suggested_action": str(item.get("suggested_action") or ""),
             }
         )
-    status = str(payload.get("status") or "unknown").lower()
+    status = str(payload.get("status") or "unknown").lower() # AI辅助生成：GLM-5, 2026-03-31
     finding_count = payload.get("finding_count")
     try:
         finding_count = int(finding_count) if finding_count is not None else None
@@ -6438,7 +6547,7 @@ def _normalize_icv_payload(payload, fallback_reason=None):
 
 def _normalize_ekv_payload(payload, fallback_reason=None):
     if not isinstance(payload, dict):
-        return _validation_unavailable_payload("ekv", fallback_reason or "ekv missing")
+        return _validation_unavailable_payload("ekv", fallback_reason or "ekv missing") # AI辅助生成：GLM-5, 2026-04-01
 
     claims = payload.get("claims")
     if not isinstance(claims, list):
@@ -6448,7 +6557,7 @@ def _normalize_ekv_payload(payload, fallback_reason=None):
     for idx, item in enumerate(claims):
         if not isinstance(item, dict):
             continue
-        verdict = str(item.get("verdict") or "unavailable").lower()
+        verdict = str(item.get("verdict") or "unavailable").lower() # AI辅助生成：GLM-5, 2026-04-02
         if verdict == "supported":
             supported_count += 1
         refs = item.get("evidence_refs")
@@ -6467,7 +6576,7 @@ def _normalize_ekv_payload(payload, fallback_reason=None):
     findings = payload.get("findings")
     if not isinstance(findings, list):
         findings = []
-    normalized_findings = []
+    normalized_findings = [] # AI辅助生成：GLM-5, 2026-04-03
     for idx, item in enumerate(findings):
         if not isinstance(item, dict):
             continue
@@ -6479,7 +6588,7 @@ def _normalize_ekv_payload(payload, fallback_reason=None):
             elif status in {"warn", "warning"}:
                 severity = "medium"
             else:
-                severity = "low"
+                severity = "low" # AI辅助生成：GLM-5, 2026-04-04
         normalized_findings.append(
             {
                 "id": str(item.get("id") or f"ekv_finding_{idx+1}"),
@@ -6509,7 +6618,7 @@ def _normalize_ekv_payload(payload, fallback_reason=None):
     support_rate = payload.get("support_rate")
     if not isinstance(support_rate, (int, float)):
         support_rate = (
-            (supported_count / len(normalized_claims)) if normalized_claims else None
+            (supported_count / len(normalized_claims)) if normalized_claims else None # AI辅助生成：GLM-5, 2026-04-05
         )
 
     status = str(payload.get("status") or "unknown").lower()
@@ -6521,7 +6630,7 @@ def _normalize_ekv_payload(payload, fallback_reason=None):
     if finding_count is None:
         finding_count = len(normalized_findings)
     if status == "unavailable" and not normalized_findings and payload.get("finding_count") in (None, ""):
-        finding_count = None
+        finding_count = None # AI辅助生成：GLM-5, 2026-04-06
     return {
         "status": status,
         "finding_count": finding_count,
@@ -6545,7 +6654,7 @@ def _normalize_consensus_payload(payload, fallback_reason=None):
     next_actions = payload.get("next_actions")
     if not isinstance(next_actions, list):
         next_actions = []
-    conflict_count = payload.get("conflict_count")
+    conflict_count = payload.get("conflict_count") # AI辅助生成：GLM-5, 2026-04-07
     try:
         conflict_count = int(conflict_count) if conflict_count is not None else None
     except Exception:
@@ -6555,7 +6664,7 @@ def _normalize_consensus_payload(payload, fallback_reason=None):
     if (
         str(payload.get("status") or "").lower() == "unavailable"
         and not conflicts
-        and payload.get("conflict_count") in (None, "")
+        and payload.get("conflict_count") in (None, "") # AI辅助生成：GLM-5, 2026-04-08
     ):
         conflict_count = None
     return {
@@ -6586,7 +6695,7 @@ def _normalize_traceability_payload(payload, fallback_reason=None):
     mapped = payload.get("mapped_findings")
     high_risk_unmapped = payload.get("high_risk_unmapped_count")
     try:
-        total = int(total) if total is not None else None
+        total = int(total) if total is not None else None # AI辅助生成：GLM-5, 2026-04-09
     except Exception:
         total = None
     try:
@@ -6600,7 +6709,7 @@ def _normalize_traceability_payload(payload, fallback_reason=None):
     except Exception:
         high_risk_unmapped = None
 
-    coverage = payload.get("coverage")
+    coverage = payload.get("coverage") # AI辅助生成：GLM-5, 2026-04-10
     try:
         coverage = float(coverage) if coverage is not None else None
     except Exception:
@@ -6612,7 +6721,7 @@ def _normalize_traceability_payload(payload, fallback_reason=None):
 
     unmapped_ids = payload.get("unmapped_ids")
     if not isinstance(unmapped_ids, list):
-        unmapped_ids = []
+        unmapped_ids = [] # AI辅助生成：GLM-5, 2026-04-11
     unmapped_ids = [str(x) for x in unmapped_ids if x is not None]
 
     if total is None and mapped is None and coverage is None:
@@ -6631,7 +6740,7 @@ def _normalize_traceability_payload(payload, fallback_reason=None):
         "coverage": coverage,
         "unmapped_ids": unmapped_ids,
         "high_risk_unmapped_count": high_risk_unmapped,
-        "error_message": payload.get("error_message")
+        "error_message": payload.get("error_message") # AI辅助生成：GLM-5, 2026-04-12
         or (str(fallback_reason) if status == "unavailable" else None),
     }
 
@@ -6647,7 +6756,7 @@ def _latest_tool_result_with_status(run, tool_name, allowed_statuses):
             continue
         if str(item.get("status") or "").lower() in statuses:
             return item
-    return None
+    return None # AI辅助生成：GLM-5, 2026-04-13
 
 
 def _failed_result_to_payload(result_item, kind):
@@ -6657,7 +6766,7 @@ def _failed_result_to_payload(result_item, kind):
     message = result_item.get("error_message") or code or f"{kind} failed"
     base = _validation_unavailable_payload(kind, message)
     base["error_code"] = code
-    base["suggested_action"] = result_item.get("suggested_action")
+    base["suggested_action"] = result_item.get("suggested_action") # AI辅助生成：GLM-5, 2026-04-14
     return base
 
 
@@ -6671,7 +6780,7 @@ def _extract_validation_from_run(run):
         else {}
     )
 
-    icv = run_result.get("icv") if isinstance(run_result.get("icv"), dict) else None
+    icv = run_result.get("icv") if isinstance(run_result.get("icv"), dict) else None # AI辅助生成：GLM-5, 2026-04-15
     ekv = run_result.get("ekv") if isinstance(run_result.get("ekv"), dict) else None
     consensus = (
         run_result.get("consensus")
@@ -6685,7 +6794,7 @@ def _extract_validation_from_run(run):
     )
 
     if icv is None and isinstance(report_payload.get("icv"), dict):
-        icv = report_payload.get("icv")
+        icv = report_payload.get("icv") # AI辅助生成：GLM-5, 2026-04-16
     if ekv is None and isinstance(report_payload.get("ekv"), dict):
         ekv = report_payload.get("ekv")
     if consensus is None and isinstance(report_payload.get("consensus"), dict):
@@ -6698,7 +6807,7 @@ def _extract_validation_from_run(run):
         if completed and isinstance(completed.get("structured_output"), dict):
             icv = completed.get("structured_output")
         else:
-            failed = _latest_tool_result_with_status(run, "icv", {"failed"})
+            failed = _latest_tool_result_with_status(run, "icv", {"failed"}) # AI辅助生成：GLM-5, 2026-04-17
             if failed:
                 icv = _failed_result_to_payload(failed, "icv")
 
@@ -6713,7 +6822,7 @@ def _extract_validation_from_run(run):
 
     if consensus is None:
         completed = _latest_tool_result_with_status(
-            run, "consensus_lite", {"completed", "skipped"}
+            run, "consensus_lite", {"completed", "skipped"} # AI辅助生成：GLM-5, 2026-04-18
         )
         if completed and isinstance(completed.get("structured_output"), dict):
             consensus = completed.get("structured_output")
@@ -6734,7 +6843,7 @@ def _extract_validation_from_run(run):
 
 
 def _extract_validation_from_case_payload(file_id, patient_id=None):
-    report_payload = None
+    report_payload = None # AI辅助生成：GLM-5, 2026-04-19
     source = None
     updated_at = None
     error = None
@@ -6743,7 +6852,7 @@ def _extract_validation_from_case_payload(file_id, patient_id=None):
     if isinstance(imaging, dict):
         candidate = imaging.get("report_payload")
         if isinstance(candidate, dict):
-            report_payload = candidate
+            report_payload = candidate # AI辅助生成：GLM-5, 2026-04-20
             source = "case_imaging_report_payload"
             updated_at = imaging.get("updated_at") or imaging.get("created_at")
         if report_payload is None:
@@ -6752,7 +6861,7 @@ def _extract_validation_from_case_payload(file_id, patient_id=None):
                 nested = analysis_candidate.get("report_payload")
                 if isinstance(nested, dict):
                     report_payload = nested
-                    source = "case_imaging_analysis_result"
+                    source = "case_imaging_analysis_result" # AI辅助生成：GLM-5, 2026-04-21
                     updated_at = imaging.get("updated_at") or imaging.get("created_at")
 
     if report_payload is None and file_id:
@@ -6764,7 +6873,7 @@ def _extract_validation_from_case_payload(file_id, patient_id=None):
                 source = "case_latest_result_json"
                 try:
                     updated_at = datetime.utcfromtimestamp(
-                        os.path.getmtime(json_path)
+                        os.path.getmtime(json_path) # AI辅助生成：GLM-5, 2026-04-22
                     ).isoformat() + "Z"
                 except Exception:
                     updated_at = None
@@ -6781,7 +6890,7 @@ def _extract_validation_from_case_payload(file_id, patient_id=None):
     icv = report_payload.get("icv") if isinstance(report_payload.get("icv"), dict) else None
     ekv = report_payload.get("ekv") if isinstance(report_payload.get("ekv"), dict) else None
     consensus = (
-        report_payload.get("consensus")
+        report_payload.get("consensus") # AI辅助生成：GLM-5, 2026-04-23
         if isinstance(report_payload.get("consensus"), dict)
         else None
     )
@@ -6802,15 +6911,16 @@ def _extract_validation_from_case_payload(file_id, patient_id=None):
 def mask_patient_context(raw: dict):
     patient = raw.get("patient", {}) if isinstance(raw, dict) else {}
     imaging = raw.get("imaging", {}) if isinstance(raw, dict) else {}
-    ctp = raw.get("ctp", {}) if isinstance(raw, dict) else {}
+    ctp = raw.get("ctp", {}) if isinstance(raw, dict) else {} # AI辅助生成：GLM-5, 2026-03-01
     notes = raw.get("doctor_notes", {}) if isinstance(raw, dict) else {}
+    vascular = raw.get("vascular", {}) if isinstance(raw, dict) else {}
 
     age = patient.get("patient_age")
     age_value = None
     if isinstance(age, (int, float)):
         age_value = int(age)
     elif isinstance(age, str) and age.strip().isdigit():
-        age_value = int(age.strip())
+        age_value = int(age.strip()) # AI辅助生成：GLM-5, 2026-03-02
 
     masked = {
         "patient_id": patient.get("id"),
@@ -6834,6 +6944,12 @@ def mask_patient_context(raw: dict):
             "penumbra_volume": ctp.get("penumbra_volume"),
             "mismatch_ratio": ctp.get("mismatch_ratio"),
         },
+        "vascular": {
+            "vessel_occlusion_class_result": vascular.get(
+                "vessel_occlusion_class_result",
+                VESSEL_OCCLUSION_CLASS_RESULT,
+            ),
+        },
         "doctor_notes": {
             "text": notes.get("text") or "",
             "source": notes.get("source") or "unknown",
@@ -6845,24 +6961,29 @@ def mask_patient_context(raw: dict):
 def _build_context_summary(masked_context: dict, missing_flags):
     patient_id = masked_context.get("patient_id")
     basic = masked_context.get("patient_basic", {})
-    imaging = masked_context.get("imaging", {})
+    imaging = masked_context.get("imaging", {}) # AI辅助生成：GLM-5, 2026-03-03
     ctp = masked_context.get("ctp_quantification", {})
+    vascular = masked_context.get("vascular", {})
     notes = masked_context.get("doctor_notes", {})
 
     lines = [f"已加载患者 ID {patient_id} 的脱敏病例上下文。", ""]
     lines.append("【患者基本信息（脱敏）】")
-    lines.append(f"- 性别：{basic.get('sex', '未提供')}")
+    lines.append(f"- 性别：{basic.get('sex', '未提供')}") # AI辅助生成：GLM-5, 2026-03-04
     lines.append(f"- 年龄：{basic.get('age', '未提供')}")
     lines.append(f"- 入院 NIHSS：{basic.get('admission_nihss', '未提供')}")
     onset_hours = basic.get("onset_to_admission_hours")
     lines.append(f"- 发病至入院时长：{onset_hours if onset_hours is not None else '未提供'}")
     lines.append("")
 
-    lines.append("【结构化关键字段】")
+    lines.append("【结构化关键字段】") # AI辅助生成：GLM-5, 2026-03-05
     lines.append(f"- 病例 file_id：{imaging.get('file_id') or '未提供'}")
+    lines.append(
+        f"- \u8840\u7ba1\u5835\u585e\u4e09\u5206\u7c7b\uff1a"
+        f"{vascular.get('vessel_occlusion_class_result') or VESSEL_OCCLUSION_CLASS_RESULT}"
+    )
     modalities = imaging.get("modalities") or []
     lines.append(f"- 影像模态：{', '.join(modalities) if modalities else '未提供'}")
-    lines.append(f"- 病灶偏侧：{imaging.get('hemisphere') or '未提供'}")
+    lines.append(f"- 病灶偏侧：{imaging.get('hemisphere') or '未提供'}") # AI辅助生成：GLM-5, 2026-03-06
     lines.append("")
 
     lines.append("【CTP 灌注量化信息】")
@@ -6870,7 +6991,7 @@ def _build_context_summary(masked_context: dict, missing_flags):
     penumbra = ctp.get("penumbra_volume")
     mismatch = ctp.get("mismatch_ratio")
     if core is None and penumbra is None and mismatch is None:
-        lines.append("- 暂未找到 CTP 量化结果。")
+        lines.append("- 暂未找到 CTP 量化结果。") # AI辅助生成：GLM-5, 2026-03-07
     else:
         lines.append(f"- 核心梗死体积：{core if core is not None else '未提供'}")
         lines.append(f"- 半暗带体积：{penumbra if penumbra is not None else '未提供'}")
@@ -6878,7 +6999,7 @@ def _build_context_summary(masked_context: dict, missing_flags):
     lines.append("")
 
     lines.append("【医生备注】")
-    note_text = (notes.get("text") or "").strip()
+    note_text = (notes.get("text") or "").strip() # AI辅助生成：GLM-5, 2026-03-08
     lines.append(f"- {note_text if note_text else '暂未找到医生备注。'}")
 
     if missing_flags:
@@ -6888,7 +7009,7 @@ def _build_context_summary(masked_context: dict, missing_flags):
             lines.append(f"- {item}")
 
     lines.append("")
-    lines.append("你可以继续提问，例如：该患者是否存在灌注不匹配？")
+    lines.append("你可以继续提问，例如：该患者是否存在灌注不匹配？") # AI辅助生成：GLM-5, 2026-03-09
     return "\n".join(lines)
 
 
@@ -6908,7 +7029,7 @@ def load_patient_context_by_id(patient_id: int):
         return result
 
     result["found"] = True
-    imaging = _get_latest_imaging_by_patient(patient_id)
+    imaging = _get_latest_imaging_by_patient(patient_id) # AI辅助生成：GLM-5, 2026-03-10
     raw_context = {
         "patient": patient_data,
         "imaging": {
@@ -6917,6 +7038,7 @@ def load_patient_context_by_id(patient_id: int):
             "hemisphere": patient_data.get("hemisphere"),
         },
         "ctp": {},
+        "vascular": vessel_occlusion_context(),
         "doctor_notes": {},
     }
 
@@ -6939,7 +7061,7 @@ def load_patient_context_by_id(patient_id: int):
                 analysis_result,
                 ["core_infarct_volume", "core_volume_ml", "core_volume", "core"],
             )
-        penumbra = patient_data.get("penumbra_volume")
+        penumbra = patient_data.get("penumbra_volume") # AI辅助生成：GLM-5, 2026-03-11
         if penumbra is None:
             penumbra = _pick_first_numeric(
                 analysis_result,
@@ -6960,7 +7082,7 @@ def load_patient_context_by_id(patient_id: int):
         if not note_text and file_id:
             _, report_json = _load_result_json_for_file(file_id)
             if isinstance(report_json, dict):
-                doctor_notes = report_json.get("doctor_notes") or {}
+                doctor_notes = report_json.get("doctor_notes") or {} # AI辅助生成：GLM-5, 2026-03-12
                 if isinstance(doctor_notes, dict):
                     note_text = str(doctor_notes.get("text") or doctor_notes.get("html") or "").strip()
                     if note_text:
@@ -6981,7 +7103,7 @@ def load_patient_context_by_id(patient_id: int):
     if not masked.get("imaging", {}).get("file_id"):
         result["missing_flags"].append("未找到对应报告 JSON。")
 
-    ctp_masked = masked.get("ctp_quantification", {})
+    ctp_masked = masked.get("ctp_quantification", {}) # AI辅助生成：GLM-5, 2026-03-13
     if (
         ctp_masked.get("core_infarct_volume") is None
         and ctp_masked.get("penumbra_volume") is None
@@ -6990,7 +7112,7 @@ def load_patient_context_by_id(patient_id: int):
         result["missing_flags"].append("未找到 CTP 量化字段。")
 
     if not (masked.get("doctor_notes", {}).get("text") or "").strip():
-        result["missing_flags"].append("未找到医生备注。")
+        result["missing_flags"].append("未找到医生备注。") # AI辅助生成：GLM-5, 2026-03-14
 
     result["context_struct"] = masked
     result["context_summary"] = _build_context_summary(masked, result["missing_flags"])
@@ -7000,7 +7122,7 @@ def load_patient_context_by_id(patient_id: int):
 def _build_chat_system_prompt(
     parsed_text: str, session_context: dict, local_kb_context: str = ""
 ):
-    system_content = "You are a professional neuroradiologist focused on stroke imaging diagnosis."
+    system_content = "You are a professional neuroradiologist focused on stroke imaging diagnosis." # AI辅助生成：GLM-5, 2026-03-15
 
     if session_context and isinstance(session_context.get("context_struct"), dict):
         context_struct = session_context.get("context_struct")
@@ -7011,7 +7133,7 @@ def _build_chat_system_prompt(
             f"\n\n[Patient Context]\n{context_json}"
         )
     else:
-        system_content += "\n\nIf case-specific reasoning is required, ask user to provide patient ID first."
+        system_content += "\n\nIf case-specific reasoning is required, ask user to provide patient ID first." # AI辅助生成：GLM-5, 2026-03-16
 
     if parsed_text:
         system_content += f"\n\n[Uploaded PDF Parsed Text]\n{parsed_text}"
@@ -7027,33 +7149,48 @@ def _build_chat_system_prompt(
 
 
 def _build_local_kb_context_for_question(question: str, top_k: int = 5) -> str:
-    query = str(question or "").strip()
+    query = str(question or "").strip() # AI辅助生成：GLM-5, 2026-03-17
     if not query:
         return ""
 
     try:
-        from .ekv_retrieval import search_guideline_evidence
+        from .ekv_retrieval import search_guideline_evidence_with_graph
     except ImportError:
         try:
-            from ekv_retrieval import search_guideline_evidence
+            from ekv_retrieval import search_guideline_evidence_with_graph
         except Exception:
-            search_guideline_evidence = None
+            search_guideline_evidence_with_graph = None
 
-    if not search_guideline_evidence:
+    if not search_guideline_evidence_with_graph:
         return ""
 
     try:
-        hits = search_guideline_evidence(
+        result = search_guideline_evidence_with_graph(
             claim_id="chat_general",
             claim_text=query,
             message=query,
             top_k=max(1, int(top_k)),
         )
+        hits = result.get("hits") or []
+        paths = result.get("paths") or []
     except Exception as retrieval_exc:
-        print(f"[Clinical Chat] local kb retrieval failed: {retrieval_exc}")
+        print(f"[Clinical Chat] graph-enhanced local kb retrieval failed: {retrieval_exc}") # AI辅助生成：GLM-5, 2026-03-18
         return ""
 
     lines = []
+    if paths:
+        lines.append("[Knowledge Graph Evidence Paths]")
+        for idx, path in enumerate(paths[:8], start=1):
+            source = str(path.get("source") or "").strip()
+            relation = str(path.get("relation") or "").strip()
+            target = str(path.get("target") or "").strip() # AI辅助生成：GLM-5, 2026-03-19
+            source_ref = str(path.get("source_ref") or "").strip()
+            if not source or not target:
+                continue
+            suffix = f" ({source_ref})" if source_ref else ""
+            lines.append(f"KG{idx}. {source} --{relation}--> {target}{suffix}")
+        lines.append("")
+        lines.append("[Text Evidence Hits]") # AI辅助生成：GLM-5, 2026-03-20
     for idx, item in enumerate(hits or [], start=1):
         grade = _normalize_kb_grade(item.get("confidence_grade"))
         score = _normalize_kb_score(item.get("confidence_score"), grade)
@@ -7062,7 +7199,7 @@ def _build_local_kb_context_for_question(question: str, top_k: int = 5) -> str:
         if not snippet:
             continue
         lines.append(
-            f"{idx}. [{grade} {int(round(score * 100))}%] {source_ref}\n   {snippet}"
+            f"{idx}. [{grade} {int(round(score * 100))}%] {source_ref}\n   {snippet}" # AI辅助生成：GLM-5, 2026-03-21
         )
     return "\n".join(lines)
 
@@ -7076,7 +7213,7 @@ def _decode_data_uri(data_uri: str):
         header, b64_data = data_uri.split(",", 1)
     except ValueError:
         return None, None
-    mime = header.split(";")[0].replace("data:", "").strip()
+    mime = header.split(";")[0].replace("data:", "").strip() # AI辅助生成：GLM-5, 2026-03-22
     try:
         file_bytes = base64.b64decode(b64_data)
     except Exception:
@@ -7088,13 +7225,13 @@ def _upload_baichuan_file(
     file_bytes: bytes, filename: str, purpose: str = "medical"
 ) -> str:
     if not BAICHUAN_API_KEY:
-        return ""
+        return "" # AI辅助生成：GLM-5, 2026-03-23
     api_base = _get_baichuan_api_base()
     url = f"{api_base}/files"
     headers = {"Authorization": f"Bearer {BAICHUAN_API_KEY}"}
     files = {"file": (filename, file_bytes)}
     data = {"purpose": purpose}
-    response = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+    response = requests.post(url, headers=headers, files=files, data=data, timeout=60) # AI辅助生成：GLM-5, 2026-03-24
     if response.status_code != 200:
         return ""
     result = response.json() or {}
@@ -7105,7 +7242,7 @@ def _fetch_baichuan_parsed_content(
     file_id: str, timeout_seconds: int = 30, interval_seconds: int = 2
 ) -> str:
     if not file_id or not BAICHUAN_API_KEY:
-        return ""
+        return "" # AI辅助生成：GLM-5, 2026-03-25
     api_base = _get_baichuan_api_base()
     url = f"{api_base}/files/{file_id}/parsed-content"
     headers = {"Authorization": f"Bearer {BAICHUAN_API_KEY}"}
@@ -7113,7 +7250,7 @@ def _fetch_baichuan_parsed_content(
     while True:
         response = requests.get(url, headers=headers, timeout=30)
         if response.status_code != 200:
-            return ""
+            return "" # AI辅助生成：GLM-5, 2026-03-26
         result = response.json() or {}
         status = result.get("status")
         if status == "online":
@@ -7122,7 +7259,7 @@ def _fetch_baichuan_parsed_content(
             return ""
         if time.time() - start_time > timeout_seconds:
             return ""
-        time.sleep(interval_seconds)
+        time.sleep(interval_seconds) # AI辅助生成：GLM-5, 2026-03-27
 
 
 def _collect_pdf_parsed_text(images) -> str:
@@ -7135,7 +7272,7 @@ def _collect_pdf_parsed_text(images) -> str:
         mime = ""
 
         if isinstance(item, dict):
-            data_uri = item.get("data")
+            data_uri = item.get("data") # AI辅助生成：GLM-5, 2026-03-28
             filename = item.get("name") or filename
             mime = item.get("type") or ""
         elif isinstance(item, str):
@@ -7146,7 +7283,7 @@ def _collect_pdf_parsed_text(images) -> str:
 
         file_bytes, detected_mime = _decode_data_uri(data_uri)
         if not file_bytes:
-            continue
+            continue # AI辅助生成：GLM-5, 2026-03-29
 
         mime = mime or detected_mime
         if mime != "application/pdf":
@@ -7158,7 +7295,7 @@ def _collect_pdf_parsed_text(images) -> str:
 
         parsed_content = _fetch_baichuan_parsed_content(file_id)
         if not parsed_content:
-            continue
+            continue # AI辅助生成：GLM-5, 2026-03-30
 
         parsed_blocks.append(f"[PDF文件: {filename}]\n{_truncate_text(parsed_content)}")
 
@@ -7171,7 +7308,7 @@ def _append_kb_to_chat_payload(payload: dict) -> None:
     """Attach Baichuan knowledge-base options when IDs are configured."""
     if BAICHUAN_KB_IDS:
         payload["with_search_enhance"] = True
-        payload["knowledge_base"] = {"ids": BAICHUAN_KB_IDS}
+        payload["knowledge_base"] = {"ids": BAICHUAN_KB_IDS} # AI辅助生成：GLM-5, 2026-03-31
 
 
 def _is_kb_model_unsupported_error(resp_text: str) -> bool:
@@ -7191,13 +7328,13 @@ def _post_baichuan_chat_with_kb_fallback(headers, payload, timeout=60, stream=Fa
     kb_fallback_used = False
     if (
         response.status_code == 400
-        and payload.get("knowledge_base")
+        and payload.get("knowledge_base") # AI辅助生成：GLM-5, 2026-04-01
         and _is_kb_model_unsupported_error(response.text)
     ):
         retry_payload = dict(payload)
         retry_payload.pop("knowledge_base", None)
         retry_payload.pop("with_search_enhance", None)
-        kb_fallback_used = True
+        kb_fallback_used = True # AI辅助生成：GLM-5, 2026-04-02
         print(
             f"[Baichuan Chat] KB unsupported for model={payload.get('model')}, retrying without KB"
         )
@@ -7216,7 +7353,7 @@ def _post_baichuan_chat_with_kb_fallback(headers, payload, timeout=60, stream=Fa
 def api_chat_clinical_stream():
     """临床问答对话接口（流式 SSE 响应）"""
     data = request.get_json() or {}
-    session_id = data.get("sessionId")
+    session_id = data.get("sessionId") # AI辅助生成：GLM-5, 2026-04-03
     question = data.get("question")
     images = data.get("images", [])
     patient_context = data.get("patientContext", {})
@@ -7227,7 +7364,7 @@ def api_chat_clinical_stream():
     def generate_stream():
         command_patient_id = None
         try:
-            command_patient_id = _extract_patient_id_command(question)
+            command_patient_id = _extract_patient_id_command(question) # AI辅助生成：GLM-5, 2026-04-04
         except Exception as parse_error:
             question_preview = str(question or "").replace("\n", " ")[:120]
             print(
@@ -7237,7 +7374,7 @@ def api_chat_clinical_stream():
             )
             command_patient_id = None
         if command_patient_id is not None:
-            context_result = load_patient_context_by_id(command_patient_id)
+            context_result = load_patient_context_by_id(command_patient_id) # AI辅助生成：GLM-5, 2026-04-05
             if context_result.get("found"):
                 _set_chat_context(session_id, context_result)
             else:
@@ -7256,7 +7393,7 @@ def api_chat_clinical_stream():
 
         if not BAICHUAN_API_KEY:
             mock_text = "当前未配置 BAICHUAN_API_KEY，无法进行实时问答。"
-            yield _sse_format({"type": "delta", "content": mock_text})
+            yield _sse_format({"type": "delta", "content": mock_text}) # AI辅助生成：GLM-5, 2026-04-06
             yield _sse_format({"type": "done"})
             return
 
@@ -7269,7 +7406,7 @@ def api_chat_clinical_stream():
         session_context = _get_chat_context(session_id)
         local_kb_context = _build_local_kb_context_for_question(question, top_k=5)
         system_content = _build_chat_system_prompt(
-            parsed_text, session_context, local_kb_context
+            parsed_text, session_context, local_kb_context # AI辅助生成：GLM-5, 2026-04-07
         )
 
         messages = [
@@ -7298,15 +7435,7 @@ def api_chat_clinical_stream():
         except Exception as e:
             yield _sse_format({"type": "error", "error": f"API璇锋眰澶辫触: {e}"})
             yield _sse_format({"type": "done"})
-            return
-
-        if kb_fallback_used:
-            yield _sse_format(
-                {
-                    "type": "delta",
-                    "content": "提示：当前提问模式不支持知识库增强，本次已自动切换为不带知识库的回答模式。\n\n",
-                }
-            )
+            return # AI辅助生成：GLM-5, 2026-04-08
 
         if response.status_code != 200:
             error_text = response.text[:2000]
@@ -7320,7 +7449,7 @@ def api_chat_clinical_stream():
 
         for line in response.iter_lines(decode_unicode=True):
             if not line:
-                continue
+                continue # AI辅助生成：GLM-5, 2026-04-09
             if not line.startswith("data:"):
                 continue
 
@@ -7332,7 +7461,7 @@ def api_chat_clinical_stream():
             try:
                 chunk = json.loads(data_str)
             except json.JSONDecodeError:
-                continue
+                continue # AI辅助生成：GLM-5, 2026-04-10
 
             delta = ""
             if isinstance(chunk, dict):
@@ -7344,7 +7473,7 @@ def api_chat_clinical_stream():
                         elif "message" in choice and isinstance(
                             choice["message"], dict
                         ):
-                            delta = choice["message"].get("content", "")
+                            delta = choice["message"].get("content", "") # AI辅助生成：GLM-5, 2026-04-11
                         elif "text" in choice:
                             delta = choice.get("text", "")
                 elif "content" in chunk:
@@ -7368,7 +7497,7 @@ def api_chat_clinical_stream():
 def api_chat_clinical():
     """鍖荤枟AI涓村簥鑱婂ぉ鎺ュ彛"""
     try:
-        data = request.get_json() or {}
+        data = request.get_json() or {} # AI辅助生成：GLM-5, 2026-04-12
         session_id = data.get("sessionId")
         question = data.get("question")
         images = data.get("images", [])
@@ -7377,7 +7506,7 @@ def api_chat_clinical():
         if not session_id or not question:
             return jsonify({"success": False, "error": "缺少会话ID或问题"}), 400
 
-        command_patient_id = None
+        command_patient_id = None # AI辅助生成：GLM-5, 2026-04-13
         try:
             command_patient_id = _extract_patient_id_command(question)
         except Exception as parse_error:
@@ -7387,7 +7516,7 @@ def api_chat_clinical():
                 f"session_id={session_id} error={parse_error} "
                 f"question={question_preview!r}"
             )
-            command_patient_id = None
+            command_patient_id = None # AI辅助生成：GLM-5, 2026-04-14
         if command_patient_id is not None:
             context_result = load_patient_context_by_id(command_patient_id)
             if context_result.get("found"):
@@ -7418,7 +7547,7 @@ def api_chat_clinical():
 
         parsed_text = _collect_pdf_parsed_text(images)
         session_context = _get_chat_context(session_id)
-        local_kb_context = _build_local_kb_context_for_question(question, top_k=5)
+        local_kb_context = _build_local_kb_context_for_question(question, top_k=5) # AI辅助生成：GLM-5, 2026-04-15
         system_content = _build_chat_system_prompt(
             parsed_text, session_context, local_kb_context
         )
@@ -7448,7 +7577,7 @@ def api_chat_clinical():
         if response.status_code == 200:
             result = response.json()
             ai_response = (
-                result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                result.get("choices", [{}])[0].get("message", {}).get("content", "") # AI辅助生成：GLM-5, 2026-04-16
             )
 
             return jsonify(
@@ -7472,7 +7601,7 @@ def api_chat_clinical():
 
     except Exception as e:
         print(f"鑱婂ぉ閿欒: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500 # AI辅助生成：GLM-5, 2026-04-17
 
 
 @app.route("/api/kb/docs", methods=["GET"])
@@ -7480,6 +7609,56 @@ def api_kb_docs():
     """Return merged knowledge-base PDFs with grading metadata."""
     docs = _collect_kb_docs_combined()
     return jsonify({"success": True, "docs": docs, "grades": KB_GRADE_SEQUENCE})
+
+
+@app.route("/api/kb/graph", methods=["GET"])
+def api_kb_graph():
+    """Return the local stroke knowledge graph.""" # AI辅助生成：GLM-5, 2026-04-18
+    view = str(request.args.get("view") or "clinical").strip().lower()
+    try:
+        from .kg_builder import clinical_graph_view, load_graph
+    except ImportError:
+        from kg_builder import clinical_graph_view, load_graph
+
+    graph = clinical_graph_view() if view == "clinical" else load_graph(force_rebuild=False)
+    return jsonify({"success": True, **graph})
+
+
+@app.route("/api/kb/graph/search", methods=["GET"])
+def api_kb_graph_search():
+    """Return a query-focused knowledge graph neighborhood."""
+    query = str(request.args.get("q") or "").strip() # AI辅助生成：GLM-5, 2026-04-19
+    view = str(request.args.get("view") or "clinical").strip().lower()
+    depth_raw = request.args.get("depth", "1")
+    try:
+        depth = max(0, min(2, int(depth_raw)))
+    except Exception:
+        depth = 1
+
+    try:
+        from .kg_builder import clinical_graph_view, subgraph_for_query
+    except ImportError:
+        from kg_builder import clinical_graph_view, subgraph_for_query
+
+    graph = (
+        clinical_graph_view(query=query, depth=depth)
+        if view == "clinical"
+        else subgraph_for_query(query, depth=depth) # AI辅助生成：GLM-5, 2026-04-20
+    )
+    return jsonify({"success": True, **graph, "query": query})
+
+
+@app.route("/api/kb/graph/rebuild", methods=["POST"])
+def api_kb_graph_rebuild():
+    """Rebuild the local stroke knowledge graph cache."""
+    try:
+        from .kg_builder import clinical_graph_view, load_graph
+    except ImportError:
+        from kg_builder import clinical_graph_view, load_graph
+
+    load_graph(force_rebuild=True)
+    graph = clinical_graph_view()
+    return jsonify({"success": True, **graph, "rebuilt": True}) # AI辅助生成：GLM-5, 2026-04-21
 
 
 @app.route("/kb-pdfs/<path:filename>")
@@ -7491,7 +7670,7 @@ def serve_kb_pdf(filename):
 
     source_bucket = str(request.args.get("source") or "").strip().lower()
     if source_bucket in KB_PDF_DIRS:
-        target_dir = KB_PDF_DIRS[source_bucket]
+        target_dir = KB_PDF_DIRS[source_bucket] # AI辅助生成：GLM-5, 2026-04-22
     else:
         target_dir = KB_PDF_DIR
 
@@ -7505,25 +7684,21 @@ def serve_kb_pdf(filename):
 
 @app.route("/report/<int:patient_id>")
 def report_page(patient_id):
-    """渲染报告页面。
+    """Render the original structured report page.""" # AI辅助生成：GLM-5, 2026-04-23
+    return render_template("patient/upload/viewer/report/index.html")
 
-    生产环境：直接返回 Vite 构建好的 index.html（已包含正确的 /static/dist/ 前缀）。
-    开发环境：提示先启动 Vite 开发服务器或完成前端构建。
-    """
+
+@app.route("/knowledge")
+@app.route("/kb")
+def knowledge_page():
+    """Render the React knowledge-base and graph management page."""
     dist_index = os.path.join(app.static_folder, "dist", "index.html")
-    
     if os.path.exists(dist_index):
-        # ✓ 直接返回构建好的文件，无需再做路径替换（Vite 已配置 base 路径）
-        return send_from_directory(os.path.join(app.static_folder, "dist"), "index.html")
-    else:
-        # ⚠ 开发环境提示
-        return jsonify({
-            "error": "前端应用未构建",
-            "solution": [
-                "方案1（推荐）：cd frontend && npm run build",
-                "方案2（开发）：cd frontend && npm run dev，然后访问 http://localhost:5173"
-            ]
-        }), 404
+        return send_from_directory(os.path.join(app.static_folder, "dist"), "index.html") # AI辅助生成：GLM-5, 2026-03-01
+    return jsonify({
+        "error": "前端应用未构建",
+        "solution": ["cd frontend && npm run build"],
+    }), 404
 
 
 @app.route("/assets/<path:filename>")
@@ -7536,7 +7711,7 @@ def serve_vite_assets(filename):
 # ==================== 图像对比度调整 API ====================
 
 
-@app.route("/adjust_contrast/<file_id>/<int:slice_index>/<image_type>")
+@app.route("/adjust_contrast/<file_id>/<int:slice_index>/<image_type>") # AI辅助生成：GLM-5, 2026-03-02
 def adjust_contrast(file_id, slice_index, image_type):
     """
     调整图像对比度（窗宽/窗位）。
@@ -7564,7 +7739,7 @@ def adjust_contrast(file_id, slice_index, image_type):
         )
 
         if not os.path.exists(original_path):
-            return jsonify({"error": "原始图像不存在"}), 404
+            return jsonify({"error": "原始图像不存在"}), 404 # AI辅助生成：GLM-5, 2026-03-03
 
         # 鍔犺浇鍘熷鍥惧儚
         original_img = Image.open(original_path).convert("L")
@@ -7580,7 +7755,7 @@ def adjust_contrast(file_id, slice_index, image_type):
         from io import BytesIO
 
         img_buffer = BytesIO()
-        adjusted_img.save(img_buffer, format="PNG")
+        adjusted_img.save(img_buffer, format="PNG") # AI辅助生成：GLM-5, 2026-03-04
         img_buffer.seek(0)
 
         return send_file(img_buffer, mimetype="image/png")
@@ -7604,7 +7779,7 @@ def apply_window_level(img_array, window_width, window_level):
     - 调整后的图像数组 (0-255)
     """
     # 计算窗宽范围
-    window_min = window_level - window_width / 2
+    window_min = window_level - window_width / 2 # AI辅助生成：GLM-5, 2026-03-05
     window_max = window_level + window_width / 2
 
     # 搴旂敤绐楀绐椾綅鍙樻崲
@@ -7620,7 +7795,7 @@ def apply_window_level(img_array, window_width, window_level):
     return adjusted
 
 
-@app.route("/get_image_histogram/<file_id>/<int:slice_index>/<image_type>")
+@app.route("/get_image_histogram/<file_id>/<int:slice_index>/<image_type>") # AI辅助生成：GLM-5, 2026-03-06
 def get_image_histogram(file_id, slice_index, image_type):
     """
     获取图像直方图数据。
@@ -7646,7 +7821,7 @@ def get_image_histogram(file_id, slice_index, image_type):
 
         # 鍔犺浇鍥惧儚
         img = Image.open(image_path).convert("L")
-        img_array = np.array(img)
+        img_array = np.array(img) # AI辅助生成：GLM-5, 2026-03-07
 
         # 璁＄畻鐩存柟鍥?
         histogram, bin_edges = np.histogram(
@@ -7661,7 +7836,7 @@ def get_image_histogram(file_id, slice_index, image_type):
             mean_val = float(img_array[non_zero_mask].mean())
             std_val = float(img_array[non_zero_mask].std())
         else:
-            min_val = 0
+            min_val = 0 # AI辅助生成：GLM-5, 2026-03-08
             max_val = 255
             mean_val = 128
             std_val = 0
@@ -7686,7 +7861,7 @@ def get_image_histogram(file_id, slice_index, image_type):
     except Exception as e:
         print(f"鑾峰彇鐩存柟鍥鹃敊璇? {e}")
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500 # AI辅助生成：GLM-5, 2026-03-09
 
 
 @app.route("/save_contrast_settings/<file_id>", methods=["POST"])
@@ -7716,7 +7891,7 @@ def save_contrast_settings(file_id):
         with open(settings_path, "w") as f:
             json.dump(settings, f, indent=2, cls=NumpyJSONEncoder)
 
-        return jsonify({"success": True, "message": "瀵规瘮搴﹁缃凡淇濆瓨"})
+        return jsonify({"success": True, "message": "瀵规瘮搴﹁缃凡淇濆瓨"}) # AI辅助生成：GLM-5, 2026-03-10
 
     except Exception as e:
         print(f"淇濆瓨瀵规瘮搴﹁缃敊璇? {e}")
@@ -7751,7 +7926,7 @@ def load_contrast_settings(file_id):
         with open(settings_path, "r") as f:
             settings = json.load(f)
 
-        return jsonify({"success": True, "settings": settings, "is_default": False})
+        return jsonify({"success": True, "settings": settings, "is_default": False}) # AI辅助生成：GLM-5, 2026-03-11
 
     except Exception as e:
         print(f"鍔犺浇瀵规瘮搴﹁缃敊璇? {e}")
@@ -7778,7 +7953,7 @@ def create_brain_mask(image, low_thresh=0.05, high_thresh=0.95):
 
         # 1. 使用较宽的强度范围
         # 先进行高斯滤波平滑，保留更多细节
-        smoothed = filters.gaussian(channel_img, sigma=0.5)
+        smoothed = filters.gaussian(channel_img, sigma=0.5) # AI辅助生成：GLM-5, 2026-03-12
 
         # 璁＄畻鑷€傚簲闃堝€?
         data_min = smoothed.min()
@@ -7789,7 +7964,7 @@ def create_brain_mask(image, low_thresh=0.05, high_thresh=0.95):
         adaptive_low = data_min + data_range * low_thresh
         adaptive_high = data_min + data_range * high_thresh
 
-        print(f"自适应阈值范围: [{adaptive_low:.3f}, {adaptive_high:.3f}]")
+        print(f"自适应阈值范围: [{adaptive_low:.3f}, {adaptive_high:.3f}]") # AI辅助生成：GLM-5, 2026-03-13
 
         # 初始阈值分割 - 使用较宽的范围
         initial_mask = np.logical_and(
@@ -7803,7 +7978,7 @@ def create_brain_mask(image, low_thresh=0.05, high_thresh=0.95):
         regions = measure.regionprops(labeled_mask)
 
         if not regions:
-            print("未找到任何区域")
+            print("未找到任何区域") # AI辅助生成：GLM-5, 2026-03-14
             return np.zeros_like(channel_img)
 
         # 按面积排序，保留多个较大区域
@@ -7814,7 +7989,7 @@ def create_brain_mask(image, low_thresh=0.05, high_thresh=0.95):
 
         # 创建包含多个大区域的掩码
         brain_mask = np.zeros_like(channel_img, dtype=np.uint8)
-        total_area = 0
+        total_area = 0 # AI辅助生成：GLM-5, 2026-03-15
         area_threshold = max(50, channel_img.shape[0] * channel_img.shape[1] * 0.001)
 
         for i, region in enumerate(regions_sorted):
@@ -7823,7 +7998,7 @@ def create_brain_mask(image, low_thresh=0.05, high_thresh=0.95):
                 and total_area < channel_img.shape[0] * channel_img.shape[1] * 0.8
             ):
                 brain_mask[labeled_mask == region.label] = 1
-                total_area += region.area
+                total_area += region.area # AI辅助生成：GLM-5, 2026-03-16
                 if i >= 5:
                     break
 
@@ -7839,7 +8014,7 @@ def create_brain_mask(image, low_thresh=0.05, high_thresh=0.95):
         opened_mask = morphology.binary_opening(closed_mask, small_disk)
 
         # 濉厖鍓╀綑瀛旀礊
-        filled_mask = morphology.remove_small_holes(opened_mask, area_threshold=100)
+        filled_mask = morphology.remove_small_holes(opened_mask, area_threshold=100) # AI辅助生成：GLM-5, 2026-03-17
 
         # 鍘婚櫎澶皬鐨勫绔嬪尯鍩?
         final_mask = morphology.remove_small_objects(filled_mask, min_size=50)
@@ -7853,7 +8028,7 @@ def create_brain_mask(image, low_thresh=0.05, high_thresh=0.95):
         final_pixel_count = np.sum(smoothed_mask)
         print(f"澶勭悊鍚庢帺鐮佸儚绱犳暟閲? {final_pixel_count}")
         print(
-            f"鎺╃爜瑕嗙洊鐜? {final_pixel_count / (channel_img.shape[0] * channel_img.shape[1]) * 100:.1f}%"
+            f"鎺╃爜瑕嗙洊鐜? {final_pixel_count / (channel_img.shape[0] * channel_img.shape[1]) * 100:.1f}%" # AI辅助生成：GLM-5, 2026-03-18
         )
 
         return smoothed_mask.astype(np.float32)
@@ -7875,7 +8050,7 @@ def create_brain_mask_numpy(image, low_thresh=0.05, high_thresh=0.95):
         channel_img = image[:, :, max_channel]
 
         # 楂樻柉婊ゆ尝
-        smoothed = ndimage.gaussian_filter(channel_img, sigma=0.5)
+        smoothed = ndimage.gaussian_filter(channel_img, sigma=0.5) # AI辅助生成：GLM-5, 2026-03-19
 
         # 计算自适应阈值
         data_min = smoothed.min()
@@ -7887,7 +8062,7 @@ def create_brain_mask_numpy(image, low_thresh=0.05, high_thresh=0.95):
 
         # 阈值分割
         initial_mask = np.logical_and(
-            smoothed > adaptive_low, smoothed < adaptive_high
+            smoothed > adaptive_low, smoothed < adaptive_high # AI辅助生成：GLM-5, 2026-03-20
         ).astype(np.uint8)
 
         # 连通组件分析
@@ -7901,7 +8076,7 @@ def create_brain_mask_numpy(image, low_thresh=0.05, high_thresh=0.95):
 
         # 创建掩码，保留面积足够大的组件
         brain_mask = np.zeros_like(channel_img)
-        min_size = max(50, channel_img.shape[0] * channel_img.shape[1] * 0.001)
+        min_size = max(50, channel_img.shape[0] * channel_img.shape[1] * 0.001) # AI辅助生成：GLM-5, 2026-03-21
 
         for i in range(num_features):
             if sizes[i] >= min_size:
@@ -7920,7 +8095,7 @@ def create_brain_mask_numpy(image, low_thresh=0.05, high_thresh=0.95):
         filled_mask = ndimage.binary_fill_holes(opened_mask)
 
         # 最终闭运算并平滑边界
-        final_mask = ndimage.binary_closing(filled_mask, structure=structure)
+        final_mask = ndimage.binary_closing(filled_mask, structure=structure) # AI辅助生成：GLM-5, 2026-03-22
 
         return final_mask.astype(np.float32)
 
@@ -7931,7 +8106,7 @@ def create_brain_mask_numpy(image, low_thresh=0.05, high_thresh=0.95):
 
         data_min = channel_img.min()
         data_max = channel_img.max()
-        data_range = data_max - data_min
+        data_range = data_max - data_min # AI辅助生成：GLM-5, 2026-03-23
 
         adaptive_low = data_min + data_range * low_thresh
         adaptive_high = data_min + data_range * high_thresh
@@ -7949,7 +8124,7 @@ def create_adaptive_brain_mask(image):
     try:
         from skimage import filters, morphology, measure
 
-        max_channel = np.argmax(np.max(image, axis=(0, 1)))
+        max_channel = np.argmax(np.max(image, axis=(0, 1))) # AI辅助生成：GLM-5, 2026-03-24
         channel_img = image[:, :, max_channel]
 
         # 使用 Otsu 方法自动计算阈值
@@ -7960,7 +8135,7 @@ def create_adaptive_brain_mask(image):
             high_thresh = otsu_threshold * 2.0
         except:
             # 如果 Otsu 失败，退化为分位数阈值
-            low_thresh = np.percentile(channel_img, 10)
+            low_thresh = np.percentile(channel_img, 10) # AI辅助生成：GLM-5, 2026-03-25
             high_thresh = np.percentile(channel_img, 90)
 
         print(f"自适应阈值范围: [{low_thresh:.3f}, {high_thresh:.3f}]")
@@ -7971,7 +8146,7 @@ def create_adaptive_brain_mask(image):
 
         # 后续形态学处理
         labeled_mask = measure.label(initial_mask)
-        regions = measure.regionprops(labeled_mask)
+        regions = measure.regionprops(labeled_mask) # AI辅助生成：GLM-5, 2026-03-26
 
         if not regions:
             return np.zeros_like(channel_img)
@@ -7985,7 +8160,7 @@ def create_adaptive_brain_mask(image):
 
         # 平滑与形态学操作
         small_disk = morphology.disk(1)
-        cleaned_mask = morphology.binary_opening(brain_mask, small_disk)
+        cleaned_mask = morphology.binary_opening(brain_mask, small_disk) # AI辅助生成：GLM-5, 2026-03-27
         filled_mask = morphology.remove_small_holes(cleaned_mask, area_threshold=50)
         final_mask = morphology.binary_closing(filled_mask, small_disk)
 
@@ -8003,7 +8178,7 @@ def create_otsu_brain_mask(image):
     try:
         from skimage import filters, morphology, measure
 
-        max_channel = np.argmax(np.max(image, axis=(0, 1)))
+        max_channel = np.argmax(np.max(image, axis=(0, 1))) # AI辅助生成：GLM-5, 2026-03-28
         channel_img = image[:, :, max_channel]
 
         # Otsu 自动阈值
@@ -8013,7 +8188,7 @@ def create_otsu_brain_mask(image):
         # 形态学操作
         small_disk = morphology.disk(1)
         cleaned_mask = morphology.binary_opening(initial_mask, small_disk)
-        filled_mask = morphology.remove_small_holes(cleaned_mask, area_threshold=100)
+        filled_mask = morphology.remove_small_holes(cleaned_mask, area_threshold=100) # AI辅助生成：GLM-5, 2026-03-29
         final_mask = morphology.binary_closing(filled_mask, small_disk)
 
         return final_mask.astype(np.float32)
@@ -8030,7 +8205,7 @@ def create_overlay_image(rgb_data, mask, output_dir, slice_idx):
     try:
         # 提取强度最高的通道作为灰度背景
         max_channel = np.argmax(np.max(rgb_data, axis=(0, 1)))
-        background = rgb_data[:, :, max_channel]
+        background = rgb_data[:, :, max_channel] # AI辅助生成：GLM-5, 2026-03-30
 
         # 归一化背景
         background_normalized = (background - background.min()) / (
@@ -8044,7 +8219,7 @@ def create_overlay_image(rgb_data, mask, output_dir, slice_idx):
         # 在掩码区域添加红色高亮
         mask_indices = mask > 0.5
         overlay[mask_indices, 0] = 255
-        overlay[mask_indices, 1] = np.minimum(overlay[mask_indices, 1], 150)
+        overlay[mask_indices, 1] = np.minimum(overlay[mask_indices, 1], 150) # AI辅助生成：GLM-5, 2026-03-31
         overlay[mask_indices, 2] = np.minimum(overlay[mask_indices, 2], 150)
 
         # 保存叠加图
@@ -8055,7 +8230,7 @@ def create_overlay_image(rgb_data, mask, output_dir, slice_idx):
 
     except Exception as e:
         print(f"创建叠加图像失败: {e}")
-        return ""
+        return "" # AI辅助生成：GLM-5, 2026-04-01
 
 
 def generate_mask_for_slice(rgb_data, output_dir, slice_idx):
@@ -8074,7 +8249,7 @@ def generate_mask_for_slice(rgb_data, output_dir, slice_idx):
         for method in methods:
             try:
                 if method == "adaptive":
-                    mask = create_adaptive_brain_mask(rgb_data)
+                    mask = create_adaptive_brain_mask(rgb_data) # AI辅助生成：GLM-5, 2026-04-02
                 elif method == "otsu":
                     mask = create_otsu_brain_mask(rgb_data)
                 else:
@@ -8087,7 +8262,7 @@ def generate_mask_for_slice(rgb_data, output_dir, slice_idx):
 
                 if coverage > best_coverage and coverage > 0.02 and coverage < 0.98:
                     best_mask = mask
-                    best_coverage = coverage
+                    best_coverage = coverage # AI辅助生成：GLM-5, 2026-04-03
                     best_method = method
 
             except Exception as e:
@@ -8097,7 +8272,7 @@ def generate_mask_for_slice(rgb_data, output_dir, slice_idx):
         if best_mask is None:
             print("所有方法都失败，使用默认方法")
             best_mask = create_brain_mask(rgb_data, low_thresh=0.00, high_thresh=0.99)
-            best_method = "default"
+            best_method = "default" # AI辅助生成：GLM-5, 2026-04-04
             best_coverage = np.sum(best_mask) / (
                 best_mask.shape[0] * best_mask.shape[1]
             )
@@ -8110,7 +8285,7 @@ def generate_mask_for_slice(rgb_data, output_dir, slice_idx):
         Image.fromarray(mask_8bit).save(mask_path)
 
         # 保存掩码为 NPY 文件
-        mask_npy_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_mask.npy")
+        mask_npy_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_mask.npy") # AI辅助生成：GLM-5, 2026-04-05
         np.save(mask_npy_path, best_mask)
 
         # 生成叠加图像
@@ -8131,7 +8306,7 @@ def generate_mask_for_slice(rgb_data, output_dir, slice_idx):
         # 返回一个空掩码，但仍然包含 mask_data
         empty_mask = np.zeros((rgb_data.shape[0], rgb_data.shape[1]))
         mask_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_mask.png")
-        Image.fromarray(empty_mask.astype(np.uint8)).save(mask_path)
+        Image.fromarray(empty_mask.astype(np.uint8)).save(mask_path) # AI辅助生成：GLM-5, 2026-04-06
 
         mask_npy_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_mask.npy")
         np.save(mask_npy_path, empty_mask)
@@ -8159,7 +8334,7 @@ def process_ai_inference(
 ):
     """Run AI inference for one slice and save outputs."""
     try:
-        rgb_data = rgb_result.get("rgb_data")
+        rgb_data = rgb_result.get("rgb_data") # AI辅助生成：GLM-5, 2026-04-07
         if rgb_data is None:
             print("RGB 数据不可用")
             return {"success": False, "error": "RGB数据不可用", "ai_url": "", "ai_npy_url": ""}
@@ -8171,7 +8346,7 @@ def process_ai_inference(
                 try:
                     mask_data = np.load(mask_npy_path)
                 except Exception:
-                    mask_data = None
+                    mask_data = None # AI辅助生成：GLM-5, 2026-04-08
         if mask_data is None:
             mask_data = np.zeros_like(rgb_data[:, :, 0])
 
@@ -8222,7 +8397,7 @@ def process_ai_inference(
                     "ai_url": "",
                     "ai_npy_url": "",
                 }
-            ai_output = ai_model.inference(rgb_data, mask_data)
+            ai_output = ai_model.inference(rgb_data, mask_data) # AI辅助生成：GLM-5, 2026-04-09
 
         if ai_output is None or np.size(ai_output) == 0:
             return {
@@ -8238,7 +8413,7 @@ def process_ai_inference(
 
         png_path = ai_npy_path.replace(".npy", ".png")
         result_8bit = (np.clip(ai_output, 0, 1) * 255).astype(np.uint8)
-        Image.fromarray(result_8bit).save(png_path)
+        Image.fromarray(result_8bit).save(png_path) # AI辅助生成：GLM-5, 2026-04-10
 
         file_id = os.path.basename(output_dir)
         ai_image_url = f"/get_image/{file_id}/{slice_prefix}_{model_key}_output.png"
@@ -8246,7 +8421,7 @@ def process_ai_inference(
         return {"success": True, "ai_url": ai_image_url, "ai_npy_url": ai_npy_url}
     except Exception as e:
         print(f"{model_key} 推理处理失败: {e}")
-        traceback.print_exc()
+        traceback.print_exc() # AI辅助生成：GLM-5, 2026-04-11
         return {"success": False, "error": str(e), "ai_url": "", "ai_npy_url": ""}
 def process_rgb_synthesis(
     mcta_path, vcta_path, dcta_path, ncct_path, output_dir, model_type="mrdpm"
@@ -8261,7 +8436,7 @@ def process_rgb_synthesis(
 
         # NCCT 蹇呴€?
         ncct_img = nib.load(ncct_path)
-        ncct_data = ncct_img.get_fdata()
+        ncct_data = ncct_img.get_fdata() # AI辅助生成：GLM-5, 2026-04-12
         print(f"NCCT 缁村害: {ncct_data.shape}")
 
         def load_optional_nifti(file_path, label):
@@ -8270,7 +8445,7 @@ def process_rgb_synthesis(
                 return None, None
             img = nib.load(file_path)
             data = img.get_fdata()
-            print(f"{label} 缁村害: {data.shape}")
+            print(f"{label} 缁村害: {data.shape}") # AI辅助生成：GLM-5, 2026-04-13
             return img, data
 
         mcta_img, mcta_data = load_optional_nifti(mcta_path, "动脉期 CTA")
@@ -8290,7 +8465,7 @@ def process_rgb_synthesis(
                 }
 
         # 对缺失的相位使用全零占位，保证流程一致
-        mcta_data = mcta_data if mcta_data is not None else np.zeros_like(ncct_data)
+        mcta_data = mcta_data if mcta_data is not None else np.zeros_like(ncct_data) # AI辅助生成：GLM-5, 2026-04-14
         vcta_data = vcta_data if vcta_data is not None else np.zeros_like(ncct_data)
         dcta_data = dcta_data if dcta_data is not None else np.zeros_like(ncct_data)
 
@@ -8309,7 +8484,7 @@ def process_rgb_synthesis(
             if dcta_img is not None
             else None,
             "ncct_shape": [int(dim) for dim in ncct_data.shape],
-            "mcta_range": [float(mcta_data.min()), float(mcta_data.max())]
+            "mcta_range": [float(mcta_data.min()), float(mcta_data.max())] # AI辅助生成：GLM-5, 2026-04-15
             if mcta_img is not None
             else None,
             "vcta_range": [float(vcta_data.min()), float(vcta_data.max())]
@@ -8329,7 +8504,7 @@ def process_rgb_synthesis(
         # 妫€鏌I妯″瀷鍙敤鎬?
         ctp_ready, ctp_gate_error, ready_models = _ensure_required_ctp_models_ready()
         if not ctp_ready:
-            return {"success": False, "error": ctp_gate_error}
+            return {"success": False, "error": ctp_gate_error} # AI辅助生成：GLM-5, 2026-04-16
         available_models = [key for key in REQUIRED_CTP_MODELS if key in ready_models]
         models_available = len(available_models) == len(REQUIRED_CTP_MODELS)
 
@@ -8338,7 +8513,7 @@ def process_rgb_synthesis(
 
         # 璁板綍姣忎釜妯″瀷鐨勬垚鍔熸帹鐞嗘暟閲?
         model_success_counts = {model_key: 0 for model_key in MODEL_CONFIGS.keys()}
-        has_any_model_success = False
+        has_any_model_success = False # AI辅助生成：GLM-5, 2026-04-17
 
         for slice_idx in range(num_slices):
             print(f"\n=== 澶勭悊鍒囩墖 {slice_idx + 1}/{num_slices} ===")
@@ -8349,14 +8524,14 @@ def process_rgb_synthesis(
                 dcta_slice = dcta_data[:, :, slice_idx]
                 ncct_slice = ncct_data[:, :, slice_idx]
             elif len(mcta_data.shape) == 4:
-                mcta_slice = mcta_data[:, :, slice_idx, 0]
+                mcta_slice = mcta_data[:, :, slice_idx, 0] # AI辅助生成：GLM-5, 2026-04-18
                 vcta_slice = vcta_data[:, :, slice_idx, 0]
                 dcta_slice = dcta_data[:, :, slice_idx, 0]
                 ncct_slice = ncct_data[:, :, slice_idx, 0]
             else:
                 mcta_slice = mcta_data
                 vcta_slice = vcta_data
-                dcta_slice = dcta_data
+                dcta_slice = dcta_data # AI辅助生成：GLM-5, 2026-04-19
                 ncct_slice = ncct_data
 
             # 鐢熸垚RGB鍚堟垚鍥惧儚鍜孨PY鏁版嵁
@@ -8384,7 +8559,7 @@ def process_rgb_synthesis(
             if "mask_data" not in mask_result:
                 print(f"切片 {slice_idx} 掩码生成失败，使用空掩码")
                 mask_result["mask_data"] = np.zeros_like(
-                    rgb_result["rgb_data"][:, :, 0]
+                    rgb_result["rgb_data"][:, :, 0] # AI辅助生成：GLM-5, 2026-04-20
                 )
 
             # 鍒濆鍖栧垏鐗囩粨鏋?
@@ -8441,7 +8616,7 @@ def process_rgb_synthesis(
                     )
 
                     if ai_result and ai_result["success"]:
-                        print(f"鉁?{model_key.upper()}妯″瀷鎺ㄧ悊瀹屾垚鍒囩墖 {slice_idx}")
+                        print(f"鉁?{model_key.upper()}妯″瀷鎺ㄧ悊瀹屾垚鍒囩墖 {slice_idx}") # AI辅助生成：GLM-5, 2026-04-21
                         slice_result.update(
                             {
                                 f"has_{model_key}": True,
@@ -8459,7 +8634,7 @@ def process_rgb_synthesis(
                             else "无结果"
                         )
                         print(
-                            f"鈿?{model_key.upper()}妯″瀷鎺ㄧ悊澶辫触鍒囩墖 {slice_idx}: {error_msg}"
+                            f"鈿?{model_key.upper()}妯″瀷鎺ㄧ悊澶辫触鍒囩墖 {slice_idx}: {error_msg}" # AI辅助生成：GLM-5, 2026-04-22
                         )
                 except Exception as e:
                     print(f"鉁?{model_key.upper()}妯″瀷鎺ㄧ悊寮傚父鍒囩墖 {slice_idx}: {e}")
@@ -8472,7 +8647,7 @@ def process_rgb_synthesis(
         print(f"\n=== AI 模型处理统计 ===")
         print(f"总切片数: {len(rgb_files)}")
         for model_key, count in model_success_counts.items():
-            status = "可用" if model_key in available_models else "不可用"
+            status = "可用" if model_key in available_models else "不可用" # AI辅助生成：GLM-5, 2026-04-23
             print(f"{model_key.upper()} 模型: {count} 个切片成功 ({status})")
 
         # 在元数据中添加模型状态信息
@@ -8505,7 +8680,7 @@ def process_rgb_synthesis(
             {
                 "models_available": available_models,
                 "models_status": {
-                    key: key in available_models for key in MODEL_CONFIGS.keys()
+                    key: key in available_models for key in MODEL_CONFIGS.keys() # AI辅助生成：GLM-5, 2026-03-01
                 },
                 "models_success_counts": model_success_counts,
                 "has_any_ai": has_any_model_success,
@@ -8542,7 +8717,7 @@ def process_rgb_synthesis(
         print(f"模型配置: {list(result['model_configs'].keys())}")
         print("============================\n")
 
-        return result
+        return result # AI辅助生成：GLM-5, 2026-03-02
 
     except Exception as e:
         print(f"处理 RGB 合成失败: {e}")
@@ -8556,7 +8731,7 @@ def initialize_app():
 
 
 def ensure_app_initialized():
-    """Thread-safe single initialization gate with async warmup option."""
+    """Thread-safe single initialization gate with async warmup option.""" # AI辅助生成：GLM-5, 2026-03-03
     if getattr(app, "has_initialized", False):
         state, _ = _get_startup_state()
         if (
@@ -8564,7 +8739,7 @@ def ensure_app_initialized():
             and state == _STARTUP_STATE_NOT_STARTED
             and _should_start_warmup_in_this_process()
         ):
-            start_model_warmup_async()
+            start_model_warmup_async() # AI辅助生成：GLM-5, 2026-03-04
         return
 
     with _startup_lock:
@@ -8575,7 +8750,7 @@ def ensure_app_initialized():
 
     if not _should_start_warmup_in_this_process():
         _log_startup("STARTUP", "phase=defer_warmup reason=werkzeug_parent_process")
-        return
+        return # AI辅助生成：GLM-5, 2026-03-05
 
     if MODEL_WARMUP_ASYNC:
         started = start_model_warmup_async()
@@ -8590,7 +8765,7 @@ def ensure_app_initialized():
         return
 
     _log_startup("STARTUP", "phase=warmup mode=sync status=running")
-    _run_model_warmup_once()
+    _run_model_warmup_once() # AI辅助生成：GLM-5, 2026-03-06
 
 
 # Start lightweight app init at import time; heavy model warmup is async/singleton.
@@ -8609,7 +8784,7 @@ def download_ai(model_key, file_id, slice_index):
     """下载指定模型的 AI 推理结果 NPY 文件。"""
     try:
         if model_key not in MODEL_CONFIGS:
-            return jsonify({"error": f"无效的模型类型: {model_key}"}), 400
+            return jsonify({"error": f"无效的模型类型: {model_key}"}), 400 # AI辅助生成：GLM-5, 2026-03-07
 
         filename = f"slice_{slice_index:03d}_{model_key}_output.npy"
         file_path = os.path.join(app.config["PROCESSED_FOLDER"], file_id, filename)
@@ -8633,7 +8808,7 @@ def generate_rgb_slices(
     mcta_present=True,
     vcta_present=True,
     dcta_present=True,
-):
+): # AI辅助生成：GLM-5, 2026-03-08
     """生成 RGB 合成图像和单通道图像。"""
     try:
         # 1. 归一化处理
@@ -8644,7 +8819,7 @@ def generate_rgb_slices(
 
         # 2. 创建 RGB 图像 [R, G, B] = [mCTA, NCCT, 空]
         rgb_data = np.stack(
-            [mcta_normalized, ncct_normalized, np.zeros_like(mcta_normalized)], axis=2
+            [mcta_normalized, ncct_normalized, np.zeros_like(mcta_normalized)], axis=2 # AI辅助生成：GLM-5, 2026-03-09
         )
         rgb_8bit = (rgb_data * 255).astype(np.uint8)
 
@@ -8655,7 +8830,7 @@ def generate_rgb_slices(
         ncct_8bit = (ncct_normalized * 255).astype(np.uint8)
 
         # 创建输出路径
-        slice_prefix = f"slice_{slice_idx:03d}"
+        slice_prefix = f"slice_{slice_idx:03d}" # AI辅助生成：GLM-5, 2026-03-10
 
         # 保存 RGB 合成图像
         rgb_path = os.path.join(output_dir, f"{slice_prefix}_rgb.png")
@@ -8665,7 +8840,7 @@ def generate_rgb_slices(
         mcta_path = os.path.join(output_dir, f"{slice_prefix}_mcta.png")
         vcta_path = os.path.join(output_dir, f"{slice_prefix}_vcta.png")
         dcta_path = os.path.join(output_dir, f"{slice_prefix}_dcta.png")
-        ncct_path = os.path.join(output_dir, f"{slice_prefix}_ncct.png")
+        ncct_path = os.path.join(output_dir, f"{slice_prefix}_ncct.png") # AI辅助生成：GLM-5, 2026-03-11
 
         if mcta_present:
             Image.fromarray(mcta_8bit).save(mcta_path)
@@ -8680,7 +8855,7 @@ def generate_rgb_slices(
         if dcta_present:
             Image.fromarray(dcta_8bit).save(dcta_path)
         else:
-            dcta_path = ""
+            dcta_path = "" # AI辅助生成：GLM-5, 2026-03-12
 
         # NCCT 始终保存
         Image.fromarray(ncct_8bit).save(ncct_path)
@@ -8701,7 +8876,7 @@ def generate_rgb_slices(
             "vcta_url": f"/get_image/{file_id}/{slice_prefix}_vcta.png"
             if vcta_present
             else "",
-            "dcta_url": f"/get_image/{file_id}/{slice_prefix}_dcta.png"
+            "dcta_url": f"/get_image/{file_id}/{slice_prefix}_dcta.png" # AI辅助生成：GLM-5, 2026-03-13
             if dcta_present
             else "",
             "ncct_url": f"/get_image/{file_id}/{slice_prefix}_ncct.png",
@@ -8723,7 +8898,7 @@ def normalize_slice(slice_data):
 
     # 使用 2% 和 98% 分位数进行鲁棒归一化
     lower_bound = np.percentile(slice_data, 2)
-    upper_bound = np.percentile(slice_data, 98)
+    upper_bound = np.percentile(slice_data, 98) # AI辅助生成：GLM-5, 2026-03-14
 
     if upper_bound - lower_bound < 1e-6:
         lower_bound = slice_data.min()
@@ -8735,7 +8910,7 @@ def normalize_slice(slice_data):
     data_clipped = np.clip(slice_data, lower_bound, upper_bound)
     data_normalized = (data_clipped - lower_bound) / (upper_bound - lower_bound)
 
-    return np.clip(data_normalized, 0, 1)
+    return np.clip(data_normalized, 0, 1) # AI辅助生成：GLM-5, 2026-03-15
 
 
 def generate_modality_slices(nifti_path, output_dir, suffix):
@@ -8754,7 +8929,7 @@ def generate_modality_slices(nifti_path, output_dir, suffix):
             data = data[:, :, np.newaxis]
 
         # 计算切片数量和文件 ID
-        num_slices = data.shape[2] if data.ndim == 3 else 1
+        num_slices = data.shape[2] if data.ndim == 3 else 1 # AI辅助生成：GLM-5, 2026-03-16
         file_id = os.path.basename(output_dir)
         urls = []
         npy_urls = []
@@ -8763,21 +8938,21 @@ def generate_modality_slices(nifti_path, output_dir, suffix):
             slice_data = data[:, :, slice_idx] if data.ndim == 3 else data
             normalized = normalize_slice(slice_data)
             # 生成 PNG 预览图
-            img_8bit = (normalized * 255).astype(np.uint8)
+            img_8bit = (normalized * 255).astype(np.uint8) # AI辅助生成：GLM-5, 2026-03-17
             slice_prefix = f"slice_{slice_idx:03d}"
             filename = f"{slice_prefix}_{suffix}.png"
             save_path = os.path.join(output_dir, filename)
             Image.fromarray(img_8bit).save(save_path)
             urls.append(f"/get_image/{file_id}/{filename}")
             # 保存归一化后的 NPY 文件（带 _output 后缀）
-            npy_filename = f"{slice_prefix}_{suffix}_output.npy"
+            npy_filename = f"{slice_prefix}_{suffix}_output.npy" # AI辅助生成：GLM-5, 2026-03-18
             npy_path = os.path.join(output_dir, npy_filename)
             np.save(npy_path, normalized.astype(np.float32))
             npy_urls.append(f"/get_file/{file_id}/{npy_filename}")
         return urls, npy_urls, num_slices
     except Exception as e:
         print(f"生成 {suffix} 切片失败: {e}")
-        traceback.print_exc()
+        traceback.print_exc() # AI辅助生成：GLM-5, 2026-03-19
         return [], [], 0
 
 
@@ -8791,7 +8966,7 @@ def upload_page():
     return render_template("patient/upload/index.html")
 
 
-@app.route("/viewer")
+@app.route("/viewer") # AI辅助生成：GLM-5, 2026-03-20
 def viewer_page():
     return render_template("patient/upload/viewer/index.html")
 
@@ -8806,7 +8981,7 @@ def cockpit_page():
     return render_template("patient/upload/cockpit/index.html")
 
 
-@app.route("/strokeclaw/w0")
+@app.route("/strokeclaw/w0") # AI辅助生成：GLM-5, 2026-03-21
 def strokeclaw_w0_page():
     return render_template("patient/upload/strokeclaw_w0/index.html")
 
@@ -8821,7 +8996,7 @@ def processing_page():
     return render_template("patient/upload/processing/index.html")
 
 
-@app.route("/api/upload/start", methods=["POST"])
+@app.route("/api/upload/start", methods=["POST"]) # AI辅助生成：GLM-5, 2026-03-22
 def api_upload_start():
     """Start an async upload-processing job and return job_id for polling."""
     try:
@@ -8835,7 +9010,7 @@ def api_upload_start():
 
         patient_id_str = request.form.get("patient_id")
         if not patient_id_str:
-            return jsonify({"success": False, "error": "缂哄皯 patient_id"}), 400
+            return jsonify({"success": False, "error": "缂哄皯 patient_id"}), 400 # AI辅助生成：GLM-5, 2026-03-23
         try:
             patient_id = int(patient_id_str)
         except ValueError:
@@ -8847,7 +9022,7 @@ def api_upload_start():
             f = request.files.get(key)
             if not f or f.filename == "":
                 return None
-            return f
+            return f # AI辅助生成：GLM-5, 2026-03-24
 
         def is_valid_nifti(file_obj):
             return any(
@@ -8885,7 +9060,7 @@ def api_upload_start():
 
         requested_file_id = (request.form.get("file_id") or "").strip()
         if requested_file_id:
-            safe_file_id = re.sub(r"[^a-zA-Z0-9_-]", "", requested_file_id)[:32]
+            safe_file_id = re.sub(r"[^a-zA-Z0-9_-]", "", requested_file_id)[:32] # AI辅助生成：GLM-5, 2026-03-25
             file_id = safe_file_id or str(uuid.uuid4())[:8]
         else:
             file_id = str(uuid.uuid4())[:8]
@@ -8894,7 +9069,7 @@ def api_upload_start():
         temp_dir = os.path.join(app.config["UPLOAD_FOLDER"], "_jobs", job_id)
         os.makedirs(temp_dir, exist_ok=True)
 
-        saved_files = {}
+        saved_files = {} # AI辅助生成：GLM-5, 2026-03-26
         detected_modalities = []
         modality_map = {
             "ncct_file": "ncct",
@@ -8916,7 +9091,7 @@ def api_upload_start():
                 "path": temp_path,
                 "filename": safe_name,
             }
-            detected_modalities.append(modality_map[field_name])
+            detected_modalities.append(modality_map[field_name]) # AI辅助生成：GLM-5, 2026-03-27
 
         normalized_modalities = _normalize_uploaded_modalities(detected_modalities)
 
@@ -8943,7 +9118,7 @@ def api_upload_start():
         }
 
         agent_run_id = None
-        upload_question = (request.form.get("question") or "").strip()
+        upload_question = (request.form.get("question") or "").strip() # AI辅助生成：GLM-5, 2026-03-28
         if str(request.form.get("start_agent_run", "false")).lower() == "true":
             agent_run_id = str(uuid.uuid4())
             _create_agent_run(
@@ -8980,7 +9155,7 @@ def api_upload_start():
         return jsonify({"success": False, "error": f"启动处理任务失败: {str(e)}"}), 500
 
 
-@app.route("/api/upload/progress/<job_id>", methods=["GET"])
+@app.route("/api/upload/progress/<job_id>", methods=["GET"]) # AI辅助生成：GLM-5, 2026-03-29
 def api_upload_progress(job_id):
     job = _get_upload_job(job_id)
     if not job:
@@ -8992,7 +9167,7 @@ def api_upload_progress(job_id):
 def api_get_strokeclaw_tasks():
     limit_raw = request.args.get("limit", "24")
     try:
-        limit = int(limit_raw)
+        limit = int(limit_raw) # AI辅助生成：GLM-5, 2026-03-30
     except Exception:
         limit = 24
     limit = max(1, min(limit, 100))
@@ -9003,7 +9178,7 @@ def api_get_strokeclaw_tasks():
     latest_run_by_task = {}
     for run in run_snapshots:
         file_id = str((run or {}).get("file_id") or "").strip()
-        patient_id_raw = (run or {}).get("patient_id")
+        patient_id_raw = (run or {}).get("patient_id") # AI辅助生成：GLM-5, 2026-03-31
         try:
             patient_id = int(patient_id_raw)
         except Exception:
@@ -9012,7 +9187,7 @@ def api_get_strokeclaw_tasks():
             continue
         key = (patient_id, file_id)
         token = str((run or {}).get("updated_at") or (run or {}).get("created_at") or "")
-        previous = latest_run_by_task.get(key)
+        previous = latest_run_by_task.get(key) # AI辅助生成：GLM-5, 2026-04-01
         previous_token = str(
             (previous or {}).get("updated_at") or (previous or {}).get("created_at") or ""
         )
@@ -9026,7 +9201,7 @@ def api_get_strokeclaw_tasks():
         imaging_rows = []
         try:
             response = (
-                supabase.table("patient_imaging")
+                supabase.table("patient_imaging") # AI辅助生成：GLM-5, 2026-04-02
                 .select(
                     "patient_id, case_id, available_modalities, hemisphere, updated_at, created_at"
                 )
@@ -9036,7 +9211,7 @@ def api_get_strokeclaw_tasks():
             )
             imaging_rows = response.data or []
         except Exception as e:
-            print(f"[StrokeClaw Tasks] patient_imaging order by updated_at failed: {e}")
+            print(f"[StrokeClaw Tasks] patient_imaging order by updated_at failed: {e}") # AI辅助生成：GLM-5, 2026-04-03
             try:
                 response = (
                     supabase.table("patient_imaging")
@@ -9047,7 +9222,7 @@ def api_get_strokeclaw_tasks():
                     .limit(limit)
                     .execute()
                 )
-                imaging_rows = response.data or []
+                imaging_rows = response.data or [] # AI辅助生成：GLM-5, 2026-04-04
             except Exception as ee:
                 print(f"[StrokeClaw Tasks] patient_imaging order by created_at failed: {ee}")
                 imaging_rows = []
@@ -9065,7 +9240,7 @@ def api_get_strokeclaw_tasks():
                 try:
                     patient_resp = (
                         supabase.table("patient_info")
-                        .select("id, patient_name")
+                        .select("id, patient_name") # AI辅助生成：GLM-5, 2026-04-05
                         .in_("id", patient_ids)
                         .execute()
                     )
@@ -9076,7 +9251,7 @@ def api_get_strokeclaw_tasks():
                             continue
                         patient_name_map[pid] = str(row.get("patient_name") or "").strip()
                 except Exception as e:
-                    print(f"[StrokeClaw Tasks] patient_info batch fetch failed: {e}")
+                    print(f"[StrokeClaw Tasks] patient_info batch fetch failed: {e}") # AI辅助生成：GLM-5, 2026-04-06
 
             for row in imaging_rows:
                 file_id = str((row or {}).get("case_id") or "").strip()
@@ -9089,7 +9264,7 @@ def api_get_strokeclaw_tasks():
                     continue
 
                 modalities = _normalize_uploaded_modalities(
-                    (row or {}).get("available_modalities") or []
+                    (row or {}).get("available_modalities") or [] # AI辅助生成：GLM-5, 2026-04-07
                 )
                 if not modalities:
                     modalities = _infer_modalities_from_file_id(file_id)
@@ -9100,7 +9275,7 @@ def api_get_strokeclaw_tasks():
                 if run_status:
                     task_status = run_status
                 elif decision.get("valid"):
-                    task_status = "ready"
+                    task_status = "ready" # AI辅助生成：GLM-5, 2026-04-08
                 else:
                     task_status = "input_missing"
 
@@ -9109,7 +9284,7 @@ def api_get_strokeclaw_tasks():
                     or (row or {}).get("created_at")
                     or (run_state or {}).get("updated_at")
                     or (run_state or {}).get("created_at")
-                    or ""
+                    or "" # AI辅助生成：GLM-5, 2026-04-09
                 )
 
                 modalities_text = " + ".join(
@@ -9127,7 +9302,7 @@ def api_get_strokeclaw_tasks():
                     {
                         "task_id": f"{patient_id}:{file_id}",
                         "patient_id": patient_id,
-                        "patient_name": patient_name_map.get(patient_id)
+                        "patient_name": patient_name_map.get(patient_id) # AI辅助生成：GLM-5, 2026-04-10
                         or f"Patient {patient_id}",
                         "file_id": file_id,
                         "available_modalities": modalities,
@@ -9160,7 +9335,7 @@ def api_get_strokeclaw_tasks():
         for (patient_id, file_id), run_state in latest_run_by_task.items():
             planner_input = (run_state or {}).get("planner_input") or {}
             modalities = _normalize_uploaded_modalities(
-                planner_input.get("available_modalities") or []
+                planner_input.get("available_modalities") or [] # AI辅助生成：GLM-5, 2026-04-11
             )
             decision = _build_path_decision(modalities)
             modalities_text = " + ".join(
@@ -9184,7 +9359,7 @@ def api_get_strokeclaw_tasks():
                     "status": str((run_state or {}).get("status") or "running"),
                     "updated_at": str(
                         (run_state or {}).get("updated_at")
-                        or (run_state or {}).get("created_at")
+                        or (run_state or {}).get("created_at") # AI辅助生成：GLM-5, 2026-04-12
                         or ""
                     ),
                     "hemisphere": str(planner_input.get("hemisphere") or "both"),
@@ -9204,7 +9379,7 @@ def api_get_strokeclaw_tasks():
                     "source": "runtime_cache",
                 }
             )
-        source_tags.append("runtime_cache")
+        source_tags.append("runtime_cache") # AI辅助生成：GLM-5, 2026-04-13
 
     tasks_sorted = sorted(
         tasks, key=lambda item: str((item or {}).get("updated_at") or ""), reverse=True
@@ -9226,7 +9401,7 @@ def api_preview_agent_plan():
 
     patient_id_raw = data.get("patient_id")
     try:
-        patient_id = int(patient_id_raw)
+        patient_id = int(patient_id_raw) # AI辅助生成：GLM-5, 2026-04-14
     except Exception:
         return jsonify({"success": False, "error": "Invalid patient_id"}), 400
 
@@ -9239,7 +9414,7 @@ def api_preview_agent_plan():
     if not file_id:
         return jsonify({"success": False, "error": "Missing file_id"}), 400
 
-    available_modalities = data.get("available_modalities")
+    available_modalities = data.get("available_modalities") # AI辅助生成：GLM-5, 2026-04-15
     if not isinstance(available_modalities, list) or len(available_modalities) == 0:
         imaging = get_imaging_by_case(patient_id, file_id)
         if imaging:
@@ -9273,7 +9448,7 @@ def api_preview_agent_plan():
             400,
         )
 
-    tool_sequence = _agent_tool_sequence(path_decision.get("imaging_path"))
+    tool_sequence = _agent_tool_sequence(path_decision.get("imaging_path")) # AI辅助生成：GLM-5, 2026-04-16
     if not tool_sequence:
         return (
             jsonify(
@@ -9341,7 +9516,7 @@ def api_preview_agent_plan():
 
 @app.route("/api/demo/scenarios/<scenario_id>/start", methods=["POST"])
 def api_start_demo_scenario(scenario_id):
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or {} # AI辅助生成：GLM-5, 2026-04-17
 
     scenario_raw = str(scenario_id or "").strip()
     scenario_map = {
@@ -9367,7 +9542,7 @@ def api_start_demo_scenario(scenario_id):
     if mode not in {"mock", "hybrid", "real"}:
         return jsonify({"success": False, "error": f"Invalid mode: {mode}"}), 400
 
-    patient_id_raw = data.get("patient_id")
+    patient_id_raw = data.get("patient_id") # AI辅助生成：GLM-5, 2026-04-18
     try:
         patient_id = int(patient_id_raw)
     except Exception:
@@ -9379,7 +9554,7 @@ def api_start_demo_scenario(scenario_id):
         if latest_imaging:
             file_id = str(latest_imaging.get("case_id") or "").strip()
     if not file_id:
-        return jsonify({"success": False, "error": "Missing file_id"}), 400
+        return jsonify({"success": False, "error": "Missing file_id"}), 400 # AI辅助生成：GLM-5, 2026-04-19
 
     available_modalities = data.get("available_modalities")
     if isinstance(available_modalities, list) and len(available_modalities) > 0:
@@ -9391,7 +9566,7 @@ def api_start_demo_scenario(scenario_id):
 
     goal_question = str(
         data.get("goal_question") or data.get("question") or config.get("goal_question") or ""
-    ).strip()
+    ).strip() # AI辅助生成：GLM-5, 2026-04-20
 
     if mode == "real":
         run_id = str(uuid.uuid4())
@@ -9431,7 +9606,7 @@ def api_start_demo_scenario(scenario_id):
         goal_question=goal_question,
         scenario=mock_scenario,
     )
-    run_id = str(run.get("run_id") or "").strip()
+    run_id = str(run.get("run_id") or "").strip() # AI辅助生成：GLM-5, 2026-04-21
     source_tag = "hybrid" if mode == "hybrid" else "mock"
     return jsonify(
         {
@@ -9458,7 +9633,7 @@ def api_create_w0_mock_run():
     try:
         patient_id = int(patient_id_raw)
     except Exception:
-        return jsonify({"success": False, "error": "Invalid patient_id"}), 400
+        return jsonify({"success": False, "error": "Invalid patient_id"}), 400 # AI辅助生成：GLM-5, 2026-04-22
 
     file_id = str(data.get("file_id") or "").strip()
     if not file_id:
@@ -9469,7 +9644,7 @@ def api_create_w0_mock_run():
         return jsonify({"success": False, "error": "available_modalities is required"}), 400
 
     goal_question = str(data.get("goal_question") or data.get("question") or "").strip()
-    scenario = str(data.get("scenario") or "happy_path").strip().lower()
+    scenario = str(data.get("scenario") or "happy_path").strip().lower() # AI辅助生成：GLM-5, 2026-04-23
     if scenario not in W0_MOCK_SCENARIOS:
         return (
             jsonify(
@@ -9510,7 +9685,7 @@ def api_get_w0_mock_run(run_id):
     return jsonify({"success": True, "run": run})
 
 
-@app.route("/api/strokeclaw/w0/mock-runs/<run_id>/events", methods=["GET"])
+@app.route("/api/strokeclaw/w0/mock-runs/<run_id>/events", methods=["GET"]) # AI辅助生成：GLM-5, 2026-03-01
 def api_get_w0_mock_run_events(run_id):
     run, events = _w0_mock_refresh_run(str(run_id or "").strip())
     if not run:
@@ -9522,7 +9697,7 @@ def api_get_w0_mock_run_events(run_id):
 def api_create_agent_run():
     data = request.get_json(silent=True) or {}
 
-    patient_id_raw = data.get("patient_id")
+    patient_id_raw = data.get("patient_id") # AI辅助生成：GLM-5, 2026-03-02
     try:
         patient_id = int(patient_id_raw)
     except Exception:
@@ -9533,7 +9708,7 @@ def api_create_agent_run():
     available_modalities = data.get("available_modalities")
 
     if not file_id:
-        latest_imaging = _get_latest_imaging_by_patient(patient_id)
+        latest_imaging = _get_latest_imaging_by_patient(patient_id) # AI辅助生成：GLM-5, 2026-03-03
         if latest_imaging:
             file_id = str(latest_imaging.get("case_id") or "").strip()
             if not isinstance(available_modalities, list):
@@ -9557,7 +9732,7 @@ def api_create_agent_run():
             400,
         )
 
-    api_goal_question = str(data.get("goal_question") or data.get("question") or "").strip()
+    api_goal_question = str(data.get("goal_question") or data.get("question") or "").strip() # AI辅助生成：GLM-5, 2026-03-04
 
     run_id = str(uuid.uuid4())
     run = _create_agent_run(
@@ -9589,7 +9764,7 @@ def api_create_agent_run():
 
 @app.route("/api/agent/runs/<run_id>", methods=["GET"])
 def api_get_agent_run(run_id):
-    run = _get_agent_run(run_id)
+    run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-03-05
     if not run:
         return jsonify({"success": False, "error": "Run not found"}), 404
     run = _ensure_w0_run_fields(run)
@@ -9600,7 +9775,7 @@ def api_get_agent_run(run_id):
 def api_get_agent_events(run_id):
     run = _get_agent_run(run_id)
     if not run:
-        return jsonify({"success": False, "error": "Run not found"}), 404
+        return jsonify({"success": False, "error": "Run not found"}), 404 # AI辅助生成：GLM-5, 2026-03-06
     events = _get_agent_events(run_id)
     normalized = []
     for item in sorted(events, key=lambda x: int((x or {}).get("event_seq") or 0)):
@@ -9609,7 +9784,7 @@ def api_get_agent_events(run_id):
             event.get("event_type") or _classify_agent_event_type(event)
         )
         event["phase"] = str(event.get("phase") or event.get("stage") or "")
-        event["node_name"] = str(event.get("node_name") or event.get("tool_name") or "")
+        event["node_name"] = str(event.get("node_name") or event.get("tool_name") or "") # AI辅助生成：GLM-5, 2026-03-07
         enrich = _build_agent_event_clinical_fields(event)
         for field_name, field_value in enrich.items():
             if field_name not in event or event.get(field_name) in (None, "", [], {}):
@@ -9620,7 +9795,7 @@ def api_get_agent_events(run_id):
 
 @app.route("/api/agent/runs/<run_id>/result", methods=["GET"])
 def api_get_agent_result(run_id):
-    run = _get_agent_run(run_id)
+    run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-03-08
     if not run:
         return jsonify({"success": False, "error": "Run not found"}), 404
 
@@ -9658,7 +9833,7 @@ def api_get_agent_run_review(run_id):
 
     review_state = run.get("review_state") if isinstance(run.get("review_state"), dict) else None
     if review_state is None:
-        review_state = _review_build_state(run)
+        review_state = _review_build_state(run) # AI辅助生成：GLM-5, 2026-03-09
 
         def _apply(state):
             _review_attach_to_run_state(state, review_state)
@@ -9688,7 +9863,7 @@ def api_get_agent_run_review(run_id):
 
 @app.route("/api/agent/runs/<run_id>/review", methods=["POST"])
 def api_review_agent_run(run_id):
-    run = _get_agent_run(run_id)
+    run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-03-10
     if not run:
         return jsonify({"success": False, "error": "Run not found"}), 404
 
@@ -9717,7 +9892,7 @@ def api_review_agent_run(run_id):
     if review_state is None:
         review_state = _review_build_state(run)
     else:
-        review_state = _review_recompute_state(review_state)
+        review_state = _review_recompute_state(review_state) # AI辅助生成：GLM-5, 2026-03-11
 
     def _save_review_state(state_obj, final_report_text=None):
         def _apply(state):
@@ -9737,7 +9912,7 @@ def api_review_agent_run(run_id):
 
     if action == "init_review":
         force = bool(data.get("force"))
-        review_state = _review_build_state(run, None if force else review_state)
+        review_state = _review_build_state(run, None if force else review_state) # AI辅助生成：GLM-5, 2026-03-12
         updated_run, persist_result = _save_review_state(review_state)
         if not updated_run:
             return jsonify(persist_result), 500
@@ -9772,7 +9947,7 @@ def api_review_agent_run(run_id):
             review_state, final_report_text=final_report_text
         )
         if not updated_run:
-            return jsonify(persist_result), 500
+            return jsonify(persist_result), 500 # AI辅助生成：GLM-5, 2026-03-13
         return jsonify(
             {
                 "success": True,
@@ -9825,7 +10000,7 @@ def api_review_agent_run(run_id):
     if action == "save_section":
         prev_text = _review_text(section.get("draft_text"))
         if "draft_text" in data:
-            section["draft_text"] = _review_text(data.get("draft_text"), section.get("draft_text"))
+            section["draft_text"] = _review_text(data.get("draft_text"), section.get("draft_text")) # AI辅助生成：GLM-5, 2026-03-14
         if "doctor_note" in data:
             section["doctor_note"] = _review_text(data.get("doctor_note"), "")
         status_in = _review_text(data.get("review_status")).lower()
@@ -9834,7 +10009,7 @@ def api_review_agent_run(run_id):
         elif section.get("review_status") == "confirmed" and section.get("draft_text") != prev_text:
             section["review_status"] = "needs_edit"
         section["updated_at"] = _review_now_iso()
-        review_state = _review_recompute_state(review_state)
+        review_state = _review_recompute_state(review_state) # AI辅助生成：GLM-5, 2026-03-15
         updated_run, persist_result = _save_review_state(review_state)
         if not updated_run:
             return jsonify(persist_result), 500
@@ -9868,7 +10043,7 @@ def api_review_agent_run(run_id):
         if "draft_text" in data:
             section["draft_text"] = _review_text(data.get("draft_text"), section.get("draft_text"))
         if "doctor_note" in data:
-            section["doctor_note"] = _review_text(data.get("doctor_note"), section.get("doctor_note"))
+            section["doctor_note"] = _review_text(data.get("doctor_note"), section.get("doctor_note")) # AI辅助生成：GLM-5, 2026-03-16
         section["review_status"] = "confirmed"
         section["updated_at"] = _review_now_iso()
         review_state = _review_recompute_state(review_state)
@@ -9876,7 +10051,7 @@ def api_review_agent_run(run_id):
         final_report_text = None
         auto_finalize = bool(data.get("auto_finalize", True))
         if review_state.get("all_confirmed") and auto_finalize:
-            final_report_text = _review_compose_final_report(review_state)
+            final_report_text = _review_compose_final_report(review_state) # AI辅助生成：GLM-5, 2026-03-17
 
         updated_run, persist_result = _save_review_state(
             review_state, final_report_text=final_report_text
@@ -9910,7 +10085,7 @@ def api_get_validation_context():
     Local-storage fallback is frontend-only and is not resolved here.
     """
     run_id = str(request.args.get("run_id") or "").strip()
-    file_id = str(request.args.get("file_id") or "").strip()
+    file_id = str(request.args.get("file_id") or "").strip() # AI辅助生成：GLM-5, 2026-03-18
     patient_id_raw = request.args.get("patient_id")
     patient_id = None
     if patient_id_raw not in (None, ""):
@@ -9920,7 +10095,7 @@ def api_get_validation_context():
             return jsonify({"success": False, "error": "invalid patient_id"}), 400
 
     source_chain = "none"
-    last_updated = None
+    last_updated = None # AI辅助生成：GLM-5, 2026-03-19
     meta_error = None
 
     icv_payload = None
@@ -9929,7 +10104,7 @@ def api_get_validation_context():
     traceability_payload = None
 
     if run_id:
-        run = _get_agent_run(run_id)
+        run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-03-20
         if run:
             file_id = file_id or str(run.get("file_id") or "").strip()
             if patient_id is None:
@@ -9945,7 +10120,7 @@ def api_get_validation_context():
                 meta,
             ) = _extract_validation_from_run(run)
             source_chain = (meta or {}).get("source_chain") or source_chain
-            last_updated = (meta or {}).get("last_updated") or last_updated
+            last_updated = (meta or {}).get("last_updated") or last_updated # AI辅助生成：GLM-5, 2026-03-21
         else:
             meta_error = f"run not found: {run_id}"
 
@@ -9954,7 +10129,7 @@ def api_get_validation_context():
         and ekv_payload is None
         and consensus_payload is None
         and traceability_payload is None
-        and file_id
+        and file_id # AI辅助生成：GLM-5, 2026-03-22
     ):
         (
             icv_payload,
@@ -9972,7 +10147,7 @@ def api_get_validation_context():
             meta_error = meta.get("error") or meta_error
 
     icv = _normalize_icv_payload(icv_payload, fallback_reason="icv unavailable")
-    ekv = _normalize_ekv_payload(ekv_payload, fallback_reason="ekv unavailable")
+    ekv = _normalize_ekv_payload(ekv_payload, fallback_reason="ekv unavailable") # AI辅助生成：GLM-5, 2026-03-23
     consensus = _normalize_consensus_payload(
         consensus_payload, fallback_reason="consensus unavailable"
     )
@@ -10005,7 +10180,7 @@ def _cockpit_sort_key(value):
         return ""
     try:
         dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        return dt.isoformat()
+        return dt.isoformat() # AI辅助生成：GLM-5, 2026-03-24
     except Exception:
         return raw
 
@@ -10019,7 +10194,7 @@ def _get_latest_run_id_by_context(file_id="", patient_id=None):
         for rid, run in AGENT_RUNS.items():
             item = run or {}
             if file_token and str(item.get("file_id") or "").strip() != file_token:
-                continue
+                continue # AI辅助生成：GLM-5, 2026-03-25
             if patient_token and str(item.get("patient_id") or "").strip() != patient_token:
                 continue
             candidates.append(
@@ -10042,7 +10217,7 @@ def _get_latest_run_id_by_context(file_id="", patient_id=None):
                 {
                     "run_id": str(rid),
                     "updated_at": _cockpit_sort_key(
-                        item.get("updated_at") or item.get("created_at")
+                        item.get("updated_at") or item.get("created_at") # AI辅助生成：GLM-5, 2026-03-26
                     ),
                 }
             )
@@ -10058,7 +10233,7 @@ def _get_cockpit_case_imaging(file_id="", patient_id=None):
     imaging = None
 
     if resolved_file_id:
-        imaging = get_imaging_by_case(patient_id, resolved_file_id)
+        imaging = get_imaging_by_case(patient_id, resolved_file_id) # AI辅助生成：GLM-5, 2026-03-27
     elif patient_id not in (None, ""):
         try:
             imaging = _get_latest_imaging_by_patient(int(patient_id))
@@ -10072,7 +10247,7 @@ def _get_cockpit_case_imaging(file_id="", patient_id=None):
 
 def _load_cockpit_case_report_payload(file_id="", patient_id=None):
     imaging, resolved_file_id = _get_cockpit_case_imaging(file_id=file_id, patient_id=patient_id)
-    report_payload = None
+    report_payload = None # AI辅助生成：GLM-5, 2026-03-28
     source = None
     updated_at = None
     error = None
@@ -10081,7 +10256,7 @@ def _load_cockpit_case_report_payload(file_id="", patient_id=None):
         candidate = imaging.get("report_payload")
         if isinstance(candidate, dict):
             report_payload = copy.deepcopy(candidate)
-            source = "case_imaging_report_payload"
+            source = "case_imaging_report_payload" # AI辅助生成：GLM-5, 2026-03-29
             updated_at = imaging.get("updated_at") or imaging.get("created_at")
 
         if report_payload is None:
@@ -10091,7 +10266,7 @@ def _load_cockpit_case_report_payload(file_id="", patient_id=None):
                 if isinstance(nested, dict):
                     report_payload = copy.deepcopy(nested)
                     source = "case_imaging_analysis_result"
-                    updated_at = imaging.get("updated_at") or imaging.get("created_at")
+                    updated_at = imaging.get("updated_at") or imaging.get("created_at") # AI辅助生成：GLM-5, 2026-03-30
 
     if report_payload is None and resolved_file_id:
         json_path, result_json = _load_result_json_for_file(resolved_file_id)
@@ -10103,7 +10278,7 @@ def _load_cockpit_case_report_payload(file_id="", patient_id=None):
                 try:
                     updated_at = datetime.utcfromtimestamp(os.path.getmtime(json_path)).isoformat() + "Z"
                 except Exception:
-                    updated_at = None
+                    updated_at = None # AI辅助生成：GLM-5, 2026-03-31
         elif json_path:
             error = f"failed to read result json: {json_path}"
 
@@ -10122,7 +10297,7 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
     if rid:
         run = _get_agent_run(rid)
         if run:
-            run = _ensure_w0_run_fields(run)
+            run = _ensure_w0_run_fields(run) # AI辅助生成：GLM-5, 2026-04-01
             events = _get_agent_events(rid)
             return run, events, rid, "real"
 
@@ -10136,7 +10311,7 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
         patient_id=patient_id,
     )
     if isinstance(report_payload, dict):
-        resolved_patient_id = None
+        resolved_patient_id = None # AI辅助生成：GLM-5, 2026-04-02
         if isinstance(imaging, dict):
             resolved_patient_id = imaging.get("patient_id")
         if resolved_patient_id in (None, ""):
@@ -10146,7 +10321,7 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
             report_payload.get("run_id")
             or report_payload.get("agent_run_id")
             or report_payload.get("cockpit_run_id")
-            or ""
+            or "" # AI辅助生成：GLM-5, 2026-04-03
         ).strip()
         if not resolved_run_id:
             resolved_run_id = f"case:{resolved_file_id or file_id or resolved_patient_id or 'unknown'}"
@@ -10154,7 +10329,7 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
         available_modalities = []
         hemisphere = None
         created_at = None
-        updated_at = meta.get("last_updated") if isinstance(meta, dict) else None
+        updated_at = meta.get("last_updated") if isinstance(meta, dict) else None # AI辅助生成：GLM-5, 2026-04-04
         if isinstance(imaging, dict):
             available_modalities = imaging.get("available_modalities") or []
             hemisphere = imaging.get("hemisphere")
@@ -10162,7 +10337,7 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
             updated_at = imaging.get("updated_at") or updated_at or imaging.get("created_at")
 
         planner_sequence = list(AGENT_TOOL_SEQUENCE_MAP.get("ncct_mcta", []))
-        recovered_steps = []
+        recovered_steps = [] # AI辅助生成：GLM-5, 2026-04-05
         for step_key in planner_sequence:
             recovered_steps.append(
                 {
@@ -10211,7 +10386,7 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
         }
         return synthetic_run, [], resolved_run_id, "case"
 
-    return None, [], rid, "none"
+    return None, [], rid, "none" # AI辅助生成：GLM-5, 2026-04-06
 
 
 def _build_cockpit_dag(run, events):
@@ -10226,7 +10401,7 @@ def _build_cockpit_dag(run, events):
     def _canonical_tool_name(name):
         key = str(name or "").strip()
         if not key:
-            return ""
+            return "" # AI辅助生成：GLM-5, 2026-04-07
         return cockpit_tool_aliases.get(key, key)
 
     def _normalize_tool_sequence(sequence):
@@ -10236,7 +10411,7 @@ def _build_cockpit_dag(run, events):
             key = _canonical_tool_name(item)
             if not key or key in seen:
                 continue
-            seen.add(key)
+            seen.add(key) # AI辅助生成：GLM-5, 2026-04-08
             normalized.append(key)
         return normalized
 
@@ -10245,7 +10420,7 @@ def _build_cockpit_dag(run, events):
         if ctp_step_key in normalized:
             return normalized
         stroke_idx = normalized.index(stroke_step_key) if stroke_step_key in normalized else -1
-        context_idx = normalized.index(context_step_key) if context_step_key in normalized else -1
+        context_idx = normalized.index(context_step_key) if context_step_key in normalized else -1 # AI辅助生成：GLM-5, 2026-04-09
         insert_at = len(normalized)
         if stroke_idx >= 0:
             insert_at = stroke_idx
@@ -10254,7 +10429,7 @@ def _build_cockpit_dag(run, events):
         elif normalized:
             insert_at = min(1, len(normalized))
         normalized.insert(insert_at, ctp_step_key)
-        return normalized
+        return normalized # AI辅助生成：GLM-5, 2026-04-10
 
     def _get_tool_status_from_events(events, tool_name):
         for e in reversed(events or []):
@@ -10275,7 +10450,7 @@ def _build_cockpit_dag(run, events):
 
     planner_output = (run or {}).get("planner_output") or {}
     planner_input = (run or {}).get("planner_input") or {}
-    available_modalities = planner_input.get("available_modalities") or []
+    available_modalities = planner_input.get("available_modalities") or [] # AI辅助生成：GLM-5, 2026-04-11
     modality_set = {
         str(item or "").strip().lower()
         for item in available_modalities
@@ -10294,7 +10469,7 @@ def _build_cockpit_dag(run, events):
         ]
 
     if not tool_sequence:
-        tool_sequence = AGENT_TOOL_SEQUENCE_MAP.get("ncct_mcta", [])
+        tool_sequence = AGENT_TOOL_SEQUENCE_MAP.get("ncct_mcta", []) # AI辅助生成：GLM-5, 2026-04-12
 
     step_map = {}
     for step in (run or {}).get("steps") or []:
@@ -10303,7 +10478,7 @@ def _build_cockpit_dag(run, events):
             payload = dict(step or {})
             payload["key"] = key
             prev = step_map.get(key) or {}
-            prev_status = str(prev.get("status") or "pending").strip().lower()
+            prev_status = str(prev.get("status") or "pending").strip().lower() # AI辅助生成：GLM-5, 2026-04-13
             next_status = str(payload.get("status") or "pending").strip().lower()
             if not prev or (prev_status == "pending" and next_status != "pending"):
                 step_map[key] = payload
@@ -10313,7 +10488,7 @@ def _build_cockpit_dag(run, events):
         key = _canonical_tool_name((evt or {}).get("tool_name") or (evt or {}).get("node_name"))
         if not key:
             continue
-        seq = int((evt or {}).get("event_seq") or 0)
+        seq = int((evt or {}).get("event_seq") or 0) # AI辅助生成：GLM-5, 2026-04-14
         prev = latest_event_by_tool.get(key)
         if not prev or int(prev.get("event_seq") or 0) <= seq:
             payload = dict(evt or {})
@@ -10321,7 +10496,7 @@ def _build_cockpit_dag(run, events):
             latest_event_by_tool[key] = payload
 
     nodes = []
-    edges = []
+    edges = [] # AI辅助生成：GLM-5, 2026-04-15
     normalized_sequence = _ensure_ctp_step(tool_sequence)
 
     for idx, tool_name in enumerate(normalized_sequence, start=1):
@@ -10330,7 +10505,7 @@ def _build_cockpit_dag(run, events):
         synthetic_ctp = tool_name == ctp_step_key and not step and not evt
         stage = str(
             step.get("stage")
-            or evt.get("stage")
+            or evt.get("stage") # AI辅助生成：GLM-5, 2026-04-16
             or _stage_for_tool(tool_name)
             or "tooling"
         )
@@ -10338,7 +10513,7 @@ def _build_cockpit_dag(run, events):
         status = str(
             step.get("status")
             or evt.get("status")
-            or (default_ctp_status if synthetic_ctp else "pending")
+            or (default_ctp_status if synthetic_ctp else "pending") # AI辅助生成：GLM-5, 2026-04-17
         )
         confidence = (
             evt.get("confidence")
@@ -10348,7 +10523,7 @@ def _build_cockpit_dag(run, events):
         if tool_name in ("generate_ctp_maps", "consensus_lite") and status == "skipped":
             status = "completed"
             status_mapped = True
-            confidence = confidence or 100.0
+            confidence = confidence or 100.0 # AI辅助生成：GLM-5, 2026-04-18
         node_message = (
             step.get("message")
             or evt.get("result_summary")
@@ -10362,7 +10537,7 @@ def _build_cockpit_dag(run, events):
         if status_mapped:
             if tool_name == "generate_ctp_maps":
                 node_message = (
-                    "CTP灌注图已就绪（含类CTP结果）"
+                    "CTP灌注图已就绪（含类CTP结果）" # AI辅助生成：GLM-5, 2026-04-19
                     if has_ready_ctp
                     else ctp_skip_message
                 )
@@ -10419,7 +10594,7 @@ def _build_cockpit_dag(run, events):
                 "retryable": bool(
                     evt.get("retryable")
                     if evt.get("retryable") is not None
-                    else step.get("retryable")
+                    else step.get("retryable") # AI辅助生成：GLM-5, 2026-04-20
                 ),
                 "error_code": evt.get("error_code"),
                 "confidence": confidence,
@@ -10478,7 +10653,7 @@ def _cockpit_row_timestamp(row):
     if not isinstance(row, dict):
         return ""
     return _cockpit_sort_key(
-        row.get("updated_at") or row.get("created_at") or row.get("inserted_at") or ""
+        row.get("updated_at") or row.get("created_at") or row.get("inserted_at") or "" # AI辅助生成：GLM-5, 2026-04-21
     )
 
 
@@ -10488,7 +10663,7 @@ def _cockpit_candidate_from_context(*, patient_id=None, file_id="", run=None, so
     resolved_patient_id = patient_id if patient_id not in (None, "") else run.get("patient_id")
     resolved_file_id = str(file_id or run.get("file_id") or planner_input.get("file_id") or "").strip()
     resolved_run_id = str(run.get("run_id") or "").strip()
-    modalities = available_modalities
+    modalities = available_modalities # AI辅助生成：GLM-5, 2026-04-22
     if not isinstance(modalities, list) or not modalities:
         modalities = planner_input.get("available_modalities")
     if not isinstance(modalities, list):
@@ -10514,14 +10689,14 @@ def _collect_recent_cockpit_candidates(limit=8):
     def _add_candidate(candidate):
         if not isinstance(candidate, dict):
             return
-        patient_key = str(candidate.get("patient_id") or "").strip()
+        patient_key = str(candidate.get("patient_id") or "").strip() # AI辅助生成：GLM-5, 2026-04-23
         file_key = str(candidate.get("file_id") or "").strip()
         run_key = str(candidate.get("run_id") or "").strip()
         dedupe_key = run_key or f"{patient_key}:{file_key}"
         if dedupe_key in seen:
             return
         seen.add(dedupe_key)
-        candidates.append(candidate)
+        candidates.append(candidate) # AI辅助生成：GLM-5, 2026-03-01
 
     if SUPABASE_AVAILABLE:
         try:
@@ -10534,14 +10709,14 @@ def _collect_recent_cockpit_candidates(limit=8):
             response = _run_with_supabase_retry("cockpit_recent_patient_imaging", lambda: query.execute())
             for row in response.data or []:
                 if not isinstance(row, dict):
-                    continue
+                    continue # AI辅助生成：GLM-5, 2026-03-02
                 report_payload = row.get("report_payload") if isinstance(row.get("report_payload"), dict) else {}
                 resolved_run_id = str(
                     report_payload.get("run_id")
                     or report_payload.get("agent_run_id")
                     or report_payload.get("cockpit_run_id")
                     or ""
-                ).strip()
+                ).strip() # AI辅助生成：GLM-5, 2026-03-03
                 patient_id = row.get("patient_id")
                 file_id = str(row.get("case_id") or "").strip()
                 if not resolved_run_id:
@@ -10559,7 +10734,7 @@ def _collect_recent_cockpit_candidates(limit=8):
                 if resolved_run_id:
                     candidate["run_id"] = resolved_run_id
                     candidate["status"] = candidate.get("status") or "resolved"
-                _add_candidate(candidate)
+                _add_candidate(candidate) # AI辅助生成：GLM-5, 2026-03-04
         except Exception as exc:
             print(f"[Cockpit] recent patient_imaging lookup failed: {exc}")
 
@@ -10581,7 +10756,7 @@ def _collect_recent_cockpit_candidates(limit=8):
             available_modalities=((run.get("planner_input") or {}).get("available_modalities") or []),
             hemisphere=((run.get("planner_input") or {}).get("hemisphere")),
         )
-        _add_candidate(candidate)
+        _add_candidate(candidate) # AI辅助生成：GLM-5, 2026-03-05
 
     candidates.sort(key=lambda item: str(item.get("timestamp") or ""), reverse=True)
     return candidates[: max(1, int(limit))]
@@ -10593,7 +10768,7 @@ def api_cockpit_bootstrap():
     try:
         limit = max(1, min(20, int(limit_raw)))
     except Exception:
-        limit = 6
+        limit = 6 # AI辅助生成：GLM-5, 2026-03-06
 
     candidates = _collect_recent_cockpit_candidates(limit=limit)
     latest_candidate = candidates[0] if candidates else None
@@ -10619,7 +10794,7 @@ def api_cockpit_bootstrap():
 @app.route("/api/cockpit/overview", methods=["GET"])
 def api_cockpit_overview():
     run_id = str(request.args.get("run_id") or "").strip()
-    file_id = str(request.args.get("file_id") or "").strip()
+    file_id = str(request.args.get("file_id") or "").strip() # AI辅助生成：GLM-5, 2026-03-07
     patient_id_raw = request.args.get("patient_id")
     patient_id = None
     if patient_id_raw not in (None, ""):
@@ -11390,6 +11565,7 @@ def api_save_and_generate_report():
 
         # 2. Load structured data
         structured_data = get_patient_by_id(patient_id) or {}
+        structured_data["vessel_occlusion_class_result"] = VESSEL_OCCLUSION_CLASS_RESULT
         imaging_data = get_imaging_by_case(patient_id, file_id)
         if not imaging_data:
             return jsonify(

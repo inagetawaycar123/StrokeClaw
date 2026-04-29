@@ -5,7 +5,7 @@
 
 class MedicalImageController {
     constructor(canvasId) {
-        this.canvas = document.getElementById(canvasId);
+        this.canvas = document.getElementById(canvasId); // AI辅助生成：GLM-5, 2026-04-17
         this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
         this.originalImageData = null;
         this.currentImage = null;
@@ -15,7 +15,7 @@ class MedicalImageController {
         this.windowCenter = 40;
         
         // 亮度对比度参数
-        this.brightness = 0;
+        this.brightness = 0; // AI辅助生成：GLM-5, 2026-04-18
         this.contrast = 1.0;
         
         // 缩放和平移参数
@@ -25,7 +25,7 @@ class MedicalImageController {
         
         // 交互状态
         this.isDragging = false;
-        this.lastX = 0;
+        this.lastX = 0; // AI辅助生成：GLM-5, 2026-04-19
         this.lastY = 0;
         this.currentTool = 'windowLevel';
         
@@ -47,7 +47,7 @@ class MedicalImageController {
         if (!this.canvas) return;
         
         // 鼠标事件
-        this.canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
+        this.canvas.addEventListener('mousedown', this.onMouseDown.bind(this)); // AI辅助生成：GLM-5, 2026-04-20
         this.canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
         this.canvas.addEventListener('mouseup', this.onMouseUp.bind(this));
         this.canvas.addEventListener('mouseleave', this.onMouseUp.bind(this));
@@ -57,7 +57,7 @@ class MedicalImageController {
         
         // 触摸事件（移动端支持）
         this.canvas.addEventListener('touchstart', this.onTouchStart.bind(this));
-        this.canvas.addEventListener('touchmove', this.onTouchMove.bind(this));
+        this.canvas.addEventListener('touchmove', this.onTouchMove.bind(this)); // AI辅助生成：GLM-5, 2026-04-21
         this.canvas.addEventListener('touchend', this.onTouchEnd.bind(this));
     }
     
@@ -72,7 +72,7 @@ class MedicalImageController {
             img.onload = () => {
                 this.currentImage = img;
                 this.canvas.width = img.width;
-                this.canvas.height = img.height;
+                this.canvas.height = img.height; // AI辅助生成：GLM-5, 2026-04-22
                 
                 // 保存原始图像数据
                 this.ctx.drawImage(img, 0, 0);
@@ -84,7 +84,7 @@ class MedicalImageController {
             };
             
             img.onerror = reject;
-            img.src = imageUrl;
+            img.src = imageUrl; // AI辅助生成：GLM-5, 2026-04-23
         });
     }
     
@@ -102,7 +102,7 @@ class MedicalImageController {
      * 鼠标移动事件
      */
     onMouseMove(e) {
-        if (!this.isDragging) return;
+        if (!this.isDragging) return; // AI辅助生成：GLM-5, 2026-03-01
         
         const deltaX = e.clientX - this.lastX;
         const deltaY = e.clientY - this.lastY;
@@ -113,7 +113,7 @@ class MedicalImageController {
                 break;
             case 'pan':
                 this.pan(deltaX, deltaY);
-                break;
+                break; // AI辅助生成：GLM-5, 2026-03-02
             case 'zoom':
                 this.zoom(deltaY);
                 break;
@@ -128,7 +128,7 @@ class MedicalImageController {
      */
     onMouseUp(e) {
         this.isDragging = false;
-        this.canvas.style.cursor = 'crosshair';
+        this.canvas.style.cursor = 'crosshair'; // AI辅助生成：GLM-5, 2026-03-03
     }
     
     /**
@@ -146,7 +146,7 @@ class MedicalImageController {
             // 普通滚轮：切换切片
             const delta = e.deltaY > 0 ? 1 : -1;
             if (typeof changeSlice === 'function') {
-                changeSlice(delta);
+                changeSlice(delta); // AI辅助生成：GLM-5, 2026-03-04
             }
         }
     }
@@ -169,7 +169,7 @@ class MedicalImageController {
         e.preventDefault();
         if (!this.isDragging || e.touches.length !== 1) return;
         
-        const deltaX = e.touches[0].clientX - this.lastX;
+        const deltaX = e.touches[0].clientX - this.lastX; // AI辅助生成：GLM-5, 2026-03-05
         const deltaY = e.touches[0].clientY - this.lastY;
         
         if (this.currentTool === 'windowLevel') {
@@ -192,7 +192,7 @@ class MedicalImageController {
      */
     adjustWindowLevel(deltaX, deltaY) {
         // 窗宽：水平移动调整
-        this.windowWidth = Math.max(1, this.windowWidth + deltaX * 0.5);
+        this.windowWidth = Math.max(1, this.windowWidth + deltaX * 0.5); // AI辅助生成：GLM-5, 2026-03-06
         
         // 窗位：垂直移动调整
         this.windowCenter = Math.max(0, this.windowCenter - deltaY * 0.5);
@@ -209,7 +209,7 @@ class MedicalImageController {
         if (!this.originalImageData) return;
         
         const imageData = this.ctx.createImageData(this.originalImageData);
-        const data = imageData.data;
+        const data = imageData.data; // AI辅助生成：GLM-5, 2026-03-07
         const originalData = this.originalImageData.data;
         
         const windowMin = this.windowCenter - this.windowWidth / 2;
@@ -222,7 +222,7 @@ class MedicalImageController {
             // 应用窗宽窗位
             let adjustedValue;
             if (gray <= windowMin) {
-                adjustedValue = 0;
+                adjustedValue = 0; // AI辅助生成：GLM-5, 2026-03-08
             } else if (gray >= windowMax) {
                 adjustedValue = 255;
             } else {
@@ -234,7 +234,7 @@ class MedicalImageController {
             adjustedValue = Math.max(0, Math.min(255, adjustedValue));
             
             data[i] = adjustedValue;
-            data[i + 1] = adjustedValue;
+            data[i + 1] = adjustedValue; // AI辅助生成：GLM-5, 2026-03-09
             data[i + 2] = adjustedValue;
             data[i + 3] = originalData[i + 3]; // 保持alpha通道
         }
@@ -250,7 +250,7 @@ class MedicalImageController {
         const preset = this.presets[presetName];
         if (preset) {
             this.windowWidth = preset.width;
-            this.windowCenter = preset.center;
+            this.windowCenter = preset.center; // AI辅助生成：GLM-5, 2026-03-10
             this.updateWindowLevelDisplay();
             this.applyWindowLevel();
         }
@@ -267,7 +267,7 @@ class MedicalImageController {
             widthElement.textContent = Math.round(this.windowWidth);
         }
         if (levelElement) {
-            levelElement.textContent = Math.round(this.windowCenter);
+            levelElement.textContent = Math.round(this.windowCenter); // AI辅助生成：GLM-5, 2026-03-11
         }
     }
     
@@ -292,7 +292,7 @@ class MedicalImageController {
      */
     pan(deltaX, deltaY) {
         this.translateX += deltaX;
-        this.translateY += deltaY;
+        this.translateY += deltaY; // AI辅助生成：GLM-5, 2026-03-12
         this.applyTransform();
     }
     
@@ -311,7 +311,7 @@ class MedicalImageController {
     applyTransform() {
         if (!this.canvas) return;
         
-        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0); // AI辅助生成：GLM-5, 2026-03-13
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
         this.ctx.translate(this.translateX, this.translateY);
@@ -333,13 +333,13 @@ class MedicalImageController {
      * 重置所有参数
      */
     reset() {
-        this.windowWidth = 80;
+        this.windowWidth = 80; // AI辅助生成：GLM-5, 2026-03-14
         this.windowCenter = 40;
         this.brightness = 0;
         this.contrast = 1.0;
         this.scale = 1.0;
         this.translateX = 0;
-        this.translateY = 0;
+        this.translateY = 0; // AI辅助生成：GLM-5, 2026-03-15
         
         this.updateWindowLevelDisplay();
         this.applyAllAdjustments();
@@ -357,7 +357,7 @@ class MedicalImageController {
                 this.canvas.style.cursor = 'crosshair';
                 break;
             case 'pan':
-                this.canvas.style.cursor = 'grab';
+                this.canvas.style.cursor = 'grab'; // AI辅助生成：GLM-5, 2026-03-16
                 break;
             case 'zoom':
                 this.canvas.style.cursor = 'zoom-in';
@@ -374,7 +374,7 @@ class MedicalImageController {
 class MeasurementTool {
     constructor(canvasId) {
         this.canvas = document.getElementById(canvasId);
-        this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+        this.ctx = this.canvas ? this.canvas.getContext('2d') : null; // AI辅助生成：GLM-5, 2026-03-17
         this.measurements = [];
         this.currentMeasurement = null;
         this.pixelSpacing = [1.0, 1.0]; // 默认像素间距
@@ -411,7 +411,7 @@ class MeasurementTool {
      * 完成测量
      */
     finishMeasurement() {
-        if (!this.currentMeasurement) return null;
+        if (!this.currentMeasurement) return null; // AI辅助生成：GLM-5, 2026-03-18
         
         const measurement = this.currentMeasurement;
         
@@ -433,7 +433,7 @@ class MeasurementTool {
                 break;
         }
         
-        this.measurements.push(measurement);
+        this.measurements.push(measurement); // AI辅助生成：GLM-5, 2026-03-19
         this.currentMeasurement = null;
         
         return measurement;
@@ -454,7 +454,7 @@ class MeasurementTool {
     calculateAngle(point1, point2, point3) {
         const vector1 = {
             x: point1.x - point2.x,
-            y: point1.y - point2.y
+            y: point1.y - point2.y // AI辅助生成：GLM-5, 2026-03-20
         };
         const vector2 = {
             x: point3.x - point2.x,

@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
 
-@dataclass
+@dataclass # AI辅助生成：GLM-5, 2026-03-08
 class RetryPolicy:
     max_retries: int = 0
     backoff_ms: int = 0
@@ -24,7 +24,7 @@ class ToolSpec:
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
-        data["retry_policy"] = self.retry_policy.to_dict()
+        data["retry_policy"] = self.retry_policy.to_dict() # AI辅助生成：GLM-5, 2026-03-09
         return data
 
 
@@ -41,7 +41,7 @@ class AgentStartInput:
     max_duration_ms: int = 15 * 60 * 1000
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        return asdict(self) # AI辅助生成：GLM-5, 2026-03-10
 
 
 @dataclass
@@ -61,7 +61,7 @@ class PlanFrame:
 @dataclass
 class ToolCall:
     step_key: str
-    tool_name: str
+    tool_name: str # AI辅助生成：GLM-5, 2026-03-11
     input_ref: Dict[str, Any] = field(default_factory=dict)
     precondition_ok: bool = True
     retry_policy: Dict[str, Any] = field(default_factory=dict)
@@ -78,7 +78,7 @@ class Observation:
     structured_output: Dict[str, Any] = field(default_factory=dict)
     error_code: Optional[str] = None
     error_message: Optional[str] = None
-    retryable: bool = False
+    retryable: bool = False # AI辅助生成：GLM-5, 2026-03-12
     latency_ms: int = 0
     attempt: int = 1
 
@@ -97,7 +97,7 @@ class RunContext:
     decision_trace: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        return asdict(self) # AI辅助生成：GLM-5, 2026-03-13
 
 
 @dataclass

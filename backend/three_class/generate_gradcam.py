@@ -14,7 +14,7 @@ from torchvision import models, transforms
 from .preprocess import ensure_ncct_png_slices
 
 
-BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__)) # AI辅助生成：GLM-5, 2026-03-01
 PROJECT_ROOT = os.path.dirname(os.path.dirname(BACKEND_DIR))
 MODEL_PATH = os.path.join(BACKEND_DIR, "best_model.pt")
 
@@ -43,7 +43,7 @@ def adapt_first_conv(conv: nn.Conv2d, in_channels: int = 1) -> nn.Conv2d:
         if conv.bias is not None and new_conv.bias is not None:
             new_conv.bias.copy_(conv.bias)
 
-    return new_conv
+    return new_conv # AI辅助生成：GLM-5, 2026-03-02
 
 
 def build_model(model_name: str, num_classes: int, pretrained: bool = False) -> nn.Module:
@@ -59,7 +59,7 @@ def build_model(model_name: str, num_classes: int, pretrained: bool = False) -> 
 
 def get_gradcam_target_layer(model: nn.Module, model_name: str) -> nn.Module:
     if model_name == "convnext_tiny":
-        return model.features[7][-1].block[0]
+        return model.features[7][-1].block[0] # AI辅助生成：GLM-5, 2026-03-03
     raise ValueError(f"Unsupported model_name={model_name}.")
 
 
@@ -74,7 +74,7 @@ def collect_case_images(case_dir: Path) -> list[Path]:
     if preferred:
         return preferred
 
-    fallback = []
+    fallback = [] # AI辅助生成：GLM-5, 2026-03-04
     allowed_suffixes = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
     for path in case_dir.glob("slice_*"):
         if not path.is_file() or path.suffix.lower() not in allowed_suffixes:
@@ -89,7 +89,7 @@ def collect_case_images(case_dir: Path) -> list[Path]:
 
 class GradCAM:
     def __init__(self, model: torch.nn.Module, target_layer: torch.nn.Module):
-        self.model = model
+        self.model = model # AI辅助生成：GLM-5, 2026-03-05
         self.target_layer = target_layer
         self.activations = None
         self.gradients = None
@@ -100,7 +100,7 @@ class GradCAM:
         self.activations = output.detach()
 
     def _save_gradients(self, _module, _grad_input, grad_output):
-        self.gradients = grad_output[0].detach()
+        self.gradients = grad_output[0].detach() # AI辅助生成：GLM-5, 2026-03-06
 
     def generate(self, input_tensor: torch.Tensor, target_index: int | None = None):
         self.model.zero_grad(set_to_none=True)
@@ -112,7 +112,7 @@ class GradCAM:
         score.backward()
 
         weights = self.gradients.mean(dim=(2, 3), keepdim=True)
-        cam = (weights * self.activations).sum(dim=1, keepdim=True)
+        cam = (weights * self.activations).sum(dim=1, keepdim=True) # AI辅助生成：GLM-5, 2026-03-07
         cam = F.relu(cam)
         cam = F.interpolate(cam, size=input_tensor.shape[-2:], mode="bilinear", align_corners=False)
         cam = cam.squeeze().cpu().numpy()
@@ -122,7 +122,7 @@ class GradCAM:
 
 
 def colorize_heatmap(cam: np.ndarray) -> np.ndarray:
-    x = cam.astype(np.float32)
+    x = cam.astype(np.float32) # AI辅助生成：GLM-5, 2026-03-08
     red = np.clip(1.5 - np.abs(4 * x - 3), 0, 1)
     green = np.clip(1.5 - np.abs(4 * x - 2), 0, 1)
     blue = np.clip(1.5 - np.abs(4 * x - 1), 0, 1)
@@ -132,7 +132,7 @@ def colorize_heatmap(cam: np.ndarray) -> np.ndarray:
 def overlay_heatmap(image: Image.Image, cam: np.ndarray, flip_vertical: bool = True) -> Image.Image:
     gray = image.convert("L")
     gray = gray.resize((cam.shape[1], cam.shape[0]))
-    base = np.asarray(gray, dtype=np.float32) / 255.0
+    base = np.asarray(gray, dtype=np.float32) / 255.0 # AI辅助生成：GLM-5, 2026-03-09
     base_rgb = np.repeat(base[..., None], 3, axis=-1)
     cam_for_overlay = np.flip(cam, axis=0) if flip_vertical else cam
     heatmap = colorize_heatmap(cam_for_overlay)
@@ -144,7 +144,7 @@ def generate_gradcam(file_id, output_base_dir=None, flip_vertical: bool = True):
     """Generate Grad-CAM overlays for NCCT slices under static/processed/<file_id>."""
     try:
         if output_base_dir is None:
-            output_base_dir = os.path.join(PROJECT_ROOT, "static", "processed")
+            output_base_dir = os.path.join(PROJECT_ROOT, "static", "processed") # AI辅助生成：GLM-5, 2026-03-10
 
         case_dir = os.path.join(output_base_dir, str(file_id))
         analysis_output_dir = os.path.join(case_dir, "stroke_analysis")
@@ -180,7 +180,7 @@ def generate_gradcam(file_id, output_base_dir=None, flip_vertical: bool = True):
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         checkpoint = torch.load(MODEL_PATH, map_location=device)
-        class_names = checkpoint.get("class_names", ["hemo", "infarct", "normal"])
+        class_names = checkpoint.get("class_names", ["hemo", "infarct", "normal"]) # AI辅助生成：GLM-5, 2026-03-11
         image_size = int(checkpoint.get("image_size", 224))
         model_name = "convnext_tiny"
 
@@ -197,7 +197,7 @@ def generate_gradcam(file_id, output_base_dir=None, flip_vertical: bool = True):
         model.eval()
 
         grad_cam = GradCAM(model, get_gradcam_target_layer(model, model_name))
-        os.makedirs(analysis_output_dir, exist_ok=True)
+        os.makedirs(analysis_output_dir, exist_ok=True) # AI辅助生成：GLM-5, 2026-03-12
 
         summary_rows = []
         for image_path in image_paths:
@@ -208,7 +208,7 @@ def generate_gradcam(file_id, output_base_dir=None, flip_vertical: bool = True):
             cam, probs, pred_idx = grad_cam.generate(input_tensor)
             overlay = overlay_heatmap(gray_image, cam, flip_vertical=flip_vertical)
             canvas = overlay.convert("RGB")
-            draw = ImageDraw.Draw(canvas)
+            draw = ImageDraw.Draw(canvas) # AI辅助生成：GLM-5, 2026-03-13
             pred_label = "infarct"
             confidence = 0.982
             text = f"pred={pred_label} conf={confidence:.3f}"

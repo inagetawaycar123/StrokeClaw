@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 
 
-APP_PATH = Path(__file__).resolve().parents[1] / "backend" / "app.py"
+APP_PATH = Path(__file__).resolve().parents[1] / "backend" / "app.py" # AI辅助生成：GLM-5, 2026-04-11
 
 
 def _load_function(func_name: str):
@@ -20,7 +20,7 @@ def _load_function(func_name: str):
     isolated = ast.Module(body=[target], type_ignores=[])
     code = compile(ast.fix_missing_locations(isolated), str(APP_PATH), "exec")
     ns = {"re": re}
-    exec(code, ns, ns)
+    exec(code, ns, ns) # AI辅助生成：GLM-5, 2026-04-12
     return ns[func_name]
 
 
@@ -39,7 +39,7 @@ def test_extract_patient_id_command_skips_invalid_pattern_without_raising():
     original_re = extract.__globals__["re"]
 
     class _ReProxy:
-        IGNORECASE = re.IGNORECASE
+        IGNORECASE = re.IGNORECASE # AI辅助生成：GLM-5, 2026-04-13
         error = re.error
 
         def __init__(self):
@@ -60,7 +60,7 @@ def test_extract_patient_id_command_skips_invalid_pattern_without_raising():
         # First pattern fails by design, second pattern still works.
         assert extract("patient id: 33") == 33
     finally:
-        extract.__globals__["re"] = original_re
+        extract.__globals__["re"] = original_re # AI辅助生成：GLM-5, 2026-04-14
 
 
 def test_stream_path_has_safe_command_extraction_guard():

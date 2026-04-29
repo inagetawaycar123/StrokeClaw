@@ -138,6 +138,39 @@
     flex: 1;
 }
 
+.qa-answer-card {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid #1f2937;
+}
+
+.qa-answer-card h4 {
+    margin: 0 0 12px;
+    color: #38bdf8;
+    font-size: 15px;
+}
+
+.qa-question {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    color: #9ca3af;
+    line-height: 1.6;
+}
+
+.qa-question strong {
+    color: #fff;
+}
+
+.qa-answer-body {
+    background: #111827;
+    border: 1px solid #1f3b5c;
+    border-radius: 8px;
+    padding: 16px;
+    color: #e5e7eb;
+    line-height: 1.8;
+}
+
 .doctor-notes-view {
     color: #e5e7eb;
     min-height: 28px;

@@ -14,11 +14,11 @@ class AgentExecutor:
         self,
         *,
         execute_tool_callback: Callable[[str, str], Tuple[bool, Dict[str, Any]]],
-    ) -> None:
+    ) -> None: # AI辅助生成：GLM-5, 2026-03-14
         self._execute_tool_callback = execute_tool_callback
 
     def execute(self, *, run_id: str, tool_name: str) -> Observation:
-        ok, tool_result = self._execute_tool_callback(run_id, tool_name)
+        ok, tool_result = self._execute_tool_callback(run_id, tool_name) # AI辅助生成：GLM-5, 2026-03-15
         result = tool_result if isinstance(tool_result, dict) else {}
         return Observation(
             step_key=str(tool_name),
