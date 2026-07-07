@@ -24,12 +24,16 @@ from flask import (
 )
 try:
     from .ai_inference import get_ai_model
+    from .compat.adapters import build_clinical_decision_bundle
+    from .compat.skill_registry import get_skill_registry
     from .extensions import NumpyJSONEncoder
     from .summary_assembler import build_summary_artifacts
     from .vessel_context import VESSEL_OCCLUSION_CLASS_RESULT, vessel_occlusion_context
 except ImportError:
     # 兼容直接运行 backend/app.py 的场景
     from ai_inference import get_ai_model
+    from compat.adapters import build_clinical_decision_bundle
+    from compat.skill_registry import get_skill_registry
     from extensions import NumpyJSONEncoder
     from summary_assembler import build_summary_artifacts
     from vessel_context import VESSEL_OCCLUSION_CLASS_RESULT, vessel_occlusion_context
@@ -10955,6 +10959,98 @@ def api_cockpit_node_detail(run_id, node_key):
     )
 
 
+@app.route("/api/compat/skill-registry", methods=["GET"])
+def api_compat_skill_registry():
+    skills = get_skill_registry()
+    return jsonify({"success": True, "count": len(skills), "skills": skills})
+
+
+@app.route("/api/compat/clinical-decision-bundle", methods=["GET"])
+def api_compat_clinical_decision_bundle():
+    patient_id_raw = request.args.get("patient_id")
+    file_id = str(request.args.get("file_id") or request.args.get("case_id") or "").strip()
+    run_id = str(request.args.get("run_id") or "").strip()
+    patient_id = None
+    if patient_id_raw not in (None, ""):
+        try:
+            patient_id = int(patient_id_raw)
+        except Exception:
+            return jsonify({"success": False, "error": "Invalid patient_id"}), 400
+
+    if not any([patient_id is not None, file_id, run_id]):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "At least one of patient_id, file_id/case_id, or run_id is required",
+                }
+            ),
+            400,
+        )
+
+    run, events, resolved_run_id, source_tag = _resolve_cockpit_run_and_events(
+        run_id=run_id,
+        file_id=file_id,
+        patient_id=patient_id,
+    )
+    if isinstance(run, dict):
+        patient_id = patient_id if patient_id is not None else run.get("patient_id")
+        file_id = file_id or str(run.get("file_id") or (run.get("planner_input") or {}).get("file_id") or "").strip()
+
+    patient = None
+    if patient_id not in (None, ""):
+        try:
+            patient = get_patient_by_id(int(patient_id))
+        except Exception:
+            patient = None
+
+    imaging = None
+    if file_id:
+        try:
+            imaging = get_imaging_by_case(int(patient_id) if patient_id not in (None, "") else None, file_id)
+        except Exception:
+            imaging = None
+
+    report_payload = None
+    if file_id or patient_id not in (None, ""):
+        try:
+            report_payload, _meta, loaded_imaging, resolved_file_id = _load_cockpit_case_report_payload(
+                file_id=file_id,
+                patient_id=patient_id,
+            )
+            if not imaging and isinstance(loaded_imaging, dict):
+                imaging = loaded_imaging
+            if resolved_file_id:
+                file_id = resolved_file_id
+        except Exception:
+            report_payload = None
+
+    dag = _build_cockpit_dag(run, events) if isinstance(run, dict) else {"nodes": [], "edges": [], "node_count": 0, "edge_count": 0}
+    validation = (
+        _build_cockpit_validation_snapshot(run=run, file_id=file_id, patient_id=patient_id)
+        if isinstance(run, dict)
+        else {}
+    )
+    bundle = build_clinical_decision_bundle(
+        patient=patient,
+        imaging=imaging,
+        run=run,
+        events=events,
+        dag=dag,
+        validation=validation,
+        report_payload=report_payload,
+        source_tag=source_tag,
+    )
+    return jsonify(
+        {
+            "success": True,
+            "source_tag": source_tag,
+            "run_id": resolved_run_id,
+            "bundle": bundle,
+        }
+    )
+
+
 @app.route("/api/agent/runs/<run_id>/retry", methods=["POST"])
 def api_retry_agent_run(run_id):
     run = _get_agent_run(run_id)
@@ -11620,9 +11716,6 @@ def api_save_and_generate_report():
         )
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
-
-
 
 
 
