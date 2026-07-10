@@ -262,6 +262,21 @@ function initializeViewer(data) {
         
         // 妫€鏌ユ暟鎹簱涓殑鍒嗘瀽鐘舵€侊紙鐢ㄤ簬鑷姩鍒嗘瀽锛?
         checkAnalysisStatus();
+
+        // 从 Agent Run 提取血管闭塞三分类真实模型结果
+        hydrateVesselOcclusionFromRun(currentRunId).then(hydrated => {
+            if (hydrated) {
+                console.log('[Vessel] Model result loaded:', currentVesselOcclusionResult);
+                if (analysisResults) {
+                    const el = document.getElementById('value-vessel-occlusion-class');
+                    if (el) el.textContent = currentVesselOcclusionResult.label || VESSEL_OCCLUSION_CLASS_RESULT;
+                    const confEl = document.getElementById('value-vessel-occlusion-confidence');
+                    if (confEl && currentVesselOcclusionResult.confidence != null) {
+                        confEl.textContent = (currentVesselOcclusionResult.confidence * 100).toFixed(1) + '%';
+                    }
+                }
+            }
+        });
     }
 
     // 妫€娴婥TP鐏屾敞鍥炬暟鎹槸鍚﹀瓨鍦?
@@ -928,6 +943,12 @@ function toggleCellPseudocolor(modelKey) {
 function toggleAnalysisPanel() { document.getElementById('analysisPanel').classList.toggle('open'); }
 
 const VESSEL_OCCLUSION_CLASS_RESULT = '大血管闭塞';
+// 血管闭塞三分类真实模型结果（从 Agent Run 中提取）
+let currentVesselOcclusionResult = {
+    label: VESSEL_OCCLUSION_CLASS_RESULT,
+    confidence: null,
+    source: 'hardcoded'  // 'hardcoded' | 'model'
+};
 
 function formatNcctConfidence(value) {
     const n = Number(value); // AI辅助生成：GLM-5, 2026-04-18
@@ -1000,7 +1021,23 @@ function displayAnalysisResults() {
         ncctClassEl.textContent = ncctThreeClass.label;
     }
     if (vesselOcclusionClassEl) {
-        vesselOcclusionClassEl.textContent = VESSEL_OCCLUSION_CLASS_RESULT; // AI辅助生成：GLM-5, 2026-04-22
+        const vesselLabel = currentVesselOcclusionResult.label || VESSEL_OCCLUSION_CLASS_RESULT;
+        vesselOcclusionClassEl.textContent = vesselLabel;
+        // 模型来源时加标记
+        if (currentVesselOcclusionResult.source === 'model') {
+            vesselOcclusionClassEl.style.color = '#4fc3f7';
+        }
+    }
+    const vesselConfEl = document.getElementById('value-vessel-occlusion-confidence');
+    if (vesselConfEl) {
+        const conf = currentVesselOcclusionResult.confidence;
+        if (conf != null && currentVesselOcclusionResult.source === 'model') {
+            vesselConfEl.textContent = (conf * 100).toFixed(1) + '%';
+            vesselConfEl.style.color = conf >= 0.7 ? '#51cf66' : conf >= 0.5 ? '#ffd43b' : '#ff6b6b';
+        } else {
+            vesselConfEl.textContent = '--';
+            vesselConfEl.style.color = '';
+        }
     }
     if (ncctConfidenceEl) {
         ncctConfidenceEl.textContent = ncctThreeClass.confidence;
@@ -1037,7 +1074,9 @@ function displayAnalysisResults() {
     };
     const lesionHemisphere = hemisphereMap[currentHemisphere] || 'both';
     
-    sessionStorage.setItem('analysis_data', JSON.stringify({
+    const vesselOcclusionLabel = currentVesselOcclusionResult.label || VESSEL_OCCLUSION_CLASS_RESULT;
+    const vesselOcclusionConf = currentVesselOcclusionResult.confidence;
+    const analysisStorageData = {
         file_id: currentFileId,
         core_infarct_volume: analysisResults.report?.summary?.core_volume_ml || 0,
         penumbra_volume: analysisResults.report?.summary?.penumbra_volume_ml || 0,
@@ -1046,18 +1085,12 @@ function displayAnalysisResults() {
         hemisphere: lesionHemisphere,
         three_class_label_cn: ncctThreeClass.label,
         three_class_confidence: ncctThreeClass.confidence,
-        vessel_occlusion_class_result: VESSEL_OCCLUSION_CLASS_RESULT
-    }));
-    localStorage.setItem('analysis_data', JSON.stringify({
-        file_id: currentFileId,
-        core_infarct_volume: analysisResults.report?.summary?.core_volume_ml || 0,
-        penumbra_volume: analysisResults.report?.summary?.penumbra_volume_ml || 0,
-        mismatch_ratio: analysisResults.report?.summary?.mismatch_ratio || 0,
-        has_mismatch: analysisResults.report?.summary?.has_mismatch || false,
-        hemisphere: lesionHemisphere,
-        three_class_label_cn: ncctThreeClass.label,
-        three_class_confidence: ncctThreeClass.confidence,
-        vessel_occlusion_class_result: VESSEL_OCCLUSION_CLASS_RESULT
+        vessel_occlusion_class_result: vesselOcclusionLabel,
+        vessel_occlusion_confidence: vesselOcclusionConf,
+        vessel_occlusion_source: currentVesselOcclusionResult.source
+    };
+    sessionStorage.setItem('analysis_data', JSON.stringify(analysisStorageData));
+    localStorage.setItem('analysis_data', JSON.stringify(analysisStorageData));
     })); // AI辅助生成：GLM-5, 2026-03-02
 
     // 淇濆瓨瀹屾暣鐨勫垎鏋愮粨鏋滃埌localStorage锛岀敤浜庨〉闈㈠埛鏂板悗鎭㈠
@@ -1205,6 +1238,62 @@ function extractRunReportResult(runState) {
     const result = ((runState || {}).result || {});
     const reportResult = result.report_result; // AI辅助生成：GLM-5, 2026-03-09
     return reportResult && typeof reportResult === 'object' ? reportResult : null;
+}
+
+function extractRunVesselOcclusionResult(runState) {
+    // 从 Agent Run 结果中提取血管闭塞三分类真实预测值
+    const run = runState || {};
+    const result = run.result || {};
+    // 优先从 result.vessel_occlusion_result 获取
+    const vesselResult = result.vessel_occlusion_result;
+    if (vesselResult && typeof vesselResult === 'object') {
+        const label = vesselResult.vessel_occlusion_class_result || vesselResult.predicted_label;
+        if (label) {
+            return {
+                label: label,
+                confidence: vesselResult.confidence != null ? Number(vesselResult.confidence) : null,
+                source: 'model',
+                predicted_class: vesselResult.predicted_class || null,
+                class_counts: vesselResult.class_counts || null
+            };
+        }
+    }
+    // 回退：从 tool_results 中寻找 vessel_occlusion
+    const toolResults = run.tool_results || [];
+    for (let i = toolResults.length - 1; i >= 0; i--) {
+        const tr = toolResults[i];
+        if (tr.tool_name === 'vessel_occlusion' && tr.status === 'completed') {
+            const output = tr.structured_output || {};
+            const label = output.vessel_occlusion_class_result || output.predicted_label;
+            if (label) {
+                return {
+                    label: label,
+                    confidence: output.confidence != null ? Number(output.confidence) : null,
+                    source: 'model',
+                    predicted_class: output.predicted_class || null,
+                    class_counts: output.class_counts || null
+                };
+            }
+        }
+    }
+    return null;
+}
+
+async function hydrateVesselOcclusionFromRun(runId) {
+    if (!runId) return false;
+    try {
+        const resp = await fetch('/api/agent/runs/' + encodeURIComponent(runId));
+        if (!resp.ok) return false;
+        const data = await resp.json();
+        if (!data || !data.success) return false;
+        const vesselResult = extractRunVesselOcclusionResult(data.run);
+        if (vesselResult) {
+            currentVesselOcclusionResult = vesselResult;
+            console.log('[Vessel] Hydrated from agent run:', vesselResult);
+            return true;
+        }
+    } catch (_e) { /* ignore */ }
+    return false;
 }
 
 function readReportGeneratingStartedAt(fileId = currentFileId) {

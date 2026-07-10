@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"e:\\\\pycharm项目\\\\StrokeClaw\\\\\")",
+      "Read(//e/pycharm项目/**)",
+      "Bash(git -C e:/pycharm项目/StrokeClaw log --oneline -30)"
+    ]
+  }
+}

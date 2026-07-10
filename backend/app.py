@@ -1,3 +1,4 @@
+import sys
 import torch
 import json
 import base64
@@ -37,6 +38,21 @@ except ImportError:
     from extensions import NumpyJSONEncoder
     from summary_assembler import build_summary_artifacts
     from vessel_context import VESSEL_OCCLUSION_CLASS_RESULT, vessel_occlusion_context
+
+# ==================== DINOv3 血管闭塞三分类 ====================
+_DINOV3_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dinov3")
+if _DINOV3_DIR not in sys.path:
+    sys.path.insert(0, _DINOV3_DIR)
+_DINOV3_AVAILABLE = False
+try:
+    from predict import predict_single_image as _dinov3_predict_single
+    _DINOV3_AVAILABLE = True
+    print("[DINOv3] 血管闭塞三分类模块加载成功")
+except ImportError as e:
+    print(f"[DINOv3] 血管闭塞三分类模块加载失败: {e}")
+except Exception as e:
+    print(f"[DINOv3] 血管闭塞三分类模块加载异常: {e}")
+
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -1687,12 +1703,33 @@ def _run_upload_processing_job(job_id, payload):
             )
             _update_step(job_id, "ctp_generate", "skipped", reason)
 
-        _update_step(
-            job_id,
-            "vessel_occlusion",
-            "completed",
-            "正常 0 | 中血管闭塞 0 | 大血管闭塞 1",
-        )
+        # 血管闭塞三分类 —— 调用 DINOv3 模型
+        _update_step(job_id, "vessel_occlusion", "running", "正在执行血管闭塞三分类")
+        try:
+            vessel_ok, vessel_result, vessel_err = _run_vessel_occlusion_on_file(
+                payload["file_id"]
+            )
+            if vessel_ok and vessel_result:
+                label = vessel_result.get("vessel_occlusion_class_result", VESSEL_OCCLUSION_CLASS_RESULT)
+                conf = vessel_result.get("confidence", 0)
+                counts = vessel_result.get("class_counts", {})
+                msg = (
+                    f"{label} (置信度 {conf:.2%}) | "
+                    f"LVO={counts.get('Class_1_LVO', 0)} "
+                    f"MeVO={counts.get('Class_2_MEVO', 0)} "
+                    f"Normal={counts.get('Class_0', 0)}"
+                )
+                _update_step(job_id, "vessel_occlusion", "completed", msg)
+            else:
+                err_text = vessel_err or "血管闭塞三分类失败"
+                _update_step(job_id, "vessel_occlusion", "failed", err_text)
+                warnings.append(err_text)
+                _add_job_warning(job_id, err_text)
+        except Exception as vessel_exc:
+            err_text = f"血管闭塞三分类异常: {vessel_exc}"
+            _update_step(job_id, "vessel_occlusion", "failed", err_text)
+            warnings.append(err_text)
+            _add_job_warning(job_id, err_text)
 
         if should_stroke:
             _update_step(job_id, "stroke_analysis", "running", "正在执行脑卒中自动分析")
@@ -1832,6 +1869,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
     "ncct_single_phase_cta": [
         "detect_modalities",
         "load_patient_context",
+        "vessel_occlusion",
         "icv",
         "ekv",
         "consensus_lite",
@@ -1840,6 +1878,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
     "ncct_mcta": [
         "detect_modalities",
         "load_patient_context",
+        "vessel_occlusion",
         "generate_ctp_maps",
         "run_stroke_analysis",
         "icv",
@@ -1850,6 +1889,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
     "ncct_mcta_ctp": [
         "detect_modalities",
         "load_patient_context",
+        "vessel_occlusion",
         "run_stroke_analysis",
         "icv",
         "ekv",
@@ -1877,6 +1917,7 @@ AGENT_TOOL_RETRY_LIMITS = {
 }
 
 AGENT_TOOL_STAGE_MAP = {
+    "vessel_occlusion": "tooling",
     "icv": "icv",
     "ekv": "ekv",
     "consensus_lite": "consensus",
@@ -1886,6 +1927,7 @@ AGENT_TOOL_STAGE_MAP = {
 AGENT_TOOL_LABELS = {
     "detect_modalities": "Case_Intake.parse()",
     "load_patient_context": "Image_QC.validate()",
+    "vessel_occlusion": "Vessel_Occlusion.classify()",
     "generate_ctp_maps": "MRDPM_Generate.run()",
     "run_stroke_analysis": "Stroke_Analysis.segment()",
     "icv": "Evidence_Check.icv()",
@@ -1897,6 +1939,7 @@ AGENT_TOOL_LABELS = {
 AGENT_TOOL_DESCRIPTIONS = {
     "detect_modalities": "识别病例模态组合并确定任务路径",
     "load_patient_context": "加载病例上下文并完成输入校验",
+    "vessel_occlusion": "DINOv3 血管闭塞三分类（正常/LVO/MeVO）",
     "generate_ctp_maps": "按需生成 CTP 灌注图谱",
     "run_stroke_analysis": "执行卒中定量分析并产出关键指标",
     "icv": "执行内在一致性校验",
@@ -1955,6 +1998,7 @@ DEMO_SCENARIOS = {
 W0_TOOL_TITLE_MAP = {
     "detect_modalities": "Case_Intake.parse()",
     "load_patient_context": "Image_QC.validate()",
+    "vessel_occlusion": "Vessel_Occlusion.classify()",
     "generate_ctp_maps": "MRDPM_Generate.run()",
     "run_stroke_analysis": "Stroke_Analysis.segment()",
     "icv": "Evidence_Check.icv()",
@@ -3829,6 +3873,135 @@ def _tool_generate_ctp_maps(run):
     )
 
 
+def _run_vessel_occlusion_on_file(file_id):
+    """对已处理的 file_id 执行血管闭塞三分类，返回 (success, result_dict_or_none, error_message_or_none)。
+
+    结果字典始终包含 vessel_occlusion_class_result 字段；调用方可直接用它覆盖硬编码默认值。
+    """
+    processed_dir = os.path.join(app.config["PROCESSED_FOLDER"], str(file_id))
+    if not os.path.isdir(processed_dir):
+        return False, None, f"Processed slice directory not found: {processed_dir}"
+
+    # 优先使用 MCTA（动脉期 CTA）切片
+    slice_patterns = ["*_mcta.png", "*_vcta.png", "*_dcta.png", "*.png"]
+    slice_images = []
+    for pat in slice_patterns:
+        candidates = sorted(glob.glob(os.path.join(processed_dir, pat)))
+        candidates = [
+            p for p in candidates
+            if "pseudocolor" not in os.path.basename(p).lower()
+            and "overlay" not in os.path.basename(p).lower()
+        ]
+        if candidates:
+            slice_images = candidates
+            break
+
+    if not slice_images:
+        return False, None, "No suitable slice images found for vessel occlusion classification"
+
+    if not _DINOV3_AVAILABLE:
+        return True, {
+            "vessel_occlusion_class_result": VESSEL_OCCLUSION_CLASS_RESULT,
+            "predicted_label": VESSEL_OCCLUSION_CLASS_RESULT,
+            "confidence": None,
+            "fallback": True,
+            "fallback_reason": "DINOv3 module not available",
+            "total_slices": len(slice_images),
+        }, None
+
+    dinov3_dir = os.path.join(PROJECT_ROOT, "dinov3")
+    model_path = os.path.join(dinov3_dir, "dinov3权重.pth")
+    dinov3_weights = os.path.join(dinov3_dir, "ckpt", "dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth")
+    repo_dir = os.path.join(dinov3_dir, "dinov3")
+
+    for name, path in [
+        ("训练权重", model_path),
+        ("预训练权重", dinov3_weights),
+        ("模型仓库", repo_dir),
+    ]:
+        if not os.path.exists(path):
+            return False, None, f"Model file missing: {name} ({path})"
+
+    predictions = []
+    class_counts = {"Class_0": 0, "Class_1_LVO": 0, "Class_2_MEVO": 0}
+    confidence_sum = 0.0
+
+    for image_path in slice_images:
+        try:
+            result = _dinov3_predict_single(
+                image_path=image_path,
+                model_path=model_path,
+                dinov3_weights=dinov3_weights,
+                repo_dir=repo_dir,
+                num_classes=3,
+                freeze_ratio=0.35,
+                dropout_rate=0.35,
+                head_type="mlp",
+                verbose=False,
+            )
+            predictions.append(result)
+            label = result.get("predicted_label", "")
+            if label in class_counts:
+                class_counts[label] += 1
+            confidence_sum += float(result.get("confidence", 0))
+        except Exception as exc:
+            print(f"[Vessel] Prediction failed for {os.path.basename(image_path)}: {exc}")
+
+    if not predictions:
+        return False, None, f"All {len(slice_images)} predictions failed"
+
+    dominant_class = max(class_counts.items(), key=lambda x: x[1])[0]
+    avg_confidence = confidence_sum / len(predictions)
+
+    label_cn_map = {
+        "Class_0": "无明显狭窄",
+        "Class_1_LVO": "大血管闭塞",
+        "Class_2_MEVO": "中血管闭塞",
+    }
+    predicted_label = label_cn_map.get(dominant_class, dominant_class)
+
+    print(
+        f"[Vessel] 血管闭塞三分类: {predicted_label} "
+        f"(LVO={class_counts['Class_1_LVO']}, MeVO={class_counts['Class_2_MEVO']}, "
+        f"Normal={class_counts['Class_0']}, avg_conf={avg_confidence:.4f})"
+    )
+
+    return True, {
+        "vessel_occlusion_class_result": predicted_label,
+        "predicted_label": predicted_label,
+        "predicted_class": dominant_class,
+        "confidence": avg_confidence,
+        "class_counts": class_counts,
+        "total_slices": len(slice_images),
+        "valid_predictions": len(predictions),
+    }, None
+
+
+def _tool_vessel_occlusion(run):
+    """血管闭塞三分类 —— 使用 DINOv3 ViT-B/16 模型对 MCTA 切片做 Normal/LVO/MeVO 三分类。"""
+    planner_input = run.get("planner_input") or {}
+    file_id = planner_input.get("file_id")
+    if not file_id:
+        return (
+            False,
+            None,
+            _tool_error_contract("TOOL_INPUT_INVALID", "Missing file_id for vessel occlusion"),
+        )
+
+    ok, result, err_msg = _run_vessel_occlusion_on_file(file_id)
+    if not ok:
+        return (
+            False,
+            None,
+            _tool_error_contract(
+                "TOOL_EXECUTION_FAILED" if result is None else "TOOL_DEPENDENCY_MISSING",
+                err_msg or "Vessel occlusion failed",
+            ),
+        )
+
+    return (True, result, None)
+
+
 def _tool_run_stroke_analysis(run):
     planner_input = run.get("planner_input") or {}
     file_id = planner_input.get("file_id")
@@ -4408,6 +4581,14 @@ def _tool_generate_medgemma_report(run):
                     val = analysis_output.get(key)
                     if val is not None:
                         patient_ctx[key] = val
+            # 从 vessel_occlusion 获取血管闭塞三分类结果（优先级高于硬编码）
+            if r.get("tool_name") == "vessel_occlusion" and r.get("status") == "completed":
+                vessel_output = r.get("structured_output") or {}
+                vessel_label = vessel_output.get("vessel_occlusion_class_result")
+                if vessel_label:
+                    patient_ctx["vessel_occlusion_class_result"] = vessel_label
+                    patient_ctx["vessel_occlusion_confidence"] = vessel_output.get("confidence")
+                    patient_ctx["vessel_occlusion_class"] = vessel_output.get("predicted_class")
         patient_ctx.setdefault(
             "vessel_occlusion_class_result",
             VESSEL_OCCLUSION_CLASS_RESULT,
@@ -4490,6 +4671,9 @@ def _execute_agent_tool(run_id, tool_name):
             agent_name = "Triage Planner Agent"
         elif tool_name == "generate_ctp_maps":
             ok, output, err = _tool_generate_ctp_maps(run) # AI辅助生成：GLM-5, 2026-03-19
+            agent_name = "Clinical Tool Agent"
+        elif tool_name == "vessel_occlusion":
+            ok, output, err = _tool_vessel_occlusion(run)
             agent_name = "Clinical Tool Agent"
         elif tool_name == "run_stroke_analysis":
             ok, output, err = _tool_run_stroke_analysis(run)
@@ -4617,6 +4801,7 @@ def _build_context_from_completed_tools(run):
         "path_decision": ((run.get("planner_output") or {}).get("path_decision") or {}),
         "patient_context": None,
         "analysis_result": None,
+        "vessel_occlusion_result": None,
         "icv_result": None,
         "ekv_result": None,
         "consensus_result": None,
@@ -4631,6 +4816,8 @@ def _build_context_from_completed_tools(run):
             context["patient_context"] = output
         elif tool_name == "run_stroke_analysis":
             context["analysis_result"] = output
+        elif tool_name == "vessel_occlusion":
+            context["vessel_occlusion_result"] = output
         elif tool_name == "icv":
             context["icv_result"] = output
         elif tool_name == "ekv":
@@ -4748,7 +4935,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
         _update_agent_run(run_id, _set_stage_for_tool)
         ok, tool_result = _execute_agent_tool(run_id, tool_name)
         if not ok:
-            if tool_name in {"icv", "ekv", "consensus_lite"}:
+            if tool_name in {"icv", "ekv", "consensus_lite", "vessel_occlusion"}:
                 # Keep verification tools non-blocking.
                 _agent_log(
                     run_id=run_id,
@@ -4795,6 +4982,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
         "tool_results": run.get("tool_results", []),
         "patient_context": context.get("patient_context"),
         "analysis_result": context.get("analysis_result"),
+        "vessel_occlusion_result": context.get("vessel_occlusion_result"),
         "icv": context.get("icv_result"),
         "ekv": context.get("ekv_result"),
         "consensus": context.get("consensus_result"),
@@ -11661,7 +11849,7 @@ def api_save_and_generate_report():
 
         # 2. Load structured data
         structured_data = get_patient_by_id(patient_id) or {}
-        structured_data["vessel_occlusion_class_result"] = VESSEL_OCCLUSION_CLASS_RESULT
+        structured_data.setdefault("vessel_occlusion_class_result", VESSEL_OCCLUSION_CLASS_RESULT)
         imaging_data = get_imaging_by_case(patient_id, file_id)
         if not imaging_data:
             return jsonify(

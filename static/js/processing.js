@@ -11,16 +11,16 @@ const UPLOAD_NODES = [
     { key: "ai_report", title: "Report_Generate.compose()", subtitle: "结构化报告草拟", chip: "Report", delegated: "generate_medgemma_report" },
 ];
 
-const VESSEL_OCCLUSION_RESULT_TEXT = "正常 0 | 中血管闭塞 0 | 大血管闭塞 1";
+const VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT = "等待模型预测...";
 const VESSEL_OCCLUSION_INPUT = Object.freeze({
     run_id: "",
     tool_name: "vessel_occlusion",
     classes: "正常 / 中血管闭塞 / 大血管闭塞",
 });
-const VESSEL_OCCLUSION_RESULT = Object.freeze({
-    value: VESSEL_OCCLUSION_RESULT_TEXT,
-    label: "大血管闭塞",
-    counts: { normal: 0, mevo: 0, lvo: 1 },
+const VESSEL_OCCLUSION_RESULT_DEFAULT = Object.freeze({
+    value: VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT,
+    label: "等待分析",
+    counts: { normal: 0, mevo: 0, lvo: 0 },
 });
 
 const TOOL_META = Object.freeze({
@@ -572,7 +572,7 @@ function displayFallbackForNode(node, displayStatus) {
     }
     if (node.key === "vessel_occlusion") {
         return displayStatus === "completed"
-            ? VESSEL_OCCLUSION_RESULT_TEXT
+            ? VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT
             : "正在执行血管堵塞三分类评估";
     }
     if (node.key === "three_class") {
@@ -588,7 +588,7 @@ function displayFallbackForNode(node, displayStatus) {
     }
     if (node.key === "vessel_occlusion") {
         return displayStatus === "completed"
-            ? VESSEL_OCCLUSION_RESULT_TEXT
+            ? VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT
             : "正在执行血管堵塞三分类评估";
     }
     return node.fallback;
@@ -785,7 +785,7 @@ function buildNodes() {
             : t((runStep && runStep.message) || (jobStep && jobStep.message), fallbackDefault);
         if (cfg.key === "vessel_occlusion") {
             fallback = status === "completed"
-                ? VESSEL_OCCLUSION_RESULT_TEXT
+                ? VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT
                 : t((jobStep && jobStep.message), status === "pending" ? "等待 CTP 生成完成后启动" : fallback);
         }
         const inputDefault = cfg.key === "archive_ready" ? { patient_id: state.patientId || "-", file_id: state.fileId || "-" } : cfg.key === "modality_detect" ? { available_modalities: modalities() } : cfg.key === "ai_report" ? { goal_question: t(state.latestRun?.planner_input?.goal_question || state.latestRun?.planner_input?.question) } : { run_id: state.runId, tool_name: cfg.delegated || cfg.key };
@@ -793,7 +793,7 @@ function buildNodes() {
             ? { ...VESSEL_OCCLUSION_INPUT, run_id: state.runId || "-" }
             : (h?.input ?? inputDefault); // AI辅助生成：GLM-5, 2026-03-18
         const detailResult = cfg.key === "vessel_occlusion"
-            ? VESSEL_OCCLUSION_RESULT
+            ? VESSEL_OCCLUSION_RESULT_DEFAULT
             : (h?.output ?? fallback);
         nodes.push({
             id: `upload_${cfg.key}`, key: cfg.key, title: cfg.title, subtitle: cfg.subtitle, chip: cfg.chip, status, rawStatus: status, group: "upload", order: idx + 1,

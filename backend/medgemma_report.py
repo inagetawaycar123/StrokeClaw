@@ -8,6 +8,11 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from .vessel_context import VESSEL_OCCLUSION_CLASS_RESULT
+except ImportError:
+    from vessel_context import VESSEL_OCCLUSION_CLASS_RESULT
+
 import torch
 from transformers import AutoModelForImageTextToText, AutoProcessor
 
@@ -1248,7 +1253,7 @@ def generate_report_with_medgemma(
             "risk_notice": list(_RISK_NOTICE),
             "vessel_occlusion_class_result": structured_data.get(
                 "vessel_occlusion_class_result",
-                "\u5927\u8840\u7ba1\u95ed\u585e",
+                VESSEL_OCCLUSION_CLASS_RESULT,
             ),
             "ncct_enhanced": stage2_sections.get("ncct_enhanced", []),
             "cta_enhanced": cta_enhanced_payload,

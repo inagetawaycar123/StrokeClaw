@@ -161,8 +161,8 @@ const CONTEXT_STEP_KEY = 'load_patient_context';
 const VESSEL_OCCLUSION_STEP_KEY = 'run_vessel_occlusion_classification'; // AI辅助生成：GLM-5, 2026-03-03
 const STROKE_ANALYSIS_STEP_KEY = 'run_stroke_analysis';
 const CTP_SKIP_MESSAGE = '已提供CTP或本次无需生成，跳过类CTP生成';
-const VESSEL_OCCLUSION_RESULT = '大血管闭塞';
-const VESSEL_OCCLUSION_MESSAGE = `结果：${VESSEL_OCCLUSION_RESULT}`;
+const VESSEL_OCCLUSION_DEFAULT = '等待模型预测';
+const VESSEL_OCCLUSION_DEFAULT_MESSAGE = '结果：等待 DINOv3 模型预测...';
 
 function setText(id, value) {
     const el = document.getElementById(id);
@@ -575,7 +575,7 @@ function buildVesselOcclusionInputPayload() {
 function buildVesselOcclusionEngineeringPayload(evt = null) {
     return {
         tool_key: VESSEL_OCCLUSION_STEP_KEY,
-        label: VESSEL_OCCLUSION_RESULT,
+        label: VESSEL_OCCLUSION_DEFAULT,
         counts: {
             normal: 0,
             mevo: 0,
@@ -594,10 +594,10 @@ function buildSyntheticVesselOcclusionStep(toolHintMap) {
         status: normalizeStatus(evt?.status || 'completed'),
         retryable: evt?.retryable === true,
         attempts: Number(evt?.attempt || 0),
-        message: evt?.message || evt?.result_summary || VESSEL_OCCLUSION_MESSAGE,
+        message: evt?.message || evt?.result_summary || VESSEL_OCCLUSION_DEFAULT_MESSAGE,
         phase: evt?.stage || evt?.phase || 'tooling',
-        result_summary: VESSEL_OCCLUSION_MESSAGE,
-        result_label: VESSEL_OCCLUSION_RESULT,
+        result_summary: VESSEL_OCCLUSION_DEFAULT_MESSAGE,
+        result_label: VESSEL_OCCLUSION_DEFAULT,
         input_payload: buildVesselOcclusionInputPayload(),
         engineering_payload: buildVesselOcclusionEngineeringPayload(evt),
     };
@@ -1012,15 +1012,15 @@ function buildGraphModel(run, events, resultResp = null) {
             retryable: step.retryable === true || evt?.retryable === true,
             error_code: evt?.error_code || '-',
             event_seq: Number(evt?.event_seq || 0) || null,
-            clinical_summary: isVesselOcclusion ? VESSEL_OCCLUSION_MESSAGE : (evt?.clinical_impact || evt?.result_summary || nodeMessage),
-            output_summary: isVesselOcclusion ? VESSEL_OCCLUSION_MESSAGE : (evt?.result_summary || evt?.message || safeJson(evt?.output_ref || nodeMessage)),
+            clinical_summary: isVesselOcclusion ? VESSEL_OCCLUSION_DEFAULT_MESSAGE : (evt?.clinical_impact || evt?.result_summary || nodeMessage),
+            output_summary: isVesselOcclusion ? VESSEL_OCCLUSION_DEFAULT_MESSAGE : (evt?.result_summary || evt?.message || safeJson(evt?.output_ref || nodeMessage)),
             input_payload: isVesselOcclusion ? (step.input_payload || buildVesselOcclusionInputPayload()) : (evt?.input_ref || {}),
             engineering_payload: isVesselOcclusion ? (step.engineering_payload || buildVesselOcclusionEngineeringPayload(evt)) : (evt || {}),
             evidence_refs: collectEvidenceRefs(evt),
             ncct_result_summary: stepKey === NCCT_STEP_KEY ? extractNcctThreeClassSummary(run, resultResp) : '',
             ncct_result_confidence: stepKey === NCCT_STEP_KEY ? extractNcctThreeClassConfidence(run, resultResp) : '',
             ncct_result_detail: stepKey === NCCT_STEP_KEY ? buildNcctThreeClassDetail(run, resultResp) : '',
-            vessel_occlusion_result_detail: isVesselOcclusion ? VESSEL_OCCLUSION_MESSAGE : '',
+            vessel_occlusion_result_detail: isVesselOcclusion ? VESSEL_OCCLUSION_DEFAULT_MESSAGE : '',
             parents: [],
             children: [],
             secondary_deps: 0,
@@ -1449,7 +1449,7 @@ function renderNodeDrawer(nodeKey) {
     setText('drawerPrimarySummaryTitle', isVesselOcclusionNode ? '血管闭塞三分类结果' : 'NCCT 三分类结果');
     setText('drawerNcctSummary', isNcctNode
         ? (node.ncct_result_detail || node.ncct_result_summary || node.output_summary || '-')
-        : (isVesselOcclusionNode ? (node.vessel_occlusion_result_detail || VESSEL_OCCLUSION_MESSAGE) : '-'));
+        : (isVesselOcclusionNode ? (node.vessel_occlusion_result_detail || VESSEL_OCCLUSION_DEFAULT_MESSAGE) : '-'));
 
     setText('drawerClinicalSummary', node.clinical_summary || '-');
     setText('drawerNodeOutput', node.output_summary || '-');

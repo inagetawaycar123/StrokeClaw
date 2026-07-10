@@ -81,7 +81,11 @@ const ImageFindingsModule = ({ data, findings, isEditing, onUpdate }) => {
     }
 
     const ncctResultText = singleLabel || threeClassDisplay || countsText || '脑缺血';
-    const vesselOcclusionResultText = data.vessel_occlusion_class_result || '大血管闭塞';
+    const vesselOcclusionResultText = data.vessel_occlusion_class_result || VESSEL_OCCLUSION_CLASS_RESULT;
+    const vesselOcclusionConf = data.vessel_occlusion_confidence;
+    const vesselOcclusionConfText = (vesselOcclusionConf != null)
+        ? (' (' + (vesselOcclusionConf * 100).toFixed(0) + '%)')
+        : '';
     const questionAnswer = data.question_answer || {};
     const questionText = questionAnswer.question || data.goal_question || '';
     const directAnswer = questionAnswer.direct_answer || questionAnswer.answer || '';
@@ -137,7 +141,8 @@ const ImageFindingsModule = ({ data, findings, isEditing, onUpdate }) => {
                 ),
                 React.createElement("div", { className: "metric" },
                     React.createElement("span", null, "血管堵塞三分类结果："),
-                    React.createElement("strong", null, vesselOcclusionResultText)
+                    React.createElement("strong", null, vesselOcclusionResultText),
+                    vesselOcclusionConfText && React.createElement("span", { style: { fontSize: '0.85em', opacity: 0.7, marginLeft: '4px' } }, vesselOcclusionConfText)
                 ),
                 directAnswer && React.createElement("div", { className: "qa-answer-card" },
                     React.createElement("h4", null, "AI 分析回答"),
@@ -168,12 +173,13 @@ const DoctorNotesModule = ({ notes, isEditing, onUpdate }) => {
 
 const VESSEL_OCCLUSION_CLASS_RESULT = '大血管闭塞';
 
-function injectVesselOcclusionIntoMarkdown(markdown) {
+function injectVesselOcclusionIntoMarkdown(markdown, vesselLabel) {
     if (!markdown || /血管堵塞三分类/.test(markdown)) {
         return markdown || '';
     }
 
-    const line = `血管堵塞三分类：${VESSEL_OCCLUSION_CLASS_RESULT}`;
+    const label = vesselLabel || VESSEL_OCCLUSION_CLASS_RESULT;
+    const line = `血管堵塞三分类：${label}`;
     if (/^NCCT\s*三分类[：:]/m.test(markdown)) {
         return markdown.replace(/^(NCCT\s*三分类[：:].*)$/m, `$1\n${line}`);
     }
@@ -195,11 +201,11 @@ function injectVesselOcclusionIntoMarkdown(markdown) {
     return `${before}\n\n${line}${after}`;
 }
 
-function renderMarkdownToHtml(markdown) {
+function renderMarkdownToHtml(markdown, vesselLabel) {
     if (!markdown) {
         return '';
     }
-    let html = injectVesselOcclusionIntoMarkdown(markdown)
+    let html = injectVesselOcclusionIntoMarkdown(markdown, vesselLabel)
         .replace(/&/g, '&amp;') // AI辅助生成：GLM-5, 2026-03-14
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
@@ -408,7 +414,8 @@ const StructuredReport = ({ patientId, fileId, analysisData }) => {
         question_answer: (reportPayload && reportPayload.question_answer) || (analysisData && analysisData.question_answer) || null,
         goal_question: (reportPayload && (reportPayload.goal_question || reportPayload.question)) || (analysisData && analysisData.goal_question) || '',
         three_class_label_cn: (analysisData && analysisData.three_class_label_cn) || (reportPayload && reportPayload.three_class_label_cn) || '脑缺血',
-        vessel_occlusion_class_result: (analysisData && analysisData.vessel_occlusion_class_result) || (reportPayload && reportPayload.vessel_occlusion_class_result) || '大血管闭塞',
+        vessel_occlusion_class_result: (analysisData && analysisData.vessel_occlusion_class_result) || (reportPayload && reportPayload.vessel_occlusion_class_result) || VESSEL_OCCLUSION_CLASS_RESULT,
+        vessel_occlusion_confidence: (analysisData && analysisData.vessel_occlusion_confidence != null) ? analysisData.vessel_occlusion_confidence : ((reportPayload && reportPayload.vessel_occlusion_confidence != null) ? reportPayload.vessel_occlusion_confidence : null),
     };
     
     const handlePatientUpdate = (field, value) => {
@@ -524,7 +531,7 @@ const StructuredReport = ({ patientId, fileId, analysisData }) => {
                             marginTop: '20px',
                             border: '1px solid #333'
                         },
-                        dangerouslySetInnerHTML: { __html: renderMarkdownToHtml(aiReport) }
+                        dangerouslySetInnerHTML: { __html: renderMarkdownToHtml(aiReport, mergedAnalysisData.vessel_occlusion_class_result) }
                     })
                 )
             :
