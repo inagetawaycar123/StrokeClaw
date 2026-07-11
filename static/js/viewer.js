@@ -269,11 +269,28 @@ function initializeViewer(data) {
                 console.log('[Vessel] Model result loaded:', currentVesselOcclusionResult);
                 if (analysisResults) {
                     const el = document.getElementById('value-vessel-occlusion-class');
-                    if (el) el.textContent = currentVesselOcclusionResult.label || VESSEL_OCCLUSION_CLASS_RESULT;
+                    if (el) {
+                        el.textContent = currentVesselOcclusionResult.label || VESSEL_OCCLUSION_CLASS_RESULT;
+                        if (currentVesselOcclusionResult.source === 'model') {
+                            el.style.color = '#4fc3f7';
+                        }
+                    }
                     const confEl = document.getElementById('value-vessel-occlusion-confidence');
                     if (confEl && currentVesselOcclusionResult.confidence != null) {
-                        confEl.textContent = (currentVesselOcclusionResult.confidence * 100).toFixed(1) + '%';
+                        const confVal = (currentVesselOcclusionResult.confidence * 100).toFixed(1) + '%';
+                        confEl.textContent = confVal;
+                        const c = currentVesselOcclusionResult.confidence;
+                        confEl.style.color = c >= 0.7 ? '#51cf66' : c >= 0.5 ? '#ffd43b' : '#ff6b6b';
                     }
+                    // 刷新 localStorage，确保报告页读取到真实数据
+                    try {
+                        const stored = JSON.parse(localStorage.getItem('analysis_data') || '{}');
+                        stored.vessel_occlusion_class_result = currentVesselOcclusionResult.label;
+                        stored.vessel_occlusion_confidence = currentVesselOcclusionResult.confidence;
+                        stored.vessel_occlusion_source = currentVesselOcclusionResult.source;
+                        localStorage.setItem('analysis_data', JSON.stringify(stored));
+                        sessionStorage.setItem('analysis_data', JSON.stringify(stored));
+                    } catch (_e) { /* ignore */ }
                 }
             }
         });

@@ -573,14 +573,31 @@ function buildVesselOcclusionInputPayload() {
 }
 
 function buildVesselOcclusionEngineeringPayload(evt = null) {
+    // 尝试从事件的 output_ref 中提取真实模型结果
+    const outputRef = evt?.output_ref || evt?.structured_output || {};
+    const hasRealResult = outputRef && typeof outputRef === 'object'
+        && (outputRef.vessel_occlusion_class_result || outputRef.predicted_label);
+    if (hasRealResult) {
+        const counts = outputRef.class_counts || {};
+        const label = outputRef.vessel_occlusion_class_result || outputRef.predicted_label;
+        const conf = outputRef.confidence != null ? outputRef.confidence : null;
+        return {
+            tool_key: VESSEL_OCCLUSION_STEP_KEY,
+            label: label || VESSEL_OCCLUSION_DEFAULT,
+            confidence: conf,
+            counts: {
+                normal: counts.Class_0 || 0,
+                mevo: counts.Class_2_MEVO || 0,
+                lvo: counts.Class_1_LVO || 0,
+            },
+            source: 'model_output',
+            upstream_event: evt || null,
+        };
+    }
     return {
         tool_key: VESSEL_OCCLUSION_STEP_KEY,
         label: VESSEL_OCCLUSION_DEFAULT,
-        counts: {
-            normal: 0,
-            mevo: 0,
-            lvo: 1,
-        },
+        counts: { normal: 0, mevo: 0, lvo: 0 },
         source: 'fixed_display',
         upstream_event: evt || null,
     };
@@ -588,16 +605,25 @@ function buildVesselOcclusionEngineeringPayload(evt = null) {
 
 function buildSyntheticVesselOcclusionStep(toolHintMap) {
     const evt = resolveStepEvent(VESSEL_OCCLUSION_STEP_KEY, toolHintMap); // AI辅助生成：GLM-5, 2026-03-26
+    const outputRef = evt?.output_ref || {};
+    const hasRealResult = outputRef && typeof outputRef === 'object'
+        && (outputRef.vessel_occlusion_class_result || outputRef.predicted_label);
+    const label = hasRealResult ? (outputRef.vessel_occlusion_class_result || outputRef.predicted_label) : VESSEL_OCCLUSION_DEFAULT;
+    const conf = hasRealResult && outputRef.confidence != null
+        ? ' (' + (outputRef.confidence * 100).toFixed(1) + '%)' : '';
+    const message = hasRealResult
+        ? ('结果：' + label + conf)
+        : VESSEL_OCCLUSION_DEFAULT_MESSAGE;
     return {
         key: VESSEL_OCCLUSION_STEP_KEY,
         title: toolTitle(VESSEL_OCCLUSION_STEP_KEY),
         status: normalizeStatus(evt?.status || 'completed'),
         retryable: evt?.retryable === true,
         attempts: Number(evt?.attempt || 0),
-        message: evt?.message || evt?.result_summary || VESSEL_OCCLUSION_DEFAULT_MESSAGE,
+        message: evt?.message || evt?.result_summary || message,
         phase: evt?.stage || evt?.phase || 'tooling',
-        result_summary: VESSEL_OCCLUSION_DEFAULT_MESSAGE,
-        result_label: VESSEL_OCCLUSION_DEFAULT,
+        result_summary: message,
+        result_label: label,
         input_payload: buildVesselOcclusionInputPayload(),
         engineering_payload: buildVesselOcclusionEngineeringPayload(evt),
     };
@@ -1012,15 +1038,29 @@ function buildGraphModel(run, events, resultResp = null) {
             retryable: step.retryable === true || evt?.retryable === true,
             error_code: evt?.error_code || '-',
             event_seq: Number(evt?.event_seq || 0) || null,
-            clinical_summary: isVesselOcclusion ? VESSEL_OCCLUSION_DEFAULT_MESSAGE : (evt?.clinical_impact || evt?.result_summary || nodeMessage),
-            output_summary: isVesselOcclusion ? VESSEL_OCCLUSION_DEFAULT_MESSAGE : (evt?.result_summary || evt?.message || safeJson(evt?.output_ref || nodeMessage)),
+            clinical_summary: isVesselOcclusion
+                ? (evt?.output_ref?.vessel_occlusion_class_result
+                    ? ('血管堵塞三分类结果：' + evt.output_ref.vessel_occlusion_class_result
+                        + (evt.output_ref.confidence != null ? ' (' + (evt.output_ref.confidence * 100).toFixed(1) + '%)' : ''))
+                    : VESSEL_OCCLUSION_DEFAULT_MESSAGE)
+                : (evt?.clinical_impact || evt?.result_summary || nodeMessage),
+            output_summary: isVesselOcclusion
+                ? (evt?.output_ref?.vessel_occlusion_class_result
+                    ? safeJson(evt?.output_ref) || VESSEL_OCCLUSION_DEFAULT_MESSAGE
+                    : VESSEL_OCCLUSION_DEFAULT_MESSAGE)
+                : (evt?.result_summary || evt?.message || safeJson(evt?.output_ref || nodeMessage)),
             input_payload: isVesselOcclusion ? (step.input_payload || buildVesselOcclusionInputPayload()) : (evt?.input_ref || {}),
             engineering_payload: isVesselOcclusion ? (step.engineering_payload || buildVesselOcclusionEngineeringPayload(evt)) : (evt || {}),
             evidence_refs: collectEvidenceRefs(evt),
             ncct_result_summary: stepKey === NCCT_STEP_KEY ? extractNcctThreeClassSummary(run, resultResp) : '',
             ncct_result_confidence: stepKey === NCCT_STEP_KEY ? extractNcctThreeClassConfidence(run, resultResp) : '',
             ncct_result_detail: stepKey === NCCT_STEP_KEY ? buildNcctThreeClassDetail(run, resultResp) : '',
-            vessel_occlusion_result_detail: isVesselOcclusion ? VESSEL_OCCLUSION_DEFAULT_MESSAGE : '',
+            vessel_occlusion_result_detail: isVesselOcclusion
+                ? (evt?.output_ref?.vessel_occlusion_class_result
+                    ? ('结果：' + evt.output_ref.vessel_occlusion_class_result
+                        + (evt.output_ref.confidence != null ? ' (' + (evt.output_ref.confidence * 100).toFixed(1) + '%)' : ''))
+                    : VESSEL_OCCLUSION_DEFAULT_MESSAGE)
+                : '',
             parents: [],
             children: [],
             secondary_deps: 0,

@@ -785,7 +785,7 @@ function buildNodes() {
             : t((runStep && runStep.message) || (jobStep && jobStep.message), fallbackDefault);
         if (cfg.key === "vessel_occlusion") {
             fallback = status === "completed"
-                ? VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT
+                ? t((jobStep && jobStep.message), VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT)
                 : t((jobStep && jobStep.message), status === "pending" ? "等待 CTP 生成完成后启动" : fallback);
         }
         const inputDefault = cfg.key === "archive_ready" ? { patient_id: state.patientId || "-", file_id: state.fileId || "-" } : cfg.key === "modality_detect" ? { available_modalities: modalities() } : cfg.key === "ai_report" ? { goal_question: t(state.latestRun?.planner_input?.goal_question || state.latestRun?.planner_input?.question) } : { run_id: state.runId, tool_name: cfg.delegated || cfg.key };
@@ -793,7 +793,7 @@ function buildNodes() {
             ? { ...VESSEL_OCCLUSION_INPUT, run_id: state.runId || "-" }
             : (h?.input ?? inputDefault); // AI辅助生成：GLM-5, 2026-03-18
         const detailResult = cfg.key === "vessel_occlusion"
-            ? VESSEL_OCCLUSION_RESULT_DEFAULT
+            ? (status === "completed" ? fallback : VESSEL_OCCLUSION_RESULT_DEFAULT)
             : (h?.output ?? fallback);
         nodes.push({
             id: `upload_${cfg.key}`, key: cfg.key, title: cfg.title, subtitle: cfg.subtitle, chip: cfg.chip, status, rawStatus: status, group: "upload", order: idx + 1,

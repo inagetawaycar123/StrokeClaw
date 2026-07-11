@@ -45,6 +45,7 @@
             three_class_display: viewerData.three_class_display || '',
             three_class_counts: viewerData.three_class_counts || null,
             vessel_occlusion_class_result: viewerData.vessel_occlusion_class_result || '等待模型预测',
+            vessel_occlusion_confidence: viewerData.vessel_occlusion_confidence != null ? viewerData.vessel_occlusion_confidence : null,
         };
 
         const root = ReactDOM.createRoot(document.getElementById('report-root'));
