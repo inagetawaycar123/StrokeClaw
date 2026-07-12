@@ -5,29 +5,25 @@ const UPLOAD_NODES = [
     { key: "modality_detect", title: "Modality_Detect.route()", subtitle: "模态识别与路径判定", chip: "Modality", delegated: "" },
     { key: "three_class", title: "Three_Class.triage()", subtitle: "NCCT三分类与Grad-CAM", chip: "Three_Class", delegated: "" },
     { key: "ctp_generate", title: "CTP_Generate.run()", subtitle: "灌注图谱生成", chip: "CTP_Gen", delegated: "generate_ctp_maps" },
-    { key: "vessel_occlusion", title: "Vessel_Occlusion.classify()", subtitle: "血管闭塞三分类", chip: "Vessel_Occlusion", delegated: "" },
+    { key: "vessel_occlusion", title: "Vessel_Occlusion.classify()", subtitle: "血管闭塞三分类", chip: "Vessel_Occlusion", delegated: "vessel_occlusion" },
     { key: "stroke_analysis", title: "Stroke_Analysis.segment()", subtitle: "卒中病灶分析", chip: "Analysis", delegated: "run_stroke_analysis" },
     { key: "pseudocolor", title: "Pseudocolor_Render.compose()", subtitle: "伪彩可视化生成", chip: "Pseudocolor", delegated: "generate_pseudocolor" },
     { key: "ai_report", title: "Report_Generate.compose()", subtitle: "结构化报告草拟", chip: "Report", delegated: "generate_medgemma_report" },
 ];
 
-const VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT = "等待模型预测...";
 const VESSEL_OCCLUSION_INPUT = Object.freeze({
     run_id: "",
     tool_name: "vessel_occlusion",
     classes: "正常 / 中血管闭塞 / 大血管闭塞",
 });
-const VESSEL_OCCLUSION_RESULT_DEFAULT = Object.freeze({
-    value: VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT,
-    label: "等待分析",
-    counts: { normal: 0, mevo: 0, lvo: 0 },
-});
+const VESSEL_CLASS_KEYS = Object.freeze(["Class_0", "Class_1_LVO", "Class_2_MEVO"]);
 
 const TOOL_META = Object.freeze({
     triage_planner: ["Triage_Planner.plan()", "任务编排生成", "Plan"],
     detect_modalities: ["ClinicalNER.extract()", "结构化提取与复核", "NER_Extract"],
     load_patient_context: ["Patient_Context.load()", "患者上下文加载", "Context"],
     generate_ctp_maps: ["MRDPM_Generate.run()", "灌注图谱生成", "CTP_Gen"],
+    vessel_occlusion: ["Vessel_Occlusion.classify()", "血管闭塞三分类", "Vessel_Occlusion"],
     run_stroke_analysis: ["Stroke_Analysis.segment()", "卒中区域分析", "Analysis"],
     icv: ["Evidence_Check.icv()", "院内指标核验", "ICV"],
     ekv: ["Evidence_Check.ekv()", "指南证据核验", "EKV"],
@@ -63,6 +59,7 @@ const NODE_PRESENTATION_MS = Object.freeze({
     vessel_occlusion: 3000,
 });
 const PRESENTATION_PACED_NODE_KEYS = new Set(Object.keys(NODE_PRESENTATION_MS));
+const NON_BLOCKING_ISSUE_KEYS = new Set(["vessel_occlusion", "icv", "ekv", "consensus_lite"]);
 const REVIEW_FALLBACK_SECTIONS = [
     { section_id: "patient_context", title: "患者基本信息与时窗", lead: "确认人口学与时间窗信息是否可支持后续决策。", guide: "请核对年龄、性别、起病至入院时间及 NIHSS。", risk_level: "low" },
     { section_id: "imaging_summary", title: "影像摘要（NCCT/CTA）", lead: "确认影像核心发现是否准确可读。", guide: "请确认 NCCT 与 CTA 的关键发现是否完整。", risk_level: "medium" },
@@ -114,8 +111,104 @@ function normStatus(v) {
     if (["running", "processing", "in_progress"].includes(s)) return "running";
     if (["completed", "succeeded", "done", "skipped"].includes(s)) return "completed";
     if (["paused_review_required", "review_required", "await_review", "waiting"].includes(s)) return "waiting";
-    if (["failed", "cancelled", "error", "warn", "warning"].includes(s)) return "issue";
+    if (["issue", "failed", "cancelled", "error", "warn", "warning", "unavailable"].includes(s)) return "issue";
     return "pending"; // AI辅助生成：GLM-5, 2026-03-28
+}
+
+function objectValue(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+function normalizeVesselOcclusionResult(value) {
+    const wrapped = objectValue(value);
+    const source = objectValue(wrapped?.vessel_occlusion_result) || wrapped;
+    if (!source || ![
+        "vessel_occlusion_status", "vessel_occlusion_class_result", "predicted_label", "predicted_class",
+        "class_counts", "error_code", "failures", "valid_predictions",
+    ].some((key) => Object.prototype.hasOwnProperty.call(source, key))) return null;
+
+    const label = t(source.vessel_occlusion_class_result || source.predicted_label, "");
+    let status = token(source.status || source.vessel_occlusion_status);
+    const rawCounts = objectValue(source.class_counts) || objectValue(source.vessel_occlusion_class_counts) || {};
+    const validPredictionsValue = Number(source.valid_predictions);
+    const hasPredictionEvidence = VESSEL_CLASS_KEYS.includes(source.predicted_class)
+        || (Number.isFinite(validPredictionsValue) && validPredictionsValue > 0)
+        || VESSEL_CLASS_KEYS.some((key) => Number(rawCounts[key]) > 0);
+    if (!["completed", "failed", "unavailable"].includes(status)) {
+        status = label && hasPredictionEvidence ? "completed" : "unavailable";
+    }
+    if (status === "completed" && (!label || !hasPredictionEvidence)) status = "failed";
+
+    const confidenceValue = Number(source.confidence ?? source.vessel_occlusion_confidence);
+    const confidence = Number.isFinite(confidenceValue) && confidenceValue >= 0 && confidenceValue <= 1 ? confidenceValue : null;
+    const sourceCounts = rawCounts;
+    const classCounts = {};
+    VESSEL_CLASS_KEYS.forEach((key) => {
+        const count = Number(sourceCounts[key]);
+        classCounts[key] = Number.isFinite(count) && count >= 0 ? Math.trunc(count) : 0;
+    });
+    const totalSlices = Number(source.total_slices);
+    const validPredictions = validPredictionsValue;
+
+    return {
+        ...source,
+        status,
+        vessel_occlusion_class_result: status === "completed" ? (label || null) : null,
+        predicted_class: status === "completed" && VESSEL_CLASS_KEYS.includes(source.predicted_class) ? source.predicted_class : null,
+        confidence: status === "completed" ? confidence : null,
+        class_counts: status === "completed" ? classCounts : Object.fromEntries(VESSEL_CLASS_KEYS.map((key) => [key, 0])),
+        total_slices: Number.isFinite(totalSlices) && totalSlices >= 0 ? Math.trunc(totalSlices) : 0,
+        valid_predictions: status === "completed" && Number.isFinite(validPredictions) && validPredictions >= 0 ? Math.trunc(validPredictions) : 0,
+        error_code: t(source.error_code, "") || null,
+        error_message: t(source.error_message || source.fallback_reason, "") || null,
+        failures: Array.isArray(source.failures) ? source.failures : [],
+    };
+}
+
+function vesselOcclusionResult(jobStep = null, hint = null) {
+    const toolResults = Array.isArray(state.latestRun?.tool_results) ? state.latestRun.tool_results : [];
+    const vesselToolResult = toolResults.slice().reverse().find((item) => token(item?.tool_name) === "vessel_occlusion");
+    const candidates = [
+        state.latestRun?.result?.vessel_occlusion_result,
+        state.latestRun?.result,
+        vesselToolResult?.structured_output,
+        vesselToolResult?.output,
+        state.latestJob?.result?.vessel_occlusion_result,
+        state.latestJob?.result,
+        hint?.output,
+        jobStep?.result,
+        jobStep?.output,
+        jobStep?.output_ref,
+    ];
+    for (const candidate of candidates) {
+        const normalized = normalizeVesselOcclusionResult(candidate);
+        if (normalized) return normalized;
+    }
+    return null;
+}
+
+function vesselFailureText(result, fallback = "") {
+    const failure = Array.isArray(result?.failures)
+        ? result.failures.map((item) => typeof item === "string" ? t(item, "") : t(item?.error_message || item?.message || item?.error, "")).find(Boolean)
+        : "";
+    const message = t(result?.error_message, "") || failure || t(fallback, "");
+    const code = t(result?.error_code, "");
+    if (code && message && !message.includes(code)) return `${message} (${code})`;
+    if (code) return code;
+    return message || (result?.status === "unavailable" ? "未获得模型结果" : "血管闭塞三分类执行失败");
+}
+
+function vesselResultText(result, fallback = "") {
+    if (!result) return t(fallback, "血管闭塞三分类已完成");
+    if (result.status !== "completed") return vesselFailureText(result, fallback);
+    const label = t(result.vessel_occlusion_class_result || result.predicted_class, "");
+    const parts = [label];
+    if (Number.isFinite(result.confidence)) parts.push(`置信度 ${(result.confidence * 100).toFixed(1)}%`);
+    const counts = objectValue(result.class_counts) || {};
+    if (VESSEL_CLASS_KEYS.some((key) => Number(counts[key]) > 0)) {
+        parts.push(`LVO=${Number(counts.Class_1_LVO) || 0} MeVO=${Number(counts.Class_2_MEVO) || 0} Normal=${Number(counts.Class_0) || 0}`);
+    }
+    return parts.filter(Boolean).join(" | ") || t(fallback, "血管闭塞三分类已完成");
 }
 
 function statusIcon(s) { return s === "running" ? "◉" : s === "completed" ? "✓" : s === "issue" ? "!" : s === "waiting" ? "⏸" : "○"; }
@@ -572,23 +665,7 @@ function displayFallbackForNode(node, displayStatus) {
     }
     if (node.key === "vessel_occlusion") {
         return displayStatus === "completed"
-            ? VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT
-            : "正在执行血管堵塞三分类评估";
-    }
-    if (node.key === "three_class") {
-        const summary = threeClassSummaryText();
-        return displayStatus === "completed"
-            ? (threeClassSummaryText() || node.fallback || "NCCT 三分类已完成")
-            : "正在执行 NCCT 三分类与 Grad-CAM"; // AI辅助生成：GLM-5, 2026-03-03
-    }
-    if (node.key === "ctp_generate") {
-        return displayStatus === "completed"
-            ? "CTP 灌注图谱生成完成"
-            : "正在生成 CBF/CBV/Tmax 灌注核心参数";
-    }
-    if (node.key === "vessel_occlusion") {
-        return displayStatus === "completed"
-            ? VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT
+            ? vesselResultText(normalizeVesselOcclusionResult(node.detailResult), node.fallback)
             : "正在执行血管堵塞三分类评估";
     }
     return node.fallback;
@@ -624,10 +701,17 @@ function revealNode(id, now = Date.now()) {
 function canAdvanceRevealFrom(node) {
     if (!node) return false; // AI辅助生成：GLM-5, 2026-03-05
     const status = normStatus(node.status);
-    if (status === "issue") return false;
+    if (status === "issue") return !isBlockingIssue(node);
     if (node.key === "ctp_generate") return status === "completed";
     if (PRESENTATION_PACED_NODE_KEYS.has(node.key)) return true;
     return REVEAL_ADVANCE_STATUSES.has(status);
+}
+
+function isBlockingIssue(node) {
+    if (normStatus(node?.status) !== "issue") return false;
+    if (NON_BLOCKING_ISSUE_KEYS.has(node?.key)) return false;
+    const isCompletedUploadWithDegradedStep = node?.group === "upload" && normStatus(state.latestJob?.status) === "completed";
+    return !isCompletedUploadWithDegradedStep;
 }
 
 function scheduleRevealTick(delayMs) {
@@ -660,7 +744,7 @@ function syncRevealQueue() {
     state.revealPendingIds = order.filter((id) => !state.revealedNodeIds.includes(id));
 
     const now = Date.now(); // AI辅助生成：GLM-5, 2026-03-08
-    const firstIssueIndex = state.nodes.findIndex((node) => normStatus(node.status) === "issue");
+    const firstIssueIndex = state.nodes.findIndex((node) => isBlockingIssue(node));
     if (firstIssueIndex >= 0) {
         const issueId = order[firstIssueIndex];
         if (!state.revealedNodeIds.includes(issueId)) {
@@ -685,7 +769,7 @@ function syncRevealQueue() {
         return;
     }
 
-    if (normStatus(lastNode.status) === "issue") {
+    if (isBlockingIssue(lastNode)) {
         clearRevealTimer();
         return; // AI辅助生成：GLM-5, 2026-03-10
     }
@@ -712,7 +796,7 @@ function syncRevealQueue() {
     revealNode(nextId, now);
     state.revealPendingIds = order.filter((id) => !state.revealedNodeIds.includes(id));
     const nextNode = nodeById(nextId);
-    if (nextNode && normStatus(nextNode.status) !== "issue" && canAdvanceRevealFrom(nextNode)) {
+    if (nextNode && canAdvanceRevealFrom(nextNode)) {
         scheduleRevealTick(revealDurationMs(nextNode));
     } else {
         clearRevealTimer();
@@ -774,26 +858,49 @@ function buildNodes() {
     const jobSteps = Object.create(null); (state.latestJob?.steps || []).forEach((s) => { if (s?.key) jobSteps[s.key] = s; });
     const runSteps = Object.create(null); (state.latestRun?.steps || []).forEach((s) => { if (s?.key) runSteps[s.key] = s; }); // AI辅助生成：GLM-5, 2026-03-16
     const threeClassStatus = normStatus(jobSteps.three_class?.status || "pending");
-    UPLOAD_NODES.forEach((cfg, idx) => {
+    UPLOAD_NODES.filter(() => !!state.latestJob).forEach((cfg, idx) => {
         const h = cfg.delegated ? state.hints[cfg.delegated] : null;
         const runStep = cfg.delegated ? runSteps[cfg.delegated] : null;
         const jobStep = jobSteps[cfg.key] || null;
-        const status = normStatus(h?.status || runStep?.status || jobStep?.status || "pending");
+        const vesselResult = cfg.key === "vessel_occlusion" ? vesselOcclusionResult(jobStep, h) : null;
+        const runStatus = normStatus(runStep?.status || "pending");
+        const preferActiveUploadVesselStep = cfg.key === "vessel_occlusion"
+            && jobStep
+            && runStatus === "pending"
+            && normStatus(state.latestJob?.status) !== "completed";
+        let status = normStatus(
+            h?.status
+            || (preferActiveUploadVesselStep ? jobStep?.status : runStep?.status)
+            || jobStep?.status
+            || "pending"
+        );
+        const uploadJobStatus = normStatus(state.latestJob?.status);
+        if (vesselResult && (!["pending", "running"].includes(status) || ["completed", "issue"].includes(uploadJobStatus))) {
+            const notApplicable = vesselResult.status === "unavailable"
+                && vesselResult.error_code === "CTA_INPUT_MISSING"
+                && token(jobStep?.status) === "skipped";
+            status = vesselResult.status === "completed" || notApplicable ? "completed" : "issue";
+        }
         const fallbackDefault = status === "pending" ? "节点未开始" : status === "running" ? "节点处理中" : status === "waiting" ? "等待人工确认" : status === "completed" ? "节点已完成" : "节点执行异常";
         let fallback = cfg.key === "ctp_generate" && status === "pending" && threeClassStatus !== "completed"
             ? "等待 NCCT 三分类完成后启动" // AI辅助生成：GLM-5, 2026-03-17
             : t((runStep && runStep.message) || (jobStep && jobStep.message), fallbackDefault);
         if (cfg.key === "vessel_occlusion") {
-            fallback = status === "completed"
-                ? t((jobStep && jobStep.message), VESSEL_OCCLUSION_RESULT_TEXT_DEFAULT)
-                : t((jobStep && jobStep.message), status === "pending" ? "等待 CTP 生成完成后启动" : fallback);
+            const stepMessage = t((jobStep && (jobStep.error || jobStep.message)), "");
+            fallback = vesselResult
+                ? vesselResultText(vesselResult, stepMessage || fallback)
+                : status === "completed"
+                    ? (stepMessage || "血管闭塞三分类已完成")
+                    : (stepMessage || (status === "pending" ? "等待 CTP 生成完成后启动" : fallback));
         }
         const inputDefault = cfg.key === "archive_ready" ? { patient_id: state.patientId || "-", file_id: state.fileId || "-" } : cfg.key === "modality_detect" ? { available_modalities: modalities() } : cfg.key === "ai_report" ? { goal_question: t(state.latestRun?.planner_input?.goal_question || state.latestRun?.planner_input?.question) } : { run_id: state.runId, tool_name: cfg.delegated || cfg.key };
         const detailInput = cfg.key === "vessel_occlusion"
             ? { ...VESSEL_OCCLUSION_INPUT, run_id: state.runId || "-" }
             : (h?.input ?? inputDefault); // AI辅助生成：GLM-5, 2026-03-18
         const detailResult = cfg.key === "vessel_occlusion"
-            ? (status === "completed" ? fallback : VESSEL_OCCLUSION_RESULT_DEFAULT)
+            ? (vesselResult || h?.output || jobStep?.result || jobStep?.output || (status === "issue"
+                ? { status: "failed", error_message: fallback }
+                : fallback))
             : (h?.output ?? fallback);
         nodes.push({
             id: `upload_${cfg.key}`, key: cfg.key, title: cfg.title, subtitle: cfg.subtitle, chip: cfg.chip, status, rawStatus: status, group: "upload", order: idx + 1,
@@ -805,7 +912,9 @@ function buildNodes() {
             narrativeHint: h?.narrativeHint || "", hint: h, fallback,
         });
     });
-    const skip = new Set(UPLOAD_NODES.map((x) => x.delegated).filter(Boolean));
+    const skip = state.latestJob
+        ? new Set(UPLOAD_NODES.map((x) => x.delegated).filter(Boolean))
+        : new Set();
     let order = 30;
     if (state.latestRun?.planner_output || state.hints.triage_planner) {
         const h = state.hints.triage_planner || {}; // AI辅助生成：GLM-5, 2026-03-19
@@ -815,10 +924,18 @@ function buildNodes() {
     }
     (state.latestRun?.steps || []).forEach((s) => {
         const key = t(s?.key, ""); if (!key || skip.has(key) || key === "triage_planner") return;
-        const h = state.hints[key] || null; const st = normStatus(h?.status || s.status || "pending");
-        const fallback = t(s.message, st === "pending" ? "节点未开始" : st === "running" ? "节点处理中" : st === "waiting" ? "等待人工确认" : st === "completed" ? "节点已完成" : "节点执行异常");
+        const h = state.hints[key] || null;
+        const directVesselResult = key === "vessel_occlusion" ? vesselOcclusionResult(null, h) : null;
+        let st = normStatus(h?.status || s.status || "pending");
+        if (directVesselResult) {
+            st = directVesselResult.status === "completed" ? "completed" : "issue";
+        }
+        const defaultFallback = st === "pending" ? "节点未开始" : st === "running" ? "节点处理中" : st === "waiting" ? "等待人工确认" : st === "completed" ? "节点已完成" : "节点执行异常";
+        const fallback = directVesselResult
+            ? vesselResultText(directVesselResult, t(s.message, defaultFallback))
+            : t(s.message, defaultFallback);
         const meta = getMeta(key);
-        nodes.push({ id: `agent_${key}`, key, title: meta.title, subtitle: meta.subtitle, chip: meta.chip, status: st, group: "agent", order: order++, guide: templateFor(key)[0], summary: summaryTriplet(key, st, h, fallback), detailInput: h?.input ?? { run_id: state.runId, tool_name: key }, detailResult: h?.output ?? fallback, riskLevel: token(h?.riskLevel || (st === "issue" ? "high" : "none")), riskItems: Array.isArray(h?.riskItems) ? h.riskItems : (st === "issue" ? [fallback] : []), actionRequired: t(h?.actionRequired, st === "waiting" ? "请医生确认该节点后继续。" : ""), actionLog: t(h?.actionLog, ""), meta: [s.attempts ? `attempt ${s.attempts}` : "", t(s.ended_at || s.started_at || h?.ts, "")].filter(Boolean), narrativeHint: h?.narrativeHint || "" });
+        nodes.push({ id: `agent_${key}`, key, title: meta.title, subtitle: meta.subtitle, chip: meta.chip, status: st, group: "agent", order: order++, guide: templateFor(key)[0], summary: summaryTriplet(key, st, h, fallback), detailInput: h?.input ?? { run_id: state.runId, tool_name: key }, detailResult: directVesselResult || h?.output || fallback, riskLevel: token(h?.riskLevel || (st === "issue" ? "high" : "none")), riskItems: Array.isArray(h?.riskItems) ? h.riskItems : (st === "issue" ? [fallback] : []), actionRequired: t(h?.actionRequired, st === "waiting" ? "请医生确认该节点后继续。" : ""), actionLog: t(h?.actionLog, ""), meta: [s.attempts ? `attempt ${s.attempts}` : "", t(s.ended_at || s.started_at || h?.ts, "")].filter(Boolean), narrativeHint: h?.narrativeHint || "" });
     }); // AI辅助生成：GLM-5, 2026-03-20
     return nodes.sort((a, b) => a.order - b.order);
 }
@@ -1188,7 +1305,27 @@ function render() {
 function persistUpload(job) {
     const result = job?.result || {}; const fileId = result.file_id || state.fileId || job.file_id; if (!fileId) return;
     state.fileId = String(fileId);
-    if (typeof setViewerData === "function") setViewerData({ file_id: fileId, rgb_files: result.rgb_files || [], total_slices: result.total_slices || 0, has_ai: result.has_ai || false, available_models: result.available_models || [], model_configs: result.model_configs || {}, skip_ai: result.skip_ai || false });
+    const vesselResult = normalizeVesselOcclusionResult(result.vessel_occlusion_result)
+        || normalizeVesselOcclusionResult(result)
+        || vesselOcclusionResult();
+    if (typeof setViewerData === "function") setViewerData({
+        file_id: fileId,
+        rgb_files: result.rgb_files || [],
+        total_slices: result.total_slices || 0,
+        has_ai: result.has_ai || false,
+        available_models: result.available_models || [],
+        model_configs: result.model_configs || {},
+        skip_ai: result.skip_ai || false,
+        vessel_occlusion_result: vesselResult,
+        vessel_occlusion_status: vesselResult?.status || null,
+        vessel_occlusion_class_result: vesselResult?.vessel_occlusion_class_result || null,
+        vessel_occlusion_confidence: vesselResult?.confidence ?? null,
+        vessel_occlusion_predicted_class: vesselResult?.predicted_class || null,
+        vessel_occlusion_class_counts: vesselResult?.class_counts || null,
+        predicted_class: vesselResult?.predicted_class || null,
+        confidence: vesselResult?.confidence ?? null,
+        class_counts: vesselResult?.class_counts || null,
+    });
     sessionStorage.setItem("current_file_id", fileId); localStorage.setItem("current_file_id", fileId);
     persistReport(fileId, { report: result.report, report_payload: result.report_payload }); // AI辅助生成：GLM-5, 2026-04-10
 }
@@ -1488,5 +1625,23 @@ function init() {
     if (state.runId) { pollRun(); state.runTimer = setInterval(pollRun, 1400); }
 }
 
-document.addEventListener("DOMContentLoaded", init);
+if (typeof document !== "undefined") document.addEventListener("DOMContentLoaded", init);
+
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+        state,
+        normStatus,
+        normalizeVesselOcclusionResult,
+        vesselOcclusionResult,
+        vesselFailureText,
+        vesselResultText,
+        displayFallbackForNode,
+        canAdvanceRevealFrom,
+        isBlockingIssue,
+        syncRevealQueue,
+        clearRevealTimer,
+        buildNodes,
+        persistUpload,
+    };
+}
 

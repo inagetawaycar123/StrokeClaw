@@ -1,4 +1,3 @@
-import sys
 import torch
 import json
 import base64
@@ -29,7 +28,15 @@ try:
     from .compat.skill_registry import get_skill_registry
     from .extensions import NumpyJSONEncoder
     from .summary_assembler import build_summary_artifacts
-    from .vessel_context import VESSEL_OCCLUSION_CLASS_RESULT, vessel_occlusion_context
+    from .vessel_context import (
+        VESSEL_OCCLUSION_CLASS_RESULT,
+        VESSEL_OCCLUSION_UNAVAILABLE_TEXT,
+        empty_vessel_occlusion_result,
+        normalize_vessel_occlusion_result,
+        vessel_occlusion_context,
+        vessel_result_display_label,
+        vessel_result_from_sources,
+    )
 except ImportError:
     # 兼容直接运行 backend/app.py 的场景
     from ai_inference import get_ai_model
@@ -37,21 +44,34 @@ except ImportError:
     from compat.skill_registry import get_skill_registry
     from extensions import NumpyJSONEncoder
     from summary_assembler import build_summary_artifacts
-    from vessel_context import VESSEL_OCCLUSION_CLASS_RESULT, vessel_occlusion_context
+    from vessel_context import (
+        VESSEL_OCCLUSION_CLASS_RESULT,
+        VESSEL_OCCLUSION_UNAVAILABLE_TEXT,
+        empty_vessel_occlusion_result,
+        normalize_vessel_occlusion_result,
+        vessel_occlusion_context,
+        vessel_result_display_label,
+        vessel_result_from_sources,
+    )
 
 # ==================== DINOv3 血管闭塞三分类 ====================
-_DINOV3_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dinov3")
-if _DINOV3_DIR not in sys.path:
-    sys.path.insert(0, _DINOV3_DIR)
 _DINOV3_AVAILABLE = False
+_DINOV3_IMPORT_ERROR = None
 try:
-    from predict import predict_single_image as _dinov3_predict_single
+    from .dinov3_adapter import predict_single_image as _dinov3_predict_single
     _DINOV3_AVAILABLE = True
     print("[DINOv3] 血管闭塞三分类模块加载成功")
 except ImportError as e:
-    print(f"[DINOv3] 血管闭塞三分类模块加载失败: {e}")
+    try:
+        from dinov3_adapter import predict_single_image as _dinov3_predict_single
+        _DINOV3_AVAILABLE = True
+        print("[DINOv3] 血管闭塞三分类模块加载成功")
+    except Exception as direct_error:
+        _DINOV3_IMPORT_ERROR = direct_error
+        print(f"[DINOv3] 血管闭塞三分类模块加载失败: {direct_error}")
 except Exception as e:
-    print(f"[DINOv3] 血管闭塞三分类模块加载异常: {e}")
+    _DINOV3_IMPORT_ERROR = e
+    print(f"[DINOv3] 血管闭塞三分类模块加载失败: {e}")
 
 from datetime import datetime
 from dotenv import load_dotenv
@@ -1557,9 +1577,16 @@ def _attach_three_class_to_rgb_files(rgb_files, predictions):
         slice_item["three_class_confidence"] = float(pred.get("confidence") or 0.0)
 
 
-def _invoke_internal_generate_report(patient_id, file_id):
+def _invoke_internal_generate_report(patient_id, file_id, run_id=None):
     with app.test_client() as client:
-        url = f"/api/generate_report/{patient_id}?format=markdown&file_id={file_id}&source=processing_page"
+        query = {
+            "format": "markdown",
+            "file_id": file_id,
+            "source": "processing_page",
+        }
+        if run_id:
+            query["run_id"] = str(run_id)
+        url = f"/api/generate_report/{patient_id}?{urlencode(query)}"
         resp = client.get(url)
         data = resp.get_json(silent=True) or {} # AI辅助生成：GLM-5, 2026-03-23
         if resp.status_code != 200:
@@ -1582,6 +1609,68 @@ def _generate_pseudocolor_for_result(file_id, total_slices):
     ok = total_success > 0 if total_attempts > 0 else False
     msg = f"伪彩图生成成功: {total_success}/{total_attempts}"
     return ok, msg # AI辅助生成：GLM-5, 2026-03-25
+
+
+def _attach_vessel_result_to_agent_run(run_id, vessel_result):
+    if not run_id:
+        return False
+    normalized = normalize_vessel_occlusion_result(vessel_result)
+
+    def _mut(run):
+        planner_input = run.setdefault("planner_input", {})
+        planner_input["vessel_occlusion_result"] = copy.deepcopy(normalized)
+
+    return bool(_update_agent_run(run_id, _mut))
+
+
+def _persist_vessel_result_to_imaging(patient_id, file_id, vessel_result):
+    """Merge the vessel result into the existing analysis_result JSONB."""
+    if not SUPABASE_AVAILABLE or not patient_id or not file_id:
+        return False
+    normalized = normalize_vessel_occlusion_result(vessel_result)
+    try:
+        imaging = get_imaging_by_case(patient_id, file_id) or {}
+        analysis_result = imaging.get("analysis_result")
+        if not isinstance(analysis_result, dict):
+            analysis_result = {}
+        merged = dict(analysis_result)
+        merged["vessel_occlusion_result"] = normalized
+
+        def _update_once():
+            return (
+                supabase.table("patient_imaging")
+                .update({"analysis_result": merged})
+                .eq("patient_id", patient_id)
+                .eq("case_id", file_id)
+                .execute()
+            )
+
+        _run_with_supabase_retry("patient_imaging.update_vessel_result", _update_once)
+        return True
+    except Exception as exc:
+        print(f"[WARN] patient_imaging vessel result update failed: {exc}")
+        return False
+
+
+def _resolve_vessel_result(run=None, imaging=None, structured=None):
+    sources = []
+    if isinstance(run, dict):
+        sources.append(run.get("result") or {})
+        for item in reversed(run.get("tool_results") or []):
+            if item.get("tool_name") == "vessel_occlusion":
+                output = item.get("structured_output")
+                if isinstance(output, dict):
+                    sources.append(output)
+        sources.append(run.get("planner_input") or {})
+    if isinstance(imaging, dict):
+        sources.extend([imaging.get("analysis_result") or {}, imaging])
+    if isinstance(structured, dict):
+        sources.append(structured)
+    return vessel_result_from_sources(*sources)
+
+
+def _vessel_result_from_run(run):
+    return _resolve_vessel_result(run=run)
 
 
 def _is_infra_stroke_analysis_error(error_message):
@@ -1703,18 +1792,25 @@ def _run_upload_processing_job(job_id, payload):
             )
             _update_step(job_id, "ctp_generate", "skipped", reason)
 
-        # 血管闭塞三分类 —— 调用 DINOv3 模型
+        # 血管闭塞三分类 —— 调用可追踪的 DINOv3 兼容适配器
+        vessel_result = empty_vessel_occlusion_result(
+            "unavailable",
+            error_code="NOT_RUN",
+            error_message="Vessel classification has not run",
+        )
         _update_step(job_id, "vessel_occlusion", "running", "正在执行血管闭塞三分类")
         try:
             vessel_ok, vessel_result, vessel_err = _run_vessel_occlusion_on_file(
                 payload["file_id"]
             )
+            vessel_result = normalize_vessel_occlusion_result(vessel_result)
             if vessel_ok and vessel_result:
-                label = vessel_result.get("vessel_occlusion_class_result", VESSEL_OCCLUSION_CLASS_RESULT)
-                conf = vessel_result.get("confidence", 0)
+                label = vessel_result_display_label(vessel_result)
+                conf = vessel_result.get("confidence")
                 counts = vessel_result.get("class_counts", {})
+                confidence_text = f"{conf:.2%}" if isinstance(conf, (int, float)) else "--"
                 msg = (
-                    f"{label} (置信度 {conf:.2%}) | "
+                    f"{label} (置信度 {confidence_text}) | "
                     f"LVO={counts.get('Class_1_LVO', 0)} "
                     f"MeVO={counts.get('Class_2_MEVO', 0)} "
                     f"Normal={counts.get('Class_0', 0)}"
@@ -1722,14 +1818,31 @@ def _run_upload_processing_job(job_id, payload):
                 _update_step(job_id, "vessel_occlusion", "completed", msg)
             else:
                 err_text = vessel_err or "血管闭塞三分类失败"
-                _update_step(job_id, "vessel_occlusion", "failed", err_text)
-                warnings.append(err_text)
-                _add_job_warning(job_id, err_text)
+                if vessel_result.get("error_code") == "CTA_INPUT_MISSING":
+                    _update_step(job_id, "vessel_occlusion", "skipped", err_text)
+                else:
+                    _update_step(job_id, "vessel_occlusion", "failed", err_text)
+                    warnings.append(err_text)
+                    _add_job_warning(job_id, err_text)
         except Exception as vessel_exc:
             err_text = f"血管闭塞三分类异常: {vessel_exc}"
+            vessel_result = empty_vessel_occlusion_result(
+                "failed",
+                error_code="MODEL_INFERENCE_EXCEPTION",
+                error_message=err_text,
+            )
             _update_step(job_id, "vessel_occlusion", "failed", err_text)
             warnings.append(err_text)
             _add_job_warning(job_id, err_text)
+
+        upload_result["vessel_occlusion_result"] = vessel_result
+        upload_result["vessel_occlusion_status"] = vessel_result.get("status")
+        upload_result["vessel_occlusion_class_result"] = vessel_result.get(
+            "vessel_occlusion_class_result"
+        )
+        upload_result["vessel_occlusion_confidence"] = vessel_result.get("confidence")
+        if payload.get("agent_run_id"):
+            _attach_vessel_result_to_agent_run(payload.get("agent_run_id"), vessel_result)
 
         if should_stroke:
             _update_step(job_id, "stroke_analysis", "running", "正在执行脑卒中自动分析")
@@ -1754,6 +1867,11 @@ def _run_upload_processing_job(job_id, payload):
                         warnings.append(warn)
                         _add_job_warning(job_id, warn)
                     else:
+                        _persist_vessel_result_to_imaging(
+                            payload.get("patient_id"),
+                            payload.get("file_id"),
+                            vessel_result,
+                        )
                         _set_job_status(job_id, "failed", err)
                         return
             except Exception as e:
@@ -1764,12 +1882,21 @@ def _run_upload_processing_job(job_id, payload):
                     warnings.append(warn)
                     _add_job_warning(job_id, warn)
                 else:
+                    _persist_vessel_result_to_imaging(
+                        payload.get("patient_id"),
+                        payload.get("file_id"),
+                        vessel_result,
+                    )
                     _set_job_status(job_id, "failed", err)
                     return # AI辅助生成：GLM-5, 2026-04-06
         else:
             _update_step(
                 job_id, "stroke_analysis", "skipped", "当前模态组合不触发脑卒中自动分析"
             )
+
+        _persist_vessel_result_to_imaging(
+            payload.get("patient_id"), payload.get("file_id"), vessel_result
+        )
 
         if _result_has_ctp_images(upload_result):
             _update_step(job_id, "pseudocolor", "running", "正在生成医学标准伪彩图")
@@ -3781,6 +3908,11 @@ def _tool_load_patient_context(run):
             )
         except Exception:
             onset_to_admission_hours = None
+    vessel_result = vessel_result_from_sources(
+        planner_input,
+        imaging_data.get("analysis_result") if isinstance(imaging_data, dict) else None,
+        imaging_data,
+    )
     output = {
         "context_struct": {
             "patient_id": patient_id,
@@ -3797,10 +3929,14 @@ def _tool_load_patient_context(run):
                 ),
                 "hemisphere": hemisphere,
             },
-            "vascular": vessel_occlusion_context(),
+            "vascular": vessel_occlusion_context(vessel_result),
         },
         "hemisphere": hemisphere,
-        "vessel_occlusion_class_result": VESSEL_OCCLUSION_CLASS_RESULT,
+        "vessel_occlusion_result": vessel_result,
+        "vessel_occlusion_status": vessel_result.get("status"),
+        "vessel_occlusion_class_result": vessel_result.get(
+            "vessel_occlusion_class_result"
+        ),
         "missing_flags": [],
     }
     if warning:
@@ -3874,40 +4010,62 @@ def _tool_generate_ctp_maps(run):
 
 
 def _run_vessel_occlusion_on_file(file_id):
-    """对已处理的 file_id 执行血管闭塞三分类，返回 (success, result_dict_or_none, error_message_or_none)。
-
-    结果字典始终包含 vessel_occlusion_class_result 字段；调用方可直接用它覆盖硬编码默认值。
-    """
+    """Run CTA-only vessel classification and return the shared result contract."""
     processed_dir = os.path.join(app.config["PROCESSED_FOLDER"], str(file_id))
     if not os.path.isdir(processed_dir):
-        return False, None, f"Processed slice directory not found: {processed_dir}"
+        message = f"Processed slice directory not found: {processed_dir}"
+        result = empty_vessel_occlusion_result(
+            "unavailable",
+            error_code="PROCESSED_DIR_MISSING",
+            error_message=message,
+        )
+        return False, result, message
 
-    # 优先使用 MCTA（动脉期 CTA）切片
-    slice_patterns = ["*_mcta.png", "*_vcta.png", "*_dcta.png", "*.png"]
-    slice_images = []
-    for pat in slice_patterns:
+    # Never fall back to arbitrary PNG/NCCT inputs for a vessel model. Keep CTA
+    # phases separate so a completely broken preferred phase can fall back to
+    # the next available phase without triple-counting the same anatomy.
+    slice_patterns = [
+        ("mcta", "*_mcta.png"),
+        ("vcta", "*_vcta.png"),
+        ("dcta", "*_dcta.png"),
+        ("cta", "*_cta.png"),
+    ]
+    phase_groups = []
+    seen_images = set()
+    for phase_name, pat in slice_patterns:
         candidates = sorted(glob.glob(os.path.join(processed_dir, pat)))
         candidates = [
             p for p in candidates
             if "pseudocolor" not in os.path.basename(p).lower()
             and "overlay" not in os.path.basename(p).lower()
+            and os.path.normcase(os.path.abspath(p)) not in seen_images
         ]
         if candidates:
-            slice_images = candidates
-            break
+            phase_groups.append((phase_name, candidates))
+            seen_images.update(
+                os.path.normcase(os.path.abspath(path)) for path in candidates
+            )
 
-    if not slice_images:
-        return False, None, "No suitable slice images found for vessel occlusion classification"
+    if not phase_groups:
+        message = "No CTA slice images found for vessel occlusion classification"
+        result = empty_vessel_occlusion_result(
+            "unavailable",
+            error_code="CTA_INPUT_MISSING",
+            error_message=message,
+        )
+        return False, result, message
+
+    preferred_slice_count = len(phase_groups[0][1])
 
     if not _DINOV3_AVAILABLE:
-        return True, {
-            "vessel_occlusion_class_result": VESSEL_OCCLUSION_CLASS_RESULT,
-            "predicted_label": VESSEL_OCCLUSION_CLASS_RESULT,
-            "confidence": None,
-            "fallback": True,
-            "fallback_reason": "DINOv3 module not available",
-            "total_slices": len(slice_images),
-        }, None
+        detail = str(_DINOV3_IMPORT_ERROR or "DINOv3 adapter is not available")
+        result = empty_vessel_occlusion_result(
+            "unavailable",
+            total_slices=preferred_slice_count,
+            error_code="MODEL_DEPENDENCY_UNAVAILABLE",
+            error_message=detail,
+        )
+        return False, result, detail
 
     dinov3_dir = os.path.join(PROJECT_ROOT, "dinov3")
     model_path = os.path.join(dinov3_dir, "dinov3权重.pth")
@@ -3920,38 +4078,114 @@ def _run_vessel_occlusion_on_file(file_id):
         ("模型仓库", repo_dir),
     ]:
         if not os.path.exists(path):
-            return False, None, f"Model file missing: {name} ({path})"
+            message = f"Model file missing: {name} ({path})"
+            result = empty_vessel_occlusion_result(
+                "unavailable",
+                total_slices=preferred_slice_count,
+                error_code="MODEL_FILE_MISSING",
+                error_message=message,
+            )
+            return False, result, message
 
     predictions = []
+    failures = []
     class_counts = {"Class_0": 0, "Class_1_LVO": 0, "Class_2_MEVO": 0}
-    confidence_sum = 0.0
+    confidence_sums = {key: 0.0 for key in class_counts}
+    total_attempted = 0
 
-    for image_path in slice_images:
-        try:
-            result = _dinov3_predict_single(
-                image_path=image_path,
-                model_path=model_path,
-                dinov3_weights=dinov3_weights,
-                repo_dir=repo_dir,
-                num_classes=3,
-                freeze_ratio=0.35,
-                dropout_rate=0.35,
-                head_type="mlp",
-                verbose=False,
-            )
-            predictions.append(result)
-            label = result.get("predicted_label", "")
-            if label in class_counts:
-                class_counts[label] += 1
-            confidence_sum += float(result.get("confidence", 0))
-        except Exception as exc:
-            print(f"[Vessel] Prediction failed for {os.path.basename(image_path)}: {exc}")
+    for phase_name, phase_images in phase_groups:
+        phase_predictions = []
+        phase_counts = {key: 0 for key in class_counts}
+        phase_confidence_sums = {key: 0.0 for key in class_counts}
+
+        for image_path in phase_images:
+            total_attempted += 1
+            try:
+                result = _dinov3_predict_single(
+                    image_path=image_path,
+                    model_path=model_path,
+                    dinov3_weights=dinov3_weights,
+                    repo_dir=repo_dir,
+                    num_classes=3,
+                    freeze_ratio=0.35,
+                    dropout_rate=0.35,
+                    head_type="mlp",
+                    verbose=False,
+                )
+                label = result.get("predicted_label", "")
+                if label not in phase_counts:
+                    raise ValueError(
+                        f"Unsupported vessel class returned by model: {label}"
+                    )
+                raw_confidence = result.get("confidence")
+                if isinstance(raw_confidence, bool):
+                    raise ValueError(
+                        f"Invalid vessel confidence returned by model: {raw_confidence!r}"
+                    )
+                confidence = float(raw_confidence)
+                if not np.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+                    raise ValueError(
+                        f"Invalid vessel confidence returned by model: {raw_confidence!r}"
+                    )
+
+                # Commit only after all contract fields are valid so one slice
+                # cannot be counted as both a success and a failure.
+                phase_predictions.append(result)
+                phase_counts[label] += 1
+                phase_confidence_sums[label] += confidence
+            except Exception as exc:
+                print(f"[Vessel] Prediction failed for {os.path.basename(image_path)}: {exc}")
+                failures.append(
+                    {
+                        "slice_file": os.path.basename(image_path),
+                        "cta_phase": phase_name,
+                        "error_code": "MODEL_INFERENCE_FAILED",
+                        "error_message": str(exc),
+                    }
+                )
+
+        if phase_predictions:
+            predictions = phase_predictions
+            class_counts = phase_counts
+            confidence_sums = phase_confidence_sums
+            break
 
     if not predictions:
-        return False, None, f"All {len(slice_images)} predictions failed"
+        message = f"All {total_attempted} predictions failed"
+        result = empty_vessel_occlusion_result(
+            "failed",
+            total_slices=total_attempted,
+            error_code="ALL_PREDICTIONS_FAILED",
+            error_message=message,
+            failures=failures,
+        )
+        return False, result, message
 
-    dominant_class = max(class_counts.items(), key=lambda x: x[1])[0]
-    avg_confidence = confidence_sum / len(predictions)
+    class_mean_confidence = {
+        label: (
+            confidence_sums[label] / class_counts[label]
+            if class_counts[label]
+            else -1.0
+        )
+        for label in class_counts
+    }
+    # Majority vote remains primary. Confidence breaks count ties; an exact
+    # evidence tie favors the higher-acuity finding instead of silently
+    # defaulting to Normal because of dictionary insertion order.
+    acuity_tie_break = {
+        "Class_0": 0,
+        "Class_2_MEVO": 1,
+        "Class_1_LVO": 2,
+    }
+    dominant_class = max(
+        class_counts,
+        key=lambda label: (
+            class_counts[label],
+            class_mean_confidence[label],
+            acuity_tie_break[label],
+        ),
+    )
+    dominant_confidence = class_mean_confidence[dominant_class]
 
     label_cn_map = {
         "Class_0": "无明显狭窄",
@@ -3963,18 +4197,23 @@ def _run_vessel_occlusion_on_file(file_id):
     print(
         f"[Vessel] 血管闭塞三分类: {predicted_label} "
         f"(LVO={class_counts['Class_1_LVO']}, MeVO={class_counts['Class_2_MEVO']}, "
-        f"Normal={class_counts['Class_0']}, avg_conf={avg_confidence:.4f})"
+        f"Normal={class_counts['Class_0']}, class_conf={dominant_confidence:.4f})"
     )
 
-    return True, {
+    result = normalize_vessel_occlusion_result({
+        "status": "completed",
         "vessel_occlusion_class_result": predicted_label,
         "predicted_label": predicted_label,
         "predicted_class": dominant_class,
-        "confidence": avg_confidence,
+        "confidence": dominant_confidence,
         "class_counts": class_counts,
-        "total_slices": len(slice_images),
+        "total_slices": total_attempted,
         "valid_predictions": len(predictions),
-    }, None
+        "error_code": None,
+        "error_message": None,
+        "failures": failures,
+    })
+    return True, result, None
 
 
 def _tool_vessel_occlusion(run):
@@ -3990,11 +4229,13 @@ def _tool_vessel_occlusion(run):
 
     ok, result, err_msg = _run_vessel_occlusion_on_file(file_id)
     if not ok:
+        normalized = normalize_vessel_occlusion_result(result)
+        unavailable = normalized.get("status") == "unavailable"
         return (
             False,
-            None,
+            normalized,
             _tool_error_contract(
-                "TOOL_EXECUTION_FAILED" if result is None else "TOOL_DEPENDENCY_MISSING",
+                "TOOL_DEPENDENCY_MISSING" if unavailable else "TOOL_EXECUTION_FAILED",
                 err_msg or "Vessel occlusion failed",
             ),
         )
@@ -4444,13 +4685,22 @@ def _tool_generate_medgemma_report(run):
             _tool_error_contract("TOOL_INPUT_INVALID", "Missing patient_id or file_id"),
         )
 
-    ok, msg, data = _invoke_internal_generate_report(patient_id, file_id)
+    ok, msg, data = _invoke_internal_generate_report(
+        patient_id, file_id, run_id=run.get("run_id")
+    )
     if not ok:
         return (
             False,
             None,
             _tool_error_contract("TOOL_EXTERNAL_API_FAILED", msg),
         )
+    # The report API already resolves run-scoped data first and persisted
+    # patient_imaging data second.  Keep that database result as a fallback
+    # instead of replacing it with an empty run-only contract.
+    vessel_result = _resolve_vessel_result(
+        run=run,
+        structured=(data.get("report_payload") or data),
+    )
     # Attach verification outputs into report_payload for frontend rendering.
     run = run or {}
     icv_payload = None
@@ -4485,10 +4735,12 @@ def _tool_generate_medgemma_report(run):
     report_payload = data.get("report_payload") or {}
     if isinstance(report_payload, dict):
         report_payload = dict(report_payload)
-        report_payload.setdefault(
-            "vessel_occlusion_class_result",
-            VESSEL_OCCLUSION_CLASS_RESULT,
+        report_payload["vessel_occlusion_result"] = vessel_result
+        report_payload["vessel_occlusion_status"] = vessel_result.get("status")
+        report_payload["vessel_occlusion_class_result"] = vessel_result.get(
+            "vessel_occlusion_class_result"
         )
+        report_payload["vessel_occlusion_confidence"] = vessel_result.get("confidence")
     if icv_payload is None and icv_failed_result is not None:
         icv_payload = {
             "status": "unavailable",
@@ -4569,11 +4821,13 @@ def _tool_generate_medgemma_report(run):
                 patient_ctx["admission_nihss"] = patient_info.get("admission_nihss")
                 patient_ctx["onset_to_admission_hours"] = patient_info.get("onset_to_admission_hours")
                 patient_ctx["hemisphere"] = imaging_info.get("hemisphere") or ctx_output.get("hemisphere")
-                patient_ctx["vessel_occlusion_class_result"] = (
-                    vascular_info.get("vessel_occlusion_class_result")
-                    or ctx_output.get("vessel_occlusion_class_result") # AI辅助生成：GLM-5, 2026-03-15
-                    or VESSEL_OCCLUSION_CLASS_RESULT
+                context_vessel_result = vessel_result_from_sources(
+                    vascular_info, ctx_output
                 )
+                if context_vessel_result.get("vessel_occlusion_class_result"):
+                    patient_ctx["vessel_occlusion_class_result"] = (
+                        context_vessel_result.get("vessel_occlusion_class_result")
+                    )
             # 从 run_stroke_analysis 获取量化数据
             if r.get("tool_name") == "run_stroke_analysis" and r.get("status") == "completed":
                 analysis_output = r.get("structured_output") or {}
@@ -4589,10 +4843,12 @@ def _tool_generate_medgemma_report(run):
                     patient_ctx["vessel_occlusion_class_result"] = vessel_label
                     patient_ctx["vessel_occlusion_confidence"] = vessel_output.get("confidence")
                     patient_ctx["vessel_occlusion_class"] = vessel_output.get("predicted_class")
-        patient_ctx.setdefault(
-            "vessel_occlusion_class_result",
-            VESSEL_OCCLUSION_CLASS_RESULT,
+        patient_ctx["vessel_occlusion_result"] = vessel_result
+        patient_ctx["vessel_occlusion_status"] = vessel_result.get("status")
+        patient_ctx["vessel_occlusion_class_result"] = vessel_result.get(
+            "vessel_occlusion_class_result"
         )
+        patient_ctx["vessel_occlusion_confidence"] = vessel_result.get("confidence")
         # 补充患者姓名（从数据库获取）
         if patient_id:
             try:
@@ -4765,7 +5021,14 @@ def _execute_agent_tool(run_id, tool_name):
         "status": "failed",
         "error_code": err["error_code"],
         "retryable": bool(err["retryable"]),
-        "structured_output": None,
+        # Vessel classification is deliberately non-blocking, but its
+        # structured failed/unavailable contract is still clinically
+        # meaningful and must reach the final result/report.
+        "structured_output": (
+            normalize_vessel_occlusion_result(output)
+            if tool_name == "vessel_occlusion" and isinstance(output, dict)
+            else None
+        ),
         "raw_ref": {"tool_name": tool_name},
         "latency_ms": latency_ms,
         "attempt": attempt,
@@ -4797,27 +5060,35 @@ def _execute_agent_tool(run_id, tool_name):
 
 
 def _build_context_from_completed_tools(run):
+    planner_vessel_result = vessel_result_from_sources(run.get("planner_input") or {})
     context = {
         "path_decision": ((run.get("planner_output") or {}).get("path_decision") or {}),
         "patient_context": None,
         "analysis_result": None,
-        "vessel_occlusion_result": None,
+        "vessel_occlusion_result": planner_vessel_result,
         "icv_result": None,
         "ekv_result": None,
         "consensus_result": None,
         "report_result": None,
     }
     for result in run.get("tool_results", []):
-        if result.get("status") != "completed":
-            continue # AI辅助生成：GLM-5, 2026-03-25
         tool_name = result.get("tool_name")
         output = result.get("structured_output")
+        if tool_name == "vessel_occlusion" and isinstance(output, dict):
+            # The latest vessel attempt wins even when it failed softly.  This
+            # prevents an earlier/stale successful planner value from being
+            # reported after a real retry failure.
+            context["vessel_occlusion_result"] = normalize_vessel_occlusion_result(
+                output
+            )
+        if result.get("status") != "completed":
+            continue # AI辅助生成：GLM-5, 2026-03-25
         if tool_name == "load_patient_context":
             context["patient_context"] = output
         elif tool_name == "run_stroke_analysis":
             context["analysis_result"] = output
         elif tool_name == "vessel_occlusion":
-            context["vessel_occlusion_result"] = output
+            context["vessel_occlusion_result"] = normalize_vessel_occlusion_result(output)
         elif tool_name == "icv":
             context["icv_result"] = output
         elif tool_name == "ekv":
@@ -6018,6 +6289,18 @@ def api_generate_report(patient_id):
                 {"status": "error", "message": f"Imaging case {file_id} not found"}
             ), 404
 
+        run_key = str(run_id or "").strip()
+        run_state = None
+        if run_key:
+            try:
+                run_state = _get_agent_run(run_key)
+                if not run_state:
+                    run_state = (_w0_mock_refresh_run(run_key)[0] or None)
+            except Exception as run_lookup_exc:
+                print(f"[MedGemma] run lookup failed run_id={run_key}: {run_lookup_exc}")
+                run_state = None
+        vessel_result = _resolve_vessel_result(run=run_state, imaging=imaging_data)
+
         # Compute onset-to-admission hours
         onset_time = patient_data.get("onset_exact_time")
         admission_time = patient_data.get("admission_time") # AI辅助生成：GLM-5, 2026-04-13
@@ -6057,7 +6340,12 @@ def api_generate_report(patient_id):
             "hemisphere": hemisphere_value,
             "three_class_label": "ischemia",
             "three_class_label_cn": "脑缺血",
-            "vessel_occlusion_class_result": VESSEL_OCCLUSION_CLASS_RESULT,
+            "vessel_occlusion_result": vessel_result,
+            "vessel_occlusion_status": vessel_result.get("status"),
+            "vessel_occlusion_class_result": vessel_result.get(
+                "vessel_occlusion_class_result"
+            ),
+            "vessel_occlusion_confidence": vessel_result.get("confidence"),
             "analysis_status": patient_data.get("analysis_status", "pending"),
         }
 
@@ -6086,16 +6374,6 @@ def api_generate_report(patient_id):
         if result["success"]:
             report_payload = result.get("report_payload")
             user_question = ""
-            run_state = None # AI辅助生成：GLM-5, 2026-04-17
-            run_key = str(run_id or "").strip()
-            if run_key:
-                try:
-                    run_state = _get_agent_run(run_key)
-                    if not run_state:
-                        run_state = (_w0_mock_refresh_run(run_key)[0] or None)
-                except Exception as run_lookup_exc:
-                    print(f"[MedGemma] run lookup failed run_id={run_key}: {run_lookup_exc}")
-                    run_state = None
             if isinstance(run_state, dict):
                 planner_input = run_state.get("planner_input") or {} # AI辅助生成：GLM-5, 2026-04-18
                 user_question = str(
@@ -6126,9 +6404,13 @@ def api_generate_report(patient_id):
                 report_payload.setdefault("mismatch_ratio", structured_data.get("mismatch_ratio"))
                 report_payload.setdefault("three_class_label", "ischemia") # AI辅助生成：GLM-5, 2026-04-20
                 report_payload.setdefault("three_class_label_cn", "脑缺血")
-                report_payload.setdefault(
-                    "vessel_occlusion_class_result",
-                    VESSEL_OCCLUSION_CLASS_RESULT,
+                report_payload["vessel_occlusion_result"] = vessel_result
+                report_payload["vessel_occlusion_status"] = vessel_result.get("status")
+                report_payload["vessel_occlusion_class_result"] = vessel_result.get(
+                    "vessel_occlusion_class_result"
+                )
+                report_payload["vessel_occlusion_confidence"] = vessel_result.get(
+                    "confidence"
                 )
                 if user_question:
                     try:
@@ -6152,7 +6434,8 @@ def api_generate_report(patient_id):
                             {
                                 "question": user_question,
                                 "direct_answer": (
-                                    "当前病例提示脑缺血、大血管闭塞，并存在灌注不匹配。"
+                                    f"当前病例提示脑缺血，血管堵塞三分类为"
+                                    f"{vessel_result_display_label(vessel_result)}。"
                                     "需结合性别、NIHSS评分、发病至入院时间、病灶偏侧、"
                                     "核心梗死体积、半暗带体积与 mismatch 比值，优先评估" # AI辅助生成：GLM-5, 2026-04-21
                                     "再通治疗获益及出血风险。"
@@ -7106,6 +7389,7 @@ def mask_patient_context(raw: dict):
     ctp = raw.get("ctp", {}) if isinstance(raw, dict) else {} # AI辅助生成：GLM-5, 2026-03-01
     notes = raw.get("doctor_notes", {}) if isinstance(raw, dict) else {}
     vascular = raw.get("vascular", {}) if isinstance(raw, dict) else {}
+    vessel_result = vessel_result_from_sources(vascular)
 
     age = patient.get("patient_age")
     age_value = None
@@ -7137,10 +7421,12 @@ def mask_patient_context(raw: dict):
             "mismatch_ratio": ctp.get("mismatch_ratio"),
         },
         "vascular": {
-            "vessel_occlusion_class_result": vascular.get(
-                "vessel_occlusion_class_result",
-                VESSEL_OCCLUSION_CLASS_RESULT,
+            "vessel_occlusion_result": vessel_result,
+            "vessel_occlusion_status": vessel_result.get("status"),
+            "vessel_occlusion_class_result": vessel_result.get(
+                "vessel_occlusion_class_result"
             ),
+            "vessel_occlusion_confidence": vessel_result.get("confidence"),
         },
         "doctor_notes": {
             "text": notes.get("text") or "",
@@ -7246,6 +7532,9 @@ def load_patient_context_by_id(patient_id: int):
         analysis_result = imaging.get("analysis_result") or {}
         if not isinstance(analysis_result, dict):
             analysis_result = {}
+        raw_context["vascular"] = vessel_occlusion_context(
+            vessel_result_from_sources(analysis_result, imaging)
+        )
 
         core = patient_data.get("core_infarct_volume")
         if core is None:
@@ -11849,12 +12138,18 @@ def api_save_and_generate_report():
 
         # 2. Load structured data
         structured_data = get_patient_by_id(patient_id) or {}
-        structured_data.setdefault("vessel_occlusion_class_result", VESSEL_OCCLUSION_CLASS_RESULT)
         imaging_data = get_imaging_by_case(patient_id, file_id)
         if not imaging_data:
             return jsonify(
                 {"status": "error", "message": f"Imaging case {file_id} not found"}
             ), 404
+        vessel_result = _resolve_vessel_result(imaging=imaging_data)
+        structured_data["vessel_occlusion_result"] = vessel_result
+        structured_data["vessel_occlusion_status"] = vessel_result.get("status")
+        structured_data["vessel_occlusion_class_result"] = vessel_result.get(
+            "vessel_occlusion_class_result"
+        )
+        structured_data["vessel_occlusion_confidence"] = vessel_result.get("confidence")
 
         # 3. Generate MedGemma report
         print(f"Auto-generate AI report after save, patient_id: {patient_id}")

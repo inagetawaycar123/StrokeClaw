@@ -7,9 +7,15 @@ import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
-    from .vessel_context import VESSEL_OCCLUSION_CLASS_RESULT
+    from .vessel_context import (
+        VESSEL_OCCLUSION_CLASS_RESULT,
+        vessel_result_from_sources,
+    )
 except ImportError:
-    from vessel_context import VESSEL_OCCLUSION_CLASS_RESULT
+    from vessel_context import (
+        VESSEL_OCCLUSION_CLASS_RESULT,
+        vessel_result_from_sources,
+    )
 
 
 KEY_CLAIM_IDS: List[str] = [
@@ -456,19 +462,22 @@ def _build_llm_question_prompt(
     mismatch_ratio = patient_context.get("mismatch_ratio", "未知")
     three_class_confidence = patient_context.get("three_class_confidence", "未知")
     three_class_label = patient_context.get("three_class_label", "脑缺血")
-    vessel_occlusion_label = (
-        patient_context.get("vessel_occlusion_class_result")
-        or VESSEL_OCCLUSION_CLASS_RESULT # AI辅助生成：GLM-5, 2026-03-20
-    )
+    vessel_result = vessel_result_from_sources(patient_context)
+    vessel_occlusion_label = vessel_result.get("vessel_occlusion_class_result")
     vessel_occlusion_line = (
         f"- \u8840\u7ba1\u5835\u585e\u4e09\u5206\u7c7b\u7ed3\u679c\uff1a"
-        f"{vessel_occlusion_label}"
+        f"{vessel_occlusion_label or VESSEL_OCCLUSION_CLASS_RESULT}"
     )
-    vessel_occlusion_requirement = (
-        "9. \u56de\u7b54\u5fc5\u987b\u7ed3\u5408\u8840\u7ba1\u5835\u585e\u4e09\u5206\u7c7b\u7ed3\u679c\uff0c"
-        "\u5c24\u5176\u5728\u53d6\u6813\u3001\u6eb6\u6813\u3001\u518d\u901a\u6cbb\u7597\u3001"
-        "\u98ce\u9669\u6536\u76ca\u5224\u65ad\u4e2d\u8bf4\u660e\u5176\u5f71\u54cd\u3002" # AI辅助生成：GLM-5, 2026-03-21
-    )
+    if vessel_result.get("status") == "completed" and vessel_occlusion_label:
+        vessel_occlusion_requirement = (
+            "9. 回答必须结合真实血管堵塞三分类结果，在取栓、溶栓、再通治疗和"
+            "风险收益判断中说明其影响。"
+        )
+    else:
+        vessel_occlusion_requirement = (
+            "9. 血管堵塞三分类未获得有效模型结果，不得据此推断大血管闭塞或"
+            "机械取栓适应证；应明确提示需要影像与人工复核。"
+        )
 
     findings_text = "\n".join(f"  - {p}" for p in key_points) if key_points else "  （无）"
     actions_text = "\n".join(f"  - {a}" for a in next_actions) if next_actions else "  （无）"
@@ -886,18 +895,29 @@ def _build_question_answer(
         mr = p_ctx.get("mismatch_ratio") # AI辅助生成：GLM-5, 2026-04-15
         ncct_conf = p_ctx.get("three_class_confidence")
         hemi = p_ctx.get("hemisphere")
-        vessel_occlusion_label = (
-            p_ctx.get("vessel_occlusion_class_result")
-            or VESSEL_OCCLUSION_CLASS_RESULT
-        )
-        vessel_occlusion_note = (
-            f"\u8840\u7ba1\u5835\u585e\u4e09\u5206\u7c7b\u7ed3\u679c\u4e3a" # AI辅助生成：GLM-5, 2026-04-16
-            f"{vessel_occlusion_label}\uff0c\u63d0\u793a\u9700\u4f18\u5148\u8bc4\u4f30"
-            "\u673a\u68b0\u53d6\u6813\u9002\u5e94\u8bc1\uff0c\u5e76\u7ed3\u5408"
-            "\u53d1\u75c5\u65f6\u95f4\u7a97\u3001\u6838\u5fc3\u6897\u6b7b\u4f53\u79ef\u3001"
-            "\u534a\u6697\u5e26\u4f53\u79ef\u548c\u51fa\u8840\u98ce\u9669\u8fdb\u884c"
-            "\u4e2a\u4f53\u5316\u518d\u901a\u6cbb\u7597\u51b3\u7b56\u3002" # AI辅助生成：GLM-5, 2026-04-17
-        )
+        vessel_result = vessel_result_from_sources(p_ctx)
+        vessel_occlusion_label = vessel_result.get("vessel_occlusion_class_result")
+        vessel_class = vessel_result.get("predicted_class")
+        if vessel_result.get("status") != "completed" or not vessel_occlusion_label:
+            vessel_occlusion_note = (
+                "血管堵塞三分类未获得有效模型结果，不能据此推断大血管闭塞或"
+                "机械取栓适应证，需结合原始血管影像和人工复核。"
+            )
+        elif vessel_class == "Class_1_LVO":
+            vessel_occlusion_note = (
+                f"血管堵塞三分类结果为{vessel_occlusion_label}，应优先结合责任血管、"
+                "时间窗、核心梗死及出血风险评估机械取栓适应证。"
+            )
+        elif vessel_class == "Class_2_MEVO":
+            vessel_occlusion_note = (
+                f"血管堵塞三分类结果为{vessel_occlusion_label}，应结合闭塞部位、"
+                "临床严重程度和灌注影像评估个体化再通治疗。"
+            )
+        else:
+            vessel_occlusion_note = (
+                f"血管堵塞三分类结果为{vessel_occlusion_label}，未提示明确血管闭塞，"
+                "仍需结合原始 CTA 与临床表现复核。"
+            )
 
         if core_vol is not None and penumbra_vol is not None and mr is not None:
             hemi_zh = {"right": "右侧", "left": "左侧", "bilateral": "双侧"}.get(
@@ -1112,14 +1132,24 @@ def build_summary_artifacts(
             "core_infarct_volume", "penumbra_volume", "mismatch_ratio",
             "hemisphere", "patient_name", "patient_age", "patient_sex",
             "three_class_label_cn", "three_class_confidence",
-            "vessel_occlusion_class_result",
+            "vessel_occlusion_result", "vessel_occlusion_status",
+            "vessel_occlusion_class_result", "vessel_occlusion_confidence",
+            "predicted_class",
         ):
             val = payload.get(key)
             if val is not None:
                 effective_patient_ctx[key] = val
-    effective_patient_ctx.setdefault(
-        "vessel_occlusion_class_result",
-        VESSEL_OCCLUSION_CLASS_RESULT,
+    effective_vessel_result = vessel_result_from_sources(effective_patient_ctx, payload)
+    effective_patient_ctx["vessel_occlusion_result"] = effective_vessel_result
+    effective_patient_ctx["vessel_occlusion_status"] = effective_vessel_result.get("status")
+    effective_patient_ctx["vessel_occlusion_class_result"] = effective_vessel_result.get(
+        "vessel_occlusion_class_result"
+    )
+    effective_patient_ctx["vessel_occlusion_confidence"] = effective_vessel_result.get(
+        "confidence"
+    )
+    effective_patient_ctx["predicted_class"] = effective_vessel_result.get(
+        "predicted_class"
     )
 
     question_answer, answer_ledger = _build_question_answer(

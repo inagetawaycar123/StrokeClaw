@@ -21,7 +21,7 @@
     <script src="/static/vendor/react/react-dom.production.min.js"></script>
 
     <!-- 引入编译后的 report.js -->
-    <script src="/static/js/report.js?v=20260426_vessel_occlusion_result"></script>
+    <script src="/static/js/report.js?v=20260712_case_scope_v2"></script>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
@@ -32,9 +32,24 @@
         
         const fileId = urlParams.get('file_id') || null;
 
-        // 从 localStorage 获取分析数据（跨标签页共享）
-        const viewerData = JSON.parse(localStorage.getItem('analysis_data') || '{}');
+        // 仅接受当前 file_id 的缓存，避免跨标签页串用上一病例。
+        let storedViewerData = {};
+        try {
+            storedViewerData = JSON.parse(localStorage.getItem('analysis_data') || '{}');
+        } catch (error) {
+            console.warn('[Report] Ignoring invalid analysis_data cache:', error);
+        }
+        const viewerData = typeof window.getCaseScopedViewerData === 'function'
+            ? window.getCaseScopedViewerData(storedViewerData, fileId)
+            : {};
+        if (storedViewerData.file_id && !viewerData.file_id) {
+            console.warn('[Report] Ignoring analysis_data from another case', {
+                requested_file_id: fileId,
+                cached_file_id: storedViewerData.file_id,
+            });
+        }
         const analysisData = {
+            file_id: fileId,
             core_volume: viewerData.core_infarct_volume || 0,
             penumbra_volume: viewerData.penumbra_volume || 0,
             mismatch_ratio: viewerData.mismatch_ratio || 0,
@@ -44,8 +59,13 @@
             three_class_label_cn: viewerData.three_class_label_cn || '脑缺血',
             three_class_display: viewerData.three_class_display || '',
             three_class_counts: viewerData.three_class_counts || null,
-            vessel_occlusion_class_result: viewerData.vessel_occlusion_class_result || '等待模型预测',
+            vessel_occlusion_result: viewerData.vessel_occlusion_result || null,
+            vessel_occlusion_status: viewerData.vessel_occlusion_status || 'unavailable',
+            vessel_occlusion_class_result: viewerData.vessel_occlusion_class_result || null,
             vessel_occlusion_confidence: viewerData.vessel_occlusion_confidence != null ? viewerData.vessel_occlusion_confidence : null,
+            vessel_occlusion_predicted_class: viewerData.vessel_occlusion_predicted_class || null,
+            vessel_occlusion_class_counts: viewerData.vessel_occlusion_class_counts || null,
+            vessel_occlusion_valid_predictions: viewerData.vessel_occlusion_valid_predictions || 0,
         };
 
         const root = ReactDOM.createRoot(document.getElementById('report-root'));

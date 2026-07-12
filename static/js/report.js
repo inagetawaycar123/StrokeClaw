@@ -81,8 +81,9 @@ const ImageFindingsModule = ({ data, findings, isEditing, onUpdate }) => {
     }
 
     const ncctResultText = singleLabel || threeClassDisplay || countsText || '脑缺血';
-    const vesselOcclusionResultText = data.vessel_occlusion_class_result || VESSEL_OCCLUSION_CLASS_RESULT;
-    const vesselOcclusionConf = data.vessel_occlusion_confidence;
+    const safeVessel = getSafeVesselDisplayData(data);
+    const vesselOcclusionResultText = safeVessel.label;
+    const vesselOcclusionConf = safeVessel.confidence;
     const vesselOcclusionConfText = (vesselOcclusionConf != null)
         ? (' (' + (vesselOcclusionConf * 100).toFixed(0) + '%)')
         : '';
@@ -171,15 +172,68 @@ const DoctorNotesModule = ({ notes, isEditing, onUpdate }) => {
     );
 };
 
-const VESSEL_OCCLUSION_CLASS_RESULT = '大血管闭塞';
+const VESSEL_OCCLUSION_CLASS_RESULT = '未获得模型结果';
+
+function getCaseScopedViewerData(data, expectedFileId) {
+    const source = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+    const expected = expectedFileId == null ? '' : String(expectedFileId).trim();
+    const actual = source.file_id == null ? '' : String(source.file_id).trim();
+    return expected && actual && expected === actual ? source : {};
+}
+
+function getSafeVesselDisplayData(data) {
+    const source = (data && typeof data === 'object') ? data : {};
+    const nested = (source.vessel_occlusion_result && typeof source.vessel_occlusion_result === 'object')
+        ? source.vessel_occlusion_result
+        : null;
+    const selected = nested || source;
+    const status = String(nested ? nested.status : source.vessel_occlusion_status || '').trim().toLowerCase();
+    const label = String(
+        (nested ? nested.vessel_occlusion_class_result : source.vessel_occlusion_class_result) || ''
+    ).trim();
+    const predictedClass = String(
+        (nested ? nested.predicted_class : (source.vessel_occlusion_predicted_class || source.predicted_class)) || ''
+    ).trim();
+    const classCounts = nested
+        ? nested.class_counts
+        : (source.vessel_occlusion_class_counts || source.class_counts);
+    const validPredictions = Number(
+        nested ? nested.valid_predictions : (source.vessel_occlusion_valid_predictions || source.valid_predictions)
+    );
+    const hasPredictionEvidence = ['Class_0', 'Class_1_LVO', 'Class_2_MEVO'].includes(predictedClass)
+        || validPredictions > 0
+        || (classCounts && typeof classCounts === 'object'
+            && Object.values(classCounts).some((value) => Number(value) > 0));
+    const confidenceValue = nested ? nested.confidence : source.vessel_occlusion_confidence;
+    const hasConfidence = confidenceValue != null && confidenceValue !== '';
+    const confidence = hasConfidence ? Number(confidenceValue) : NaN;
+    const isLegacyFallback = selected.fallback === true
+        || String(selected.source || source.vessel_occlusion_source || '').trim().toLowerCase() === 'hardcoded';
+    const completed = status === 'completed' && !!label && hasPredictionEvidence && !isLegacyFallback;
+    return {
+        label: completed && label ? label : VESSEL_OCCLUSION_CLASS_RESULT,
+        confidence: completed && Number.isFinite(confidence) && confidence >= 0 && confidence <= 1 ? confidence : null,
+        status: completed ? 'completed' : (status === 'failed' ? 'failed' : 'unavailable'),
+    };
+}
 
 function injectVesselOcclusionIntoMarkdown(markdown, vesselLabel) {
-    if (!markdown || /血管堵塞三分类/.test(markdown)) {
-        return markdown || '';
-    }
+    if (!markdown) return '';
 
     const label = vesselLabel || VESSEL_OCCLUSION_CLASS_RESULT;
     const line = `血管堵塞三分类：${label}`;
+    let replacedExistingLine = false;
+    const replacedMarkdown = markdown.replace(
+        /^(\s*(?:[-*+]\s*)?)(?:\*\*)?血管(?:堵塞|闭塞)三分类(?:结果)?(?:\*\*)?\s*(?:[：:]|为)\s*.*$/gm,
+        (_match, prefix) => {
+            replacedExistingLine = true;
+            return `${prefix}${line}`;
+        }
+    );
+    if (replacedExistingLine) {
+        return replacedMarkdown;
+    }
+
     if (/^NCCT\s*三分类[：:]/m.test(markdown)) {
         return markdown.replace(/^(NCCT\s*三分类[：:].*)$/m, `$1\n${line}`);
     }
@@ -225,24 +279,19 @@ function renderMarkdownToHtml(markdown, vesselLabel) {
 }
 
 const getReportStorageKeys = (fileId) => {
-    if (fileId) {
-        return {
-            report: `ai_report_${fileId}`,
-            generating: `ai_report_generating_${fileId}`,
-            error: `ai_report_error_${fileId}`,
-            payload: `ai_report_payload_${fileId}`
-        };
-    }
+    const caseId = fileId == null ? '' : String(fileId).trim();
+    if (!caseId) return null;
     return {
-        report: 'ai_report',
-        generating: 'ai_report_generating',
-        error: 'ai_report_error',
-        payload: 'ai_report_payload'
+        report: `ai_report_${caseId}`,
+        generating: `ai_report_generating_${caseId}`,
+        error: `ai_report_error_${caseId}`,
+        payload: `ai_report_payload_${caseId}`
     };
 };
 const REPORT_GENERATING_TIMEOUT_MS = 90000;
 const getGeneratingTsKey = (keys) => `${keys.generating}_ts`;
 const clearGeneratingState = (keys) => {
+    if (!keys) return;
     localStorage.removeItem(keys.generating); // AI辅助生成：GLM-5, 2026-03-15
     localStorage.removeItem(getGeneratingTsKey(keys));
     localStorage.removeItem('ai_report_generating');
@@ -265,6 +314,12 @@ const StructuredReport = ({ patientId, fileId, analysisData }) => {
     const [error, setError] = useState(null);    // 报告缓存按 file_id 隔离，避免跨病例串数据
     useEffect(() => {
         const keys = getReportStorageKeys(fileId); // AI辅助生成：GLM-5, 2026-03-17
+        if (!keys) {
+            setAiReport(null);
+            setReportPayload(null);
+            setIsGeneratingReport(false);
+            return undefined;
+        }
         const tsKey = getGeneratingTsKey(keys);
 
         const applyStorageState = () => {
@@ -328,6 +383,7 @@ const StructuredReport = ({ patientId, fileId, analysisData }) => {
 
     useEffect(() => {
         const keys = getReportStorageKeys(fileId); // AI辅助生成：GLM-5, 2026-03-22
+        if (!keys) return undefined;
         const tsKey = getGeneratingTsKey(keys);
         const timer = setInterval(() => {
             const hasReport = !!localStorage.getItem(keys.report);
@@ -360,8 +416,13 @@ const StructuredReport = ({ patientId, fileId, analysisData }) => {
             setLoading(false); // AI辅助生成：GLM-5, 2026-03-25
             return;
         }
+        if (!fileId) {
+            setError('缺少病例 file_id，已拒绝读取全局报告缓存。');
+            setLoading(false);
+            return;
+        }
         loadPatientInfo();
-    }, [patientId]);
+    }, [patientId, fileId]);
     
     const loadPatientInfo = async () => {
         try {
@@ -405,6 +466,10 @@ const StructuredReport = ({ patientId, fileId, analysisData }) => {
         });
     };
 
+    const mergedVesselData = getSafeVesselDisplayData({
+        ...((analysisData && typeof analysisData === 'object') ? analysisData : {}),
+        ...((reportPayload && typeof reportPayload === 'object') ? reportPayload : {}),
+    });
     const mergedAnalysisData = {
         ...(analysisData || {}),
         ...((reportPayload && typeof reportPayload === 'object') ? reportPayload : {}),
@@ -414,8 +479,9 @@ const StructuredReport = ({ patientId, fileId, analysisData }) => {
         question_answer: (reportPayload && reportPayload.question_answer) || (analysisData && analysisData.question_answer) || null,
         goal_question: (reportPayload && (reportPayload.goal_question || reportPayload.question)) || (analysisData && analysisData.goal_question) || '',
         three_class_label_cn: (analysisData && analysisData.three_class_label_cn) || (reportPayload && reportPayload.three_class_label_cn) || '脑缺血',
-        vessel_occlusion_class_result: (analysisData && analysisData.vessel_occlusion_class_result) || (reportPayload && reportPayload.vessel_occlusion_class_result) || VESSEL_OCCLUSION_CLASS_RESULT,
-        vessel_occlusion_confidence: (analysisData && analysisData.vessel_occlusion_confidence != null) ? analysisData.vessel_occlusion_confidence : ((reportPayload && reportPayload.vessel_occlusion_confidence != null) ? reportPayload.vessel_occlusion_confidence : null),
+        vessel_occlusion_status: mergedVesselData.status,
+        vessel_occlusion_class_result: mergedVesselData.label,
+        vessel_occlusion_confidence: mergedVesselData.confidence,
     };
     
     const handlePatientUpdate = (field, value) => {
@@ -552,5 +618,16 @@ const StructuredReport = ({ patientId, fileId, analysisData }) => {
     );
 };
 
-window.StructuredReport = StructuredReport;
+if (typeof window !== 'undefined') {
+    window.StructuredReport = StructuredReport;
+    window.getCaseScopedViewerData = getCaseScopedViewerData;
+}
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        getReportStorageKeys,
+        getCaseScopedViewerData,
+        getSafeVesselDisplayData,
+        injectVesselOcclusionIntoMarkdown,
+    };
+}
 

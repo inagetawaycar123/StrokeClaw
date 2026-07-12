@@ -9,9 +9,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
-    from .vessel_context import VESSEL_OCCLUSION_CLASS_RESULT
+    from .vessel_context import vessel_result_from_sources
 except ImportError:
-    from vessel_context import VESSEL_OCCLUSION_CLASS_RESULT
+    from vessel_context import vessel_result_from_sources
 
 import torch
 from transformers import AutoModelForImageTextToText, AutoProcessor
@@ -1232,6 +1232,7 @@ def generate_report_with_medgemma(
         summary_findings = _build_summary_findings(
             ncct_section, cta_sections, stage2_sections, ctp_lines
         )
+        vessel_result = vessel_result_from_sources(structured_data)
 
         report_payload = {
             "modalities": modalities,
@@ -1251,10 +1252,12 @@ def generate_report_with_medgemma(
             "summary_findings": summary_findings,
             "ctp_enhanced": ctp_lines if show_ctp else None,
             "risk_notice": list(_RISK_NOTICE),
-            "vessel_occlusion_class_result": structured_data.get(
-                "vessel_occlusion_class_result",
-                VESSEL_OCCLUSION_CLASS_RESULT,
+            "vessel_occlusion_result": vessel_result,
+            "vessel_occlusion_status": vessel_result.get("status"),
+            "vessel_occlusion_class_result": vessel_result.get(
+                "vessel_occlusion_class_result"
             ),
+            "vessel_occlusion_confidence": vessel_result.get("confidence"),
             "ncct_enhanced": stage2_sections.get("ncct_enhanced", []),
             "cta_enhanced": cta_enhanced_payload,
             "quality_checks": quality_checks,

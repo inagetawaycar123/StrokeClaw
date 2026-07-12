@@ -151,6 +151,61 @@ function buildProcessingReviewUrl() {
     return query ? `/processing?${query}` : '/processing';
 }
 
+function normalizeCaseIdentifier(value) {
+    return value == null ? '' : String(value).trim();
+}
+
+function viewerDataMatchesFileId(viewerData, expectedFileId) {
+    if (!viewerData || typeof viewerData !== 'object') return false;
+    const expected = normalizeCaseIdentifier(expectedFileId);
+    const actual = normalizeCaseIdentifier(viewerData.file_id);
+    return !!expected && !!actual && expected === actual;
+}
+
+function agentRunMatchesCase(runState, expectedFileId, expectedPatientId = '') {
+    if (!runState || typeof runState !== 'object') return false;
+
+    const expectedFile = normalizeCaseIdentifier(expectedFileId);
+    if (!expectedFile) return false;
+
+    const plannerInput = runState.planner_input && typeof runState.planner_input === 'object'
+        ? runState.planner_input
+        : {};
+    const runFileIds = [runState.file_id, plannerInput.file_id]
+        .map(normalizeCaseIdentifier)
+        .filter(Boolean);
+    if (runFileIds.length === 0 || runFileIds.some((fileId) => fileId !== expectedFile)) {
+        return false;
+    }
+
+    const expectedPatient = normalizeCaseIdentifier(expectedPatientId);
+    const runPatientIds = [runState.patient_id, plannerInput.patient_id]
+        .map(normalizeCaseIdentifier)
+        .filter(Boolean);
+    if (expectedPatient && runPatientIds.some((patientId) => patientId !== expectedPatient)) {
+        return false;
+    }
+
+    return true;
+}
+
+async function validateAgentRunForCase(runId, expectedFileId, expectedPatientId = '') {
+    if (!runId) return true;
+    try {
+        const resp = await fetch('/api/agent/runs/' + encodeURIComponent(runId));
+        if (!resp.ok) return false;
+        const data = await resp.json();
+        return !!(data && data.success && agentRunMatchesCase(
+            data.run,
+            expectedFileId,
+            expectedPatientId
+        ));
+    } catch (error) {
+        console.warn('[Viewer] Unable to validate Agent Run case:', error);
+        return false;
+    }
+}
+
 async function enforceReviewGateBeforeViewer() {
     if (!currentRunId) return true;
     try {
@@ -169,7 +224,7 @@ async function enforceReviewGateBeforeViewer() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', async function() {
+if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded', async function() {
     const urlParams = new URLSearchParams(window.location.search); // AI辅助生成：GLM-5, 2026-03-05
     const fileIdParam = urlParams.get('file_id');
     const runIdParam = urlParams.get('run_id') || urlParams.get('agent_run_id');
@@ -181,10 +236,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     } else if (currentFileId) {
         currentRunId = localStorage.getItem(`latest_agent_run_${currentFileId}`) || '';
     }
-    if (currentFileId && currentRunId) {
-        localStorage.setItem(`latest_agent_run_${currentFileId}`, currentRunId);
-    }
-
     currentPatientId = getCurrentPatientId();
     const viewerData = getViewerData();
 
@@ -192,6 +243,31 @@ document.addEventListener('DOMContentLoaded', async function() {
         showMsg('Missing required viewer context. Please re-upload.', 'error');
         setTimeout(() => window.location.href = '/upload', 1000); // AI辅助生成：GLM-5, 2026-03-06
         return;
+    }
+
+    if (!viewerDataMatchesFileId(viewerData, currentFileId)) {
+        console.warn('[Viewer] Refusing mismatched viewer_data', {
+            requested_file_id: currentFileId,
+            viewer_file_id: viewerData && viewerData.file_id,
+        });
+        showMsg('Viewer data does not match the requested case. Please reopen it from Processing.', 'error');
+        setTimeout(() => window.location.href = '/upload', 1000);
+        return;
+    }
+
+    if (currentRunId) {
+        const runMatchesCase = await validateAgentRunForCase(
+            currentRunId,
+            currentFileId,
+            currentPatientId
+        );
+        if (!runMatchesCase) {
+            console.warn('[Viewer] Ignoring mismatched or unverifiable run_id', currentRunId);
+            localStorage.removeItem(`latest_agent_run_${currentFileId}`);
+            currentRunId = '';
+        } else {
+            localStorage.setItem(`latest_agent_run_${currentFileId}`, currentRunId);
+        }
     }
 
     const gatePass = await enforceReviewGateBeforeViewer();
@@ -221,6 +297,11 @@ function initializeViewer(data) {
     isPseudocolorActive = false;
     pseudocolorLutStats = {};
     updatePseudocolorButtonLabel();
+
+    // Always establish a case-scoped vessel state before restoring any cached
+    // stroke analysis. Missing/failed results must not inherit another case's
+    // prediction from the shared analysis_data storage key.
+    applyVesselOcclusionResult(data.vessel_occlusion_result, 'viewer_data');
 
     // 浠庡悗绔暟鎹簱鑾峰彇 hemisphere锛坧atient_imaging 琛�?
     currentHemisphere = 'both';
@@ -263,37 +344,8 @@ function initializeViewer(data) {
         // 妫€鏌ユ暟鎹簱涓殑鍒嗘瀽鐘舵€侊紙鐢ㄤ簬鑷姩鍒嗘瀽锛?
         checkAnalysisStatus();
 
-        // 从 Agent Run 提取血管闭塞三分类真实模型结果
-        hydrateVesselOcclusionFromRun(currentRunId).then(hydrated => {
-            if (hydrated) {
-                console.log('[Vessel] Model result loaded:', currentVesselOcclusionResult);
-                if (analysisResults) {
-                    const el = document.getElementById('value-vessel-occlusion-class');
-                    if (el) {
-                        el.textContent = currentVesselOcclusionResult.label || VESSEL_OCCLUSION_CLASS_RESULT;
-                        if (currentVesselOcclusionResult.source === 'model') {
-                            el.style.color = '#4fc3f7';
-                        }
-                    }
-                    const confEl = document.getElementById('value-vessel-occlusion-confidence');
-                    if (confEl && currentVesselOcclusionResult.confidence != null) {
-                        const confVal = (currentVesselOcclusionResult.confidence * 100).toFixed(1) + '%';
-                        confEl.textContent = confVal;
-                        const c = currentVesselOcclusionResult.confidence;
-                        confEl.style.color = c >= 0.7 ? '#51cf66' : c >= 0.5 ? '#ffd43b' : '#ff6b6b';
-                    }
-                    // 刷新 localStorage，确保报告页读取到真实数据
-                    try {
-                        const stored = JSON.parse(localStorage.getItem('analysis_data') || '{}');
-                        stored.vessel_occlusion_class_result = currentVesselOcclusionResult.label;
-                        stored.vessel_occlusion_confidence = currentVesselOcclusionResult.confidence;
-                        stored.vessel_occlusion_source = currentVesselOcclusionResult.source;
-                        localStorage.setItem('analysis_data', JSON.stringify(stored));
-                        sessionStorage.setItem('analysis_data', JSON.stringify(stored));
-                    } catch (_e) { /* ignore */ }
-                }
-            }
-        });
+        // Agent Run is the freshest source and may safely override viewer_data.
+        hydrateVesselOcclusionFromRun(currentRunId);
     }
 
     // 妫€娴婥TP鐏屾敞鍥炬暟鎹槸鍚﹀瓨鍦?
@@ -957,15 +1009,174 @@ function toggleCellPseudocolor(modelKey) {
     updateLutScale(modelKey, currentSlice);
 }
 
-function toggleAnalysisPanel() { document.getElementById('analysisPanel').classList.toggle('open'); }
+function toggleAnalysisPanel() {
+    const panel = document.getElementById('analysisPanel');
+    if (!panel) {
+        console.warn('[Viewer] analysisPanel is not available');
+        return;
+    }
+    panel.classList.toggle('open');
+}
 
-const VESSEL_OCCLUSION_CLASS_RESULT = '大血管闭塞';
-// 血管闭塞三分类真实模型结果（从 Agent Run 中提取）
-let currentVesselOcclusionResult = {
-    label: VESSEL_OCCLUSION_CLASS_RESULT,
-    confidence: null,
-    source: 'hardcoded'  // 'hardcoded' | 'model'
+const VESSEL_OCCLUSION_CLASS_RESULT = '未获得模型结果';
+const VESSEL_RESULT_STATUSES = new Set(['completed', 'failed', 'unavailable']);
+const VESSEL_CLASS_LABELS = {
+    Class_0: '无明显狭窄',
+    Class_1_LVO: '大血管闭塞',
+    Class_2_MEVO: '中血管闭塞'
 };
+const VESSEL_STORAGE_FIELDS = [
+    'vessel_occlusion_result',
+    'vessel_occlusion_status',
+    'vessel_occlusion_class_result',
+    'vessel_occlusion_confidence',
+    'vessel_occlusion_source',
+    'vessel_occlusion_predicted_class',
+    'vessel_occlusion_class_counts'
+];
+
+function normalizeViewerVesselOcclusionResult(rawResult, source = 'viewer_data') {
+    const candidate = rawResult && typeof rawResult === 'object' ? rawResult : {};
+    const raw = candidate.vessel_occlusion_result && typeof candidate.vessel_occlusion_result === 'object'
+        ? candidate.vessel_occlusion_result
+        : candidate;
+    const predictedClass = String(raw.predicted_class || '').trim();
+    const rawLabel = raw.vessel_occlusion_class_result || raw.predicted_label || VESSEL_CLASS_LABELS[predictedClass];
+    const label = rawLabel == null ? '' : String(rawLabel).trim();
+    const rawStatus = String(raw.status || '').trim().toLowerCase();
+    const classCounts = raw.class_counts && typeof raw.class_counts === 'object' ? raw.class_counts : null;
+    const hasPredictionEvidence = Object.prototype.hasOwnProperty.call(VESSEL_CLASS_LABELS, predictedClass)
+        || Number(raw.valid_predictions) > 0
+        || (classCounts && Object.values(classCounts).some((value) => Number(value) > 0));
+    let status = VESSEL_RESULT_STATUSES.has(rawStatus)
+        ? rawStatus
+        : (label && hasPredictionEvidence ? 'completed' : 'unavailable');
+
+    if (raw.fallback === true || String(raw.source || '').toLowerCase() === 'hardcoded') {
+        status = 'unavailable';
+    } else if (status === 'completed' && (!label || !hasPredictionEvidence)) {
+        status = 'failed';
+    }
+
+    const rawConfidence = raw.confidence;
+    const confidenceValue = rawConfidence == null || rawConfidence === '' ? NaN : Number(rawConfidence);
+    const confidence = status === 'completed'
+        && Number.isFinite(confidenceValue)
+        && confidenceValue >= 0
+        && confidenceValue <= 1
+        ? confidenceValue
+        : null;
+
+    return {
+        status,
+        label: status === 'completed' ? label : VESSEL_OCCLUSION_CLASS_RESULT,
+        confidence,
+        source,
+        predicted_class: status === 'completed' && predictedClass ? predictedClass : null,
+        class_counts: classCounts ? { ...classCounts } : null,
+        total_slices: Math.max(0, Number(raw.total_slices) || 0),
+        valid_predictions: Math.max(0, Number(raw.valid_predictions) || 0),
+        error_code: raw.error_code || null,
+        error_message: raw.error_message || raw.fallback_reason || null,
+        failures: Array.isArray(raw.failures) ? raw.failures.slice() : []
+    };
+}
+
+function isCompletedVesselOcclusionResult(result = currentVesselOcclusionResult) {
+    return !!(
+        result
+        && result.status === 'completed'
+        && result.label
+        && result.label !== VESSEL_OCCLUSION_CLASS_RESULT
+    );
+}
+
+function buildVesselOcclusionContract(result = currentVesselOcclusionResult) {
+    const completed = isCompletedVesselOcclusionResult(result);
+    return {
+        status: completed ? 'completed' : (result?.status === 'failed' ? 'failed' : 'unavailable'),
+        vessel_occlusion_class_result: completed ? result.label : null,
+        predicted_class: completed ? (result.predicted_class || null) : null,
+        confidence: completed ? result.confidence : null,
+        class_counts: completed && result?.class_counts ? result.class_counts : {
+            Class_0: 0,
+            Class_1_LVO: 0,
+            Class_2_MEVO: 0
+        },
+        total_slices: Math.max(0, Number(result?.total_slices) || 0),
+        valid_predictions: completed ? Math.max(0, Number(result?.valid_predictions) || 0) : 0,
+        error_code: completed ? null : (result?.error_code || null),
+        error_message: completed ? null : (result?.error_message || null),
+        failures: Array.isArray(result?.failures) ? result.failures.slice() : []
+    };
+}
+
+function syncVesselOcclusionStorage() {
+    const contract = buildVesselOcclusionContract();
+    const completed = contract.status === 'completed';
+
+    [sessionStorage, localStorage].forEach((storage) => {
+        try {
+            let stored = {};
+            const raw = storage.getItem('analysis_data');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    stored = parsed;
+                }
+            }
+
+            // Remove every legacy vessel field first so a failed or unavailable
+            // result can never retain the prior case's positive prediction.
+            VESSEL_STORAGE_FIELDS.forEach((field) => delete stored[field]);
+            stored.file_id = currentFileId || stored.file_id || null;
+            stored.vessel_occlusion_result = contract;
+            stored.vessel_occlusion_status = contract.status;
+
+            if (completed) {
+                stored.vessel_occlusion_class_result = contract.vessel_occlusion_class_result;
+                stored.vessel_occlusion_confidence = contract.confidence;
+                stored.vessel_occlusion_source = currentVesselOcclusionResult.source;
+                stored.vessel_occlusion_predicted_class = contract.predicted_class;
+                stored.vessel_occlusion_class_counts = contract.class_counts;
+            }
+
+            storage.setItem('analysis_data', JSON.stringify(stored));
+        } catch (error) {
+            console.warn('[Vessel] Unable to refresh analysis_data storage:', error);
+        }
+    });
+}
+
+function renderVesselOcclusionResult() {
+    const completed = isCompletedVesselOcclusionResult();
+    const classEl = document.getElementById('value-vessel-occlusion-class');
+    if (classEl) {
+        classEl.textContent = completed ? currentVesselOcclusionResult.label : VESSEL_OCCLUSION_CLASS_RESULT;
+        classEl.style.color = completed ? '#4fc3f7' : '';
+    }
+
+    const confidenceEl = document.getElementById('value-vessel-occlusion-confidence');
+    if (confidenceEl) {
+        const confidence = currentVesselOcclusionResult.confidence;
+        if (completed && confidence != null) {
+            confidenceEl.textContent = (confidence * 100).toFixed(1) + '%';
+            confidenceEl.style.color = confidence >= 0.7 ? '#51cf66' : confidence >= 0.5 ? '#ffd43b' : '#ff6b6b';
+        } else {
+            confidenceEl.textContent = '--';
+            confidenceEl.style.color = '';
+        }
+    }
+}
+
+function applyVesselOcclusionResult(rawResult, source = 'viewer_data') {
+    currentVesselOcclusionResult = normalizeViewerVesselOcclusionResult(rawResult, source);
+    renderVesselOcclusionResult();
+    syncVesselOcclusionStorage();
+}
+
+// Case-scoped safe default. A model failure must never imply an LVO diagnosis.
+let currentVesselOcclusionResult = normalizeViewerVesselOcclusionResult(null, 'unavailable');
 
 function formatNcctConfidence(value) {
     const n = Number(value); // AI辅助生成：GLM-5, 2026-04-18
@@ -1032,30 +1243,11 @@ function displayAnalysisResults() {
     const report = analysisResults.report?.summary;
     const ncctThreeClass = extractNcctThreeClassInfo();
     const ncctClassEl = document.getElementById('value-ncct-class');
-    const vesselOcclusionClassEl = document.getElementById('value-vessel-occlusion-class');
     const ncctConfidenceEl = document.getElementById('value-ncct-confidence');
     if (ncctClassEl) {
         ncctClassEl.textContent = ncctThreeClass.label;
     }
-    if (vesselOcclusionClassEl) {
-        const vesselLabel = currentVesselOcclusionResult.label || VESSEL_OCCLUSION_CLASS_RESULT;
-        vesselOcclusionClassEl.textContent = vesselLabel;
-        // 模型来源时加标记
-        if (currentVesselOcclusionResult.source === 'model') {
-            vesselOcclusionClassEl.style.color = '#4fc3f7';
-        }
-    }
-    const vesselConfEl = document.getElementById('value-vessel-occlusion-confidence');
-    if (vesselConfEl) {
-        const conf = currentVesselOcclusionResult.confidence;
-        if (conf != null && currentVesselOcclusionResult.source === 'model') {
-            vesselConfEl.textContent = (conf * 100).toFixed(1) + '%';
-            vesselConfEl.style.color = conf >= 0.7 ? '#51cf66' : conf >= 0.5 ? '#ffd43b' : '#ff6b6b';
-        } else {
-            vesselConfEl.textContent = '--';
-            vesselConfEl.style.color = '';
-        }
-    }
+    renderVesselOcclusionResult();
     if (ncctConfidenceEl) {
         ncctConfidenceEl.textContent = ncctThreeClass.confidence;
     }
@@ -1091,8 +1283,7 @@ function displayAnalysisResults() {
     };
     const lesionHemisphere = hemisphereMap[currentHemisphere] || 'both';
     
-    const vesselOcclusionLabel = currentVesselOcclusionResult.label || VESSEL_OCCLUSION_CLASS_RESULT;
-    const vesselOcclusionConf = currentVesselOcclusionResult.confidence;
+    const vesselOcclusionContract = buildVesselOcclusionContract();
     const analysisStorageData = {
         file_id: currentFileId,
         core_infarct_volume: analysisResults.report?.summary?.core_volume_ml || 0,
@@ -1102,13 +1293,18 @@ function displayAnalysisResults() {
         hemisphere: lesionHemisphere,
         three_class_label_cn: ncctThreeClass.label,
         three_class_confidence: ncctThreeClass.confidence,
-        vessel_occlusion_class_result: vesselOcclusionLabel,
-        vessel_occlusion_confidence: vesselOcclusionConf,
-        vessel_occlusion_source: currentVesselOcclusionResult.source
+        vessel_occlusion_result: vesselOcclusionContract,
+        vessel_occlusion_status: vesselOcclusionContract.status
     };
+    if (vesselOcclusionContract.status === 'completed') {
+        analysisStorageData.vessel_occlusion_class_result = vesselOcclusionContract.vessel_occlusion_class_result;
+        analysisStorageData.vessel_occlusion_confidence = vesselOcclusionContract.confidence;
+        analysisStorageData.vessel_occlusion_source = currentVesselOcclusionResult.source;
+        analysisStorageData.vessel_occlusion_predicted_class = vesselOcclusionContract.predicted_class;
+        analysisStorageData.vessel_occlusion_class_counts = vesselOcclusionContract.class_counts;
+    }
     sessionStorage.setItem('analysis_data', JSON.stringify(analysisStorageData));
     localStorage.setItem('analysis_data', JSON.stringify(analysisStorageData));
-    })); // AI辅助生成：GLM-5, 2026-03-02
 
     // 淇濆瓨瀹屾暣鐨勫垎鏋愮粨鏋滃埌localStorage锛岀敤浜庨〉闈㈠埛鏂板悗鎭㈠
     if (currentFileId) {
@@ -1258,40 +1454,37 @@ function extractRunReportResult(runState) {
 }
 
 function extractRunVesselOcclusionResult(runState) {
-    // 从 Agent Run 结果中提取血管闭塞三分类真实预测值
     const run = runState || {};
     const result = run.result || {};
-    // 优先从 result.vessel_occlusion_result 获取
     const vesselResult = result.vessel_occlusion_result;
     if (vesselResult && typeof vesselResult === 'object') {
-        const label = vesselResult.vessel_occlusion_class_result || vesselResult.predicted_label;
-        if (label) {
-            return {
-                label: label,
-                confidence: vesselResult.confidence != null ? Number(vesselResult.confidence) : null,
-                source: 'model',
-                predicted_class: vesselResult.predicted_class || null,
-                class_counts: vesselResult.class_counts || null
-            };
-        }
+        return vesselResult;
     }
-    // 回退：从 tool_results 中寻找 vessel_occlusion
+
+    // Compatibility path for runs created before the aggregate result was
+    // attached. Failed tool results are returned as an explicit safe state.
     const toolResults = run.tool_results || [];
     for (let i = toolResults.length - 1; i >= 0; i--) {
         const tr = toolResults[i];
-        if (tr.tool_name === 'vessel_occlusion' && tr.status === 'completed') {
-            const output = tr.structured_output || {};
-            const label = output.vessel_occlusion_class_result || output.predicted_label;
-            if (label) {
-                return {
-                    label: label,
-                    confidence: output.confidence != null ? Number(output.confidence) : null,
-                    source: 'model',
-                    predicted_class: output.predicted_class || null,
-                    class_counts: output.class_counts || null
-                };
-            }
+        if (tr.tool_name !== 'vessel_occlusion') continue;
+
+        const output = tr.structured_output || tr.output_ref || tr.output || {};
+        if (output && typeof output === 'object' && Object.keys(output).length > 0) {
+            return {
+                ...output,
+                status: output.status || (
+                    tr.status === 'completed'
+                        ? 'completed'
+                        : (tr.status === 'unavailable' ? 'unavailable' : 'failed')
+                )
+            };
         }
+
+        return {
+            status: tr.status === 'unavailable' ? 'unavailable' : 'failed',
+            error_code: tr.error_code || null,
+            error_message: tr.error_message || tr.message || null
+        };
     }
     return null;
 }
@@ -1303,13 +1496,24 @@ async function hydrateVesselOcclusionFromRun(runId) {
         if (!resp.ok) return false;
         const data = await resp.json();
         if (!data || !data.success) return false;
+        if (!agentRunMatchesCase(data.run, currentFileId, currentPatientId)) {
+            console.warn('[Vessel] Ignoring Agent Run from a different case', {
+                requested_file_id: currentFileId,
+                requested_patient_id: currentPatientId,
+                run_file_id: data.run && data.run.file_id,
+                planner_file_id: data.run && data.run.planner_input && data.run.planner_input.file_id,
+            });
+            return false;
+        }
         const vesselResult = extractRunVesselOcclusionResult(data.run);
         if (vesselResult) {
-            currentVesselOcclusionResult = vesselResult;
-            console.log('[Vessel] Hydrated from agent run:', vesselResult);
+            applyVesselOcclusionResult(vesselResult, 'agent_run');
+            console.log('[Vessel] Hydrated from agent run:', currentVesselOcclusionResult);
             return true;
         }
-    } catch (_e) { /* ignore */ }
+    } catch (error) {
+        console.warn('[Vessel] Agent run hydration failed:', error);
+    }
     return false;
 }
 
@@ -1828,9 +2032,11 @@ async function triggerGenerateReportFromTopBar() {
     showMsg(`\u62a5\u544a\u751f\u6210\u5931\u8d25\uff1a${result.message || '\u672a\u77e5\u9519\u8bef'}`, 'error');
 }
 
-window.triggerGenerateReportFromTopBar = triggerGenerateReportFromTopBar;
-window.openValidation = openValidation; // AI辅助生成：GLM-5, 2026-04-04
-window.openCockpit = openCockpit;
+if (typeof window !== 'undefined') {
+    window.triggerGenerateReportFromTopBar = triggerGenerateReportFromTopBar;
+    window.openValidation = openValidation; // AI辅助生成：GLM-5, 2026-04-04
+    window.openCockpit = openCockpit;
+}
 
 function checkAnalysisStatus() {
     if (!currentFileId) return;
@@ -1870,6 +2076,16 @@ function checkAnalysisStatus() {
         .catch(err => {
             console.warn('check analysis status failed', err);
         });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        agentRunMatchesCase,
+        normalizeViewerVesselOcclusionResult,
+        toggleAnalysisPanel,
+        validateAgentRunForCase,
+        viewerDataMatchesFileId,
+    };
 }
 
 
