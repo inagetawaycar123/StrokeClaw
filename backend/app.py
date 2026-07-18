@@ -27,6 +27,7 @@ try:
     from .compat.adapters import build_clinical_decision_bundle
     from .compat.skill_registry import get_skill_registry
     from .extensions import NumpyJSONEncoder
+    from .mRS_predict.mRS import predict_mrs_risk
     from .summary_assembler import build_summary_artifacts
     from .vessel_context import (
         VESSEL_OCCLUSION_CLASS_RESULT,
@@ -243,6 +244,7 @@ def append_modalities_to_imaging(
     Upsert uploaded modalities into patient_imaging.available_modalities (text[])
     using (patient_id, case_id) as the record key.
     Returns (True, data) or (False, error).
+    from mRS_predict.mRS import predict_mrs_risk
     """
     if not SUPABASE_AVAILABLE:
         return (False, "Supabase unavailable")
@@ -1329,6 +1331,28 @@ def _add_job_warning(job_id, warning):
 def _get_upload_job(job_id):
     with UPLOAD_JOBS_LOCK:
         return _safe_job_copy(UPLOAD_JOBS.get(job_id))
+
+
+def _find_latest_upload_job_by_case(patient_id, file_id):
+    target_patient_id = str(patient_id or "").strip()
+    target_file_id = str(file_id or "").strip()
+    if not target_patient_id or not target_file_id:
+        return None
+
+    with UPLOAD_JOBS_LOCK:
+        candidates = []
+        for job in UPLOAD_JOBS.values():
+            if str((job or {}).get("patient_id") or "").strip() != target_patient_id:
+                continue
+            if str((job or {}).get("file_id") or "").strip() != target_file_id:
+                continue
+            candidates.append(copy.deepcopy(job))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: str(item.get("updated_at") or item.get("created_at") or ""), reverse=True)
+    return candidates[0]
 
 
 def _normalize_uploaded_modalities(modalities):
@@ -8978,6 +9002,36 @@ def process_rgb_synthesis(
             "voxel_dims": [float(dim) for dim in ncct_img.header.get_zooms()[:3]],
         }
 
+        mrs_result = {
+            "success": False,
+            "model_available": False,
+            "risk_level": "unknown",
+            "risk_label_cn": "不可用",
+            "risk_score": None,
+            "probabilities": {},
+            "source": "unavailable",
+            "message": "mRS 仅支持 NCCT + mCTA + vCTA + dCTA 模态",
+        }
+        has_full_cta = bool(mcta_path and vcta_path and dcta_path)
+        if has_full_cta:
+            try:
+                mrs_result = predict_mrs_risk(ncct_path, mcta_path, vcta_path, dcta_path)
+                mrs_result["cta_phase_used"] = "mcta+vcta+dcta"
+                mrs_result["modality_requirement"] = "ncct+mcta+vcta+dcta"
+            except Exception as mrs_exc:
+                mrs_result = {
+                    "success": False,
+                    "model_available": False,
+                    "risk_level": "unknown",
+                    "risk_label_cn": "不可用",
+                    "risk_score": None,
+                    "probabilities": {},
+                    "source": "error",
+                    "message": f"mRS 预测失败: {mrs_exc}",
+                }
+                metadata["mrs_available"] = has_full_cta
+        metadata["mrs_result"] = mrs_result
+
         # 澶勭悊姣忎釜鍒囩墖
         rgb_files = []
         num_slices = mcta_data.shape[2] if len(mcta_data.shape) >= 3 else 1
@@ -9190,6 +9244,7 @@ def process_rgb_synthesis(
             "has_ai": has_any_model_success,
             "available_models": available_models,
             "model_configs": MODEL_CONFIGS,
+            "mrs_result": mrs_result,
         }
 
         print(f"\n=== 返回给前端的数据结构 ===")
@@ -10249,6 +10304,10 @@ def api_get_agent_run(run_id):
     if not run:
         return jsonify({"success": False, "error": "Run not found"}), 404
     run = _ensure_w0_run_fields(run)
+    if not run.get("linked_upload_job_id"):
+        inferred_job = _find_latest_upload_job_by_case(run.get("patient_id"), run.get("file_id"))
+        if inferred_job:
+            run["linked_upload_job_id"] = inferred_job.get("job_id")
     return jsonify({"success": True, "run": run})
 
 
@@ -11893,6 +11952,42 @@ def upload_files():
             if not three_class_view.get("success"):
                 print(f"[WARN] three_class inference failed: {three_class_view.get('error')}")
 
+            mrs_result = {
+                "success": False,
+                "model_available": False,
+                "risk_level": "unknown",
+                "risk_label_cn": "不可用",
+                "risk_score": None,
+                "probabilities": {},
+                "source": "unavailable",
+                "message": "mRS 仅支持 NCCT + mCTA + vCTA + dCTA 模态",
+            }
+            has_full_cta = bool(
+                mcta_path
+                and vcta_path
+                and dcta_path
+                and os.path.exists(mcta_path)
+                and os.path.exists(vcta_path)
+                and os.path.exists(dcta_path)
+            )
+
+            if has_full_cta:
+                try:
+                    mrs_result = predict_mrs_risk(ncct_path, mcta_path, vcta_path, dcta_path)
+                    mrs_result["cta_phase_used"] = "mcta+vcta+dcta"
+                    mrs_result["modality_requirement"] = "ncct+mcta+vcta+dcta"
+                except Exception as mrs_exc:
+                    mrs_result = {
+                        "success": False,
+                        "model_available": False,
+                        "risk_level": "unknown",
+                        "risk_label_cn": "不可用",
+                        "risk_score": None,
+                        "probabilities": {},
+                        "source": "error",
+                        "message": f"mRS 预测失败: {mrs_exc}",
+                    }
+
             # 自动触发脑卒中分析（如果满足条件）
             if patient_id and not defer_stroke_analysis:
                 print("尝试自动触发脑卒中分析...")
@@ -11921,7 +12016,11 @@ def upload_files():
                     "cbv_filename": cbv_file.filename if cbv_file else "",
                     "tmax_filename": tmax_file.filename if tmax_file else "",
                     "ncct_filename": ncct_file.filename,
-                    "metadata": {},
+                    "metadata": {
+                        "mrs_available": has_full_cta,
+                        "mrs_result": mrs_result,
+                    },
+                    "mrs_result": mrs_result,
                     "rgb_files": rgb_files,
                     "total_slices": int(total_slices),
                     "has_ai": False,

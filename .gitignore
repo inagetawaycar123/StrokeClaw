@@ -43,5 +43,8 @@ MedGemma_Model/example/
 # 三分类权重
 backend/three_class/best_model.pt
 
+# mRS权重
+backend/mRS_predict/cnn_2class_model.pth
+
 # .idea
 .idea/

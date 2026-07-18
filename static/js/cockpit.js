@@ -1,6 +1,7 @@
 let cockpitRunId = ''; // AI辅助生成：GLM-5, 2026-04-23
 let cockpitFileId = '';
 let cockpitPatientId = '';
+let cockpitJobId = '';
 
 let cockpitRun = null;
 let cockpitEvents = [];
@@ -96,6 +97,7 @@ const TOOL_TITLE_MAP = {
     run_vessel_occlusion_classification: '血管闭塞三分类',
     generate_ctp_maps: '类CTP生成',
     run_stroke_analysis: '卒中自动分析',
+    run_mrs_prediction: 'mRS 风险预测',
     icv: '内在一致性校验',
     ekv: '外部证据校验',
     consensus_lite: '一致性裁决',
@@ -118,6 +120,7 @@ const TOOL_LANE_MAP = {
     run_vessel_occlusion_classification: 'L3',
     generate_ctp_maps: 'L3',
     run_stroke_analysis: 'L3',
+    run_mrs_prediction: 'L3',
     icv: 'L4',
     ekv: 'L4',
     consensus_lite: 'L4',
@@ -147,6 +150,7 @@ const STEP_EVENT_ALIAS = {
     generate_structured_report: ['generate_medgemma_report', 'summary'],
     review_confirm: ['human_confirm', 'human_review'],
     review: ['human_review', 'human_confirm'],
+    run_mrs_prediction: ['mrs_predict', 'mRS_predict'],
 };
 
 const STEP_KEY_CANONICAL_MAP = Object.freeze({
@@ -160,6 +164,7 @@ const NCCT_STEP_KEY = 'run_ncct_classification';
 const CONTEXT_STEP_KEY = 'load_patient_context';
 const VESSEL_OCCLUSION_STEP_KEY = 'run_vessel_occlusion_classification'; // AI辅助生成：GLM-5, 2026-03-03
 const STROKE_ANALYSIS_STEP_KEY = 'run_stroke_analysis';
+const MRS_STEP_KEY = 'run_mrs_prediction';
 const CTP_SKIP_MESSAGE = '已提供CTP或本次无需生成，跳过类CTP生成';
 const VESSEL_OCCLUSION_DEFAULT = '等待模型预测';
 const VESSEL_OCCLUSION_DEFAULT_MESSAGE = '结果：等待 DINOv3 模型预测...';
@@ -328,6 +333,7 @@ function parseCockpitParams() {
     cockpitRunId = (params.get('run_id') || cockpitRunId || '').trim();
     cockpitFileId = (params.get('file_id') || cockpitFileId || sessionStorage.getItem('current_file_id') || '').trim(); // AI辅助生成：GLM-5, 2026-03-12
     cockpitPatientId = (params.get('patient_id') || cockpitPatientId || (typeof getCurrentPatientId === 'function' ? getCurrentPatientId() : '') || '').trim();
+    cockpitJobId = (params.get('job_id') || cockpitJobId || '').trim();
 
     if (!cockpitRunId && cockpitFileId) {
         cockpitRunId = (localStorage.getItem(`latest_agent_run_${cockpitFileId}`) || '').trim();
@@ -467,7 +473,7 @@ function getThreeClassCandidates(run, resultResp) {
 }
 
 async function fetchLinkedUploadResult(run) {
-    const linkedJobId = String(run?.linked_upload_job_id || '').trim();
+    const linkedJobId = String(run?.linked_upload_job_id || cockpitJobId || '').trim();
     if (!linkedJobId) return null;
     try {
         const resp = await fetch(`/api/upload/progress/${encodeURIComponent(linkedJobId)}`);
@@ -629,6 +635,158 @@ function buildSyntheticVesselOcclusionStep(toolHintMap) {
     };
 }
 
+function getMrsCandidates(run, resultResp) {
+    const candidates = [];
+    const push = (item) => {
+        if (item && typeof item === 'object') candidates.push(item);
+    };
+
+    push(cockpitUploadResult);
+    push(resultResp?.data?.result);
+    push(run?.result);
+
+    const payload = parseResultPayload(resultResp);
+    if (payload && typeof payload === 'object') {
+        push(payload);
+        push(payload.upload_result);
+        push(payload.mrs_result);
+        push(payload.analysis_result);
+    }
+
+    return candidates;
+}
+
+function readMrsResult(item) {
+    if (!item || typeof item !== 'object') return null;
+    let source = null;
+    if (item.mrs_result && typeof item.mrs_result === 'object') {
+        source = item.mrs_result;
+    } else if (item.metadata && typeof item.metadata.mrs_result === 'object') {
+        source = item.metadata.mrs_result;
+    } else if (
+        Object.prototype.hasOwnProperty.call(item, 'mrs_risk_level')
+        || Object.prototype.hasOwnProperty.call(item, 'mrs_risk_score')
+        || Object.prototype.hasOwnProperty.call(item, 'mrs_risk_label_cn')
+        || Object.prototype.hasOwnProperty.call(item, 'mrs_message')
+    ) {
+        source = {
+            risk_level: item.mrs_risk_level,
+            risk_score: item.mrs_risk_score,
+            risk_label_cn: item.mrs_risk_label_cn,
+            message: item.mrs_message,
+            source: item.mrs_source,
+            model_path: item.mrs_model_path,
+            input_shape: item.mrs_input_shape,
+            probabilities: item.mrs_probabilities,
+            model_available: item.mrs_model_available,
+        };
+    }
+    if (!source) return null;
+
+    const riskLevel = String(source.risk_level || source.riskLevel || '').trim().toLowerCase();
+    if (!riskLevel) return null;
+    const riskScore = Number(source.risk_score ?? source.score);
+    const labelCn = String(source.risk_label_cn || source.risk_label || '').trim();
+    const probabilities = source.probabilities && typeof source.probabilities === 'object' ? source.probabilities : {};
+    return {
+        risk_level: riskLevel,
+        risk_label_cn: labelCn || (riskLevel === 'high' ? '高风险' : '低风险'),
+        risk_score: Number.isFinite(riskScore) ? riskScore : null,
+        probabilities,
+        source: String(source.source || 'cnn_model').trim(),
+        message: String(source.message || '').trim(),
+        model_available: source.model_available !== false,
+        input_shape: source.input_shape || null,
+        model_path: source.model_path || '',
+    };
+}
+
+function isMrsUsableResult(result) {
+    if (!result || typeof result !== 'object') return false;
+    const level = String(result.risk_level || '').trim().toLowerCase();
+    if (level === 'high' || level === 'low') return true;
+    return false;
+}
+
+function extractMrsResult(run, resultResp) {
+    let fallback = null;
+    for (const item of getMrsCandidates(run, resultResp)) {
+        const result = readMrsResult(item);
+        if (!result) continue;
+        if (isMrsUsableResult(result)) return result;
+        if (!fallback) fallback = result;
+    }
+    return fallback;
+}
+
+function extractMrsRiskSummary(run, resultResp) {
+    const result = extractMrsResult(run, resultResp);
+    if (!result) return '--';
+    return result.risk_label_cn || (result.risk_level === 'high' ? '高风险' : '低风险');
+}
+
+function extractMrsRiskScore(run, resultResp) {
+    const result = extractMrsResult(run, resultResp);
+    if (!result) return '--';
+    if (!Number.isFinite(Number(result.risk_score))) return '--';
+    return formatConfidence(result.risk_score);
+}
+
+function buildMrsDetail(run, resultResp) {
+    const result = extractMrsResult(run, resultResp);
+    if (!result) return '等待 mRS 风险预测结果';
+    const parts = [];
+    parts.push(`结果：${result.risk_label_cn}`);
+    if (Number.isFinite(Number(result.risk_score))) {
+        parts.push(`概率：${formatConfidence(result.risk_score)}`);
+    }
+    if (result.source) parts.push(`来源：${result.source}`);
+    return parts.join(' | ');
+}
+
+function findRunStep(run, stepKey) {
+    const normalizedKey = normalizeStepKey(stepKey);
+    const steps = normalizeStepList(Array.isArray(run?.steps) ? run.steps : []);
+    return steps.find((step) => normalizeStepKey(step.key || step.tool_name || step.node_name) === normalizedKey) || null;
+}
+
+function buildSyntheticMrsStep(toolHintMap, run, resultResp) {
+    const evt = resolveStepEvent(MRS_STEP_KEY, toolHintMap);
+    const result = extractMrsResult(run, resultResp);
+    const hasResult = isMrsUsableResult(result);
+    const defaultStatus = hasResult ? 'completed' : 'pending';
+    const defaultMessage = hasResult ? buildMrsDetail(run, resultResp) : '等待 mRS 风险预测结果';
+    const eventMessage = String(evt?.message || evt?.result_summary || '').trim();
+    const shouldUseEventMessage = eventMessage && (!hasResult || !/不可用|unavailable|pending|待执行/i.test(eventMessage));
+    const displayMessage = shouldUseEventMessage ? eventMessage : defaultMessage;
+    const riskLevel = result?.risk_level || inferRisk(defaultStatus, evt);
+    const confidence = Number.isFinite(Number(result?.risk_score)) ? Number(result.risk_score) : extractConfidence(evt?.output_ref, evt);
+    const displayStatus = hasResult ? 'completed' : normalizeStatus(evt?.status || defaultStatus);
+    return {
+        key: MRS_STEP_KEY,
+        title: toolTitle(MRS_STEP_KEY),
+        status: displayStatus,
+        retryable: evt?.retryable === true,
+        attempts: Number(evt?.attempt || 0),
+        message: displayMessage,
+        phase: evt?.stage || evt?.phase || 'tooling',
+        result_summary: defaultMessage,
+        result_label: result?.risk_label_cn || '',
+        confidence,
+        risk_level: riskLevel,
+        input_payload: {
+            input_shape: result?.input_shape || null,
+            model_path: result?.model_path || '',
+        },
+        engineering_payload: {
+            tool_key: MRS_STEP_KEY,
+            source: result?.source || 'cnn_model',
+            model_available: result?.model_available !== false,
+            probabilities: result?.probabilities || {},
+        },
+    };
+}
+
 function renderRunSummary(run, validation, resultResp) {
     const reportReady = resultResp?.ok || normalizeStatus(run?.status || '') === 'succeeded';
     setText('summaryResultStatus', reportReady ? '已生成' : '生成中');
@@ -706,6 +864,13 @@ function renderRunSummary(run, validation, resultResp) {
             ? Number(traceability.high_risk_unmapped_count)
             : '-'
     );
+
+    const strokeStep = findRunStep(run, STROKE_ANALYSIS_STEP_KEY);
+    setText('summaryAttentionNcct', extractNcctThreeClassSummary(run, resultResp));
+    setText('summaryAttentionStroke', strokeStep ? statusText(strokeStep.status || '-') : '-');
+    setText('summaryAttentionMrs', extractMrsRiskSummary(run, resultResp));
+    setText('summaryAttentionMrsScore', extractMrsRiskScore(run, resultResp));
+    setText('summaryAttentionMrsSource', extractMrsResult(run, resultResp)?.source || '-');
 }
 
 function uniqueValues(items, getter) {
@@ -973,6 +1138,49 @@ function ensureVesselOcclusionStep(steps, toolHintMap) {
     return nextSteps;
 }
 
+function ensureMrsStep(steps, toolHintMap, run, resultResp) {
+    const nextSteps = [...(steps || [])];
+    const synthetic = buildSyntheticMrsStep(toolHintMap, run, resultResp);
+    const existingIdx = nextSteps.findIndex((step) => step?.key === MRS_STEP_KEY);
+    if (existingIdx >= 0) {
+        const existing = { ...(nextSteps[existingIdx] || {}) };
+        const merged = {
+            ...existing,
+            result_summary: existing.result_summary || synthetic.result_summary,
+            result_label: existing.result_label || synthetic.result_label,
+            input_payload: existing.input_payload || synthetic.input_payload,
+            engineering_payload: existing.engineering_payload || synthetic.engineering_payload,
+            confidence: Number.isFinite(Number(existing.confidence)) ? Number(existing.confidence) : synthetic.confidence,
+            risk_level: existing.risk_level || synthetic.risk_level,
+        };
+
+        const currentStatus = normalizeStatus(existing.status || 'pending');
+        const hasMrsResult = Boolean(extractMrsResult(run, resultResp));
+        if (hasMrsResult && currentStatus === 'pending') {
+            merged.status = 'completed';
+            merged.message = synthetic.message;
+            merged.phase = merged.phase || synthetic.phase;
+        } else if (hasMrsResult && /不可用|unavailable|pending|待执行/i.test(String(existing.message || '').trim())) {
+            merged.message = synthetic.message;
+        } else if (!existing.message || existing.message === '-') {
+            merged.message = synthetic.message;
+        }
+
+        nextSteps[existingIdx] = merged;
+        return nextSteps;
+    }
+
+    const strokeIdx = nextSteps.findIndex((step) => step?.key === STROKE_ANALYSIS_STEP_KEY);
+    const vesselIdx = nextSteps.findIndex((step) => step?.key === VESSEL_OCCLUSION_STEP_KEY);
+    const ctpIdx = nextSteps.findIndex((step) => step?.key === CTP_STEP_KEY);
+    let insertAt = nextSteps.length;
+    if (strokeIdx >= 0) insertAt = strokeIdx + 1;
+    else if (vesselIdx >= 0) insertAt = vesselIdx + 1;
+    else if (ctpIdx >= 0) insertAt = ctpIdx + 1;
+    nextSteps.splice(insertAt, 0, synthetic);
+    return nextSteps;
+}
+
 function deriveStepsFromEvents(events) {
     const steps = [];
     const seen = new Set();
@@ -1000,7 +1208,8 @@ function buildGraphModel(run, events, resultResp = null) {
     const stepsSource = Array.isArray(run?.steps) && run.steps.length > 0 ? run.steps : deriveStepsFromEvents(events);
     const stepsWithNcct = ensureNcctStep(normalizeStepList(stepsSource), toolHintMap, run, resultResp); // AI辅助生成：GLM-5, 2026-04-23
     const stepsWithCtp = ensureCtpStep(stepsWithNcct, toolHintMap, run);
-    const stepsRaw = ensureVesselOcclusionStep(stepsWithCtp, toolHintMap);
+    const stepsWithVessel = ensureVesselOcclusionStep(stepsWithCtp, toolHintMap);
+    const stepsRaw = ensureMrsStep(stepsWithVessel, toolHintMap, run, cockpitUploadResult || resultResp);
     const modalities = Array.isArray(run?.planner_input?.available_modalities) ? run.planner_input.available_modalities : [];
     const modalitySet = new Set(modalities.map((x) => String(x || '').trim().toLowerCase()));
     const hasReadyCtp = ['cbf', 'cbv', 'tmax'].every((k) => modalitySet.has(k))
@@ -1021,6 +1230,8 @@ function buildGraphModel(run, events, resultResp = null) {
         const stage = String(step.phase || evt?.stage || run?.stage || '').trim().toLowerCase();
         const laneKey = laneForStep(stepKey, stage); // AI辅助生成：GLM-5, 2026-03-02
         const isVesselOcclusion = stepKey === VESSEL_OCCLUSION_STEP_KEY;
+        const isMrs = stepKey === MRS_STEP_KEY;
+        const mrsResult = isMrs ? extractMrsResult(run, resultResp) : null;
         const node = {
             step_key: stepKey,
             tool_key: stepKey,
@@ -1029,9 +1240,11 @@ function buildGraphModel(run, events, resultResp = null) {
             lane_title: laneTitle(laneKey),
             order: idx + 1,
             status,
-            confidence: extractConfidence(step, evt),
+            confidence: isMrs && Number.isFinite(Number(mrsResult?.risk_score))
+                ? Number(mrsResult.risk_score)
+                : extractConfidence(step, evt),
             latency_ms: extractLatency(step, evt),
-            risk_level: inferRisk(status, evt),
+            risk_level: isMrs ? (mrsResult?.risk_level || inferRisk(status, evt)) : inferRisk(status, evt),
             source_tag: evt?.source_tag || run?.source_tag || cockpitSourceTag || 'real',
             stage,
             message: nodeMessage,
@@ -1043,18 +1256,43 @@ function buildGraphModel(run, events, resultResp = null) {
                     ? ('血管堵塞三分类结果：' + evt.output_ref.vessel_occlusion_class_result
                         + (evt.output_ref.confidence != null ? ' (' + (evt.output_ref.confidence * 100).toFixed(1) + '%)' : ''))
                     : VESSEL_OCCLUSION_DEFAULT_MESSAGE)
-                : (evt?.clinical_impact || evt?.result_summary || nodeMessage),
+                : (isMrs
+                    ? (mrsResult
+                        ? ('mRS 预测结果：' + mrsResult.risk_label_cn
+                            + (Number.isFinite(Number(mrsResult.risk_score)) ? ' (' + (mrsResult.risk_score * 100).toFixed(1) + '%)' : ''))
+                        : '等待 mRS 风险预测结果')
+                    : (evt?.clinical_impact || evt?.result_summary || nodeMessage)),
             output_summary: isVesselOcclusion
                 ? (evt?.output_ref?.vessel_occlusion_class_result
                     ? safeJson(evt?.output_ref) || VESSEL_OCCLUSION_DEFAULT_MESSAGE
                     : VESSEL_OCCLUSION_DEFAULT_MESSAGE)
-                : (evt?.result_summary || evt?.message || safeJson(evt?.output_ref || nodeMessage)),
-            input_payload: isVesselOcclusion ? (step.input_payload || buildVesselOcclusionInputPayload()) : (evt?.input_ref || {}),
-            engineering_payload: isVesselOcclusion ? (step.engineering_payload || buildVesselOcclusionEngineeringPayload(evt)) : (evt || {}),
+                : (isMrs
+                    ? (mrsResult
+                        ? safeJson(mrsResult)
+                        : '等待 mRS 风险预测结果')
+                    : (evt?.result_summary || evt?.message || safeJson(evt?.output_ref || nodeMessage))),
+            input_payload: isVesselOcclusion
+                ? (step.input_payload || buildVesselOcclusionInputPayload())
+                : (isMrs
+                    ? (step.input_payload || { input_shape: mrsResult?.input_shape || null, model_path: mrsResult?.model_path || '' })
+                    : (evt?.input_ref || {})),
+            engineering_payload: isVesselOcclusion
+                ? (step.engineering_payload || buildVesselOcclusionEngineeringPayload(evt))
+                : (isMrs
+                    ? (step.engineering_payload || {
+                        tool_key: MRS_STEP_KEY,
+                        source: mrsResult?.source || 'cnn_model',
+                        model_available: mrsResult?.model_available !== false,
+                        probabilities: mrsResult?.probabilities || {},
+                    })
+                    : (evt || {})),
             evidence_refs: collectEvidenceRefs(evt),
             ncct_result_summary: stepKey === NCCT_STEP_KEY ? extractNcctThreeClassSummary(run, resultResp) : '',
             ncct_result_confidence: stepKey === NCCT_STEP_KEY ? extractNcctThreeClassConfidence(run, resultResp) : '',
             ncct_result_detail: stepKey === NCCT_STEP_KEY ? buildNcctThreeClassDetail(run, resultResp) : '',
+            mrs_result_summary: isMrs ? (mrsResult?.risk_label_cn || '') : '',
+            mrs_result_confidence: isMrs && Number.isFinite(Number(mrsResult?.risk_score)) ? formatConfidence(mrsResult.risk_score) : '',
+            mrs_result_detail: isMrs ? buildMrsDetail(run, resultResp) : '',
             vessel_occlusion_result_detail: isVesselOcclusion
                 ? (evt?.output_ref?.vessel_occlusion_class_result
                     ? ('结果：' + evt.output_ref.vessel_occlusion_class_result
@@ -1383,7 +1621,7 @@ function renderDagGraph(graph, preserveViewport = true) {
         const kind = toNode?.primary_parent === edge.from ? 'primary' : 'secondary';
         edgeKinds.set(edge.id, kind);
         if (kind === 'primary') primaryEdgeCount += 1;
-        else secondaryEdgeCount += 1;
+        else if (kind === 'secondary') secondaryEdgeCount += 1;
     });
 
     setText('dagNodeCount', `nodes: ${graph.nodes.length}`);
@@ -1486,10 +1724,13 @@ function renderNodeDrawer(nodeKey) {
 
     const isNcctNode = node.step_key === NCCT_STEP_KEY;
     const isVesselOcclusionNode = node.step_key === VESSEL_OCCLUSION_STEP_KEY; // AI辅助生成：GLM-5, 2026-04-02
-    setText('drawerPrimarySummaryTitle', isVesselOcclusionNode ? '血管闭塞三分类结果' : 'NCCT 三分类结果');
+    const isMrsNode = node.step_key === MRS_STEP_KEY;
+    setText('drawerPrimarySummaryTitle', isMrsNode ? 'mRS 风险预测结果' : (isVesselOcclusionNode ? '血管闭塞三分类结果' : 'NCCT 三分类结果'));
     setText('drawerNcctSummary', isNcctNode
         ? (node.ncct_result_detail || node.ncct_result_summary || node.output_summary || '-')
-        : (isVesselOcclusionNode ? (node.vessel_occlusion_result_detail || VESSEL_OCCLUSION_DEFAULT_MESSAGE) : '-'));
+        : (isVesselOcclusionNode
+            ? (node.vessel_occlusion_result_detail || VESSEL_OCCLUSION_DEFAULT_MESSAGE)
+            : (isMrsNode ? (node.mrs_result_detail || node.output_summary || '-') : '-')));
 
     setText('drawerClinicalSummary', node.clinical_summary || '-');
     setText('drawerNodeOutput', node.output_summary || '-');
@@ -1526,7 +1767,8 @@ function renderStepTimeline(run) {
         const normalized = normalizeStepList(run.steps); // AI辅助生成：GLM-5, 2026-04-05
         const withNcct = ensureNcctStep(normalized, toolHintMap, run, cockpitResult);
         const withCtp = ensureCtpStep(withNcct, toolHintMap, run);
-        steps = ensureVesselOcclusionStep(withCtp, toolHintMap);
+        const withVessel = ensureVesselOcclusionStep(withCtp, toolHintMap);
+        steps = ensureMrsStep(withVessel, toolHintMap, run, cockpitUploadResult || cockpitResult);
     } else {
         steps = (cockpitGraphModel?.nodes || []).map((node) => ({
             key: node.step_key,
