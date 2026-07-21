@@ -21,6 +21,23 @@ const KG_NODE_COLORS = {
   evidence_chunk: "#c94a56",
 };
 
+const KG_TYPE_LABELS = {
+  disease: "疾病",
+  modality: "检查手段",
+  vascular_class: "血管分型",
+  concept: "概念",
+  imaging_metric: "影像指标",
+  treatment: "治疗策略",
+  criterion: "标准 / 条件",
+  risk: "风险 / 禁忌",
+  anatomy: "血管解剖",
+  imaging_sign: "影像征象",
+  referral: "转诊",
+  case: "病例经验",
+  guideline_doc: "指南文档",
+  evidence_chunk: "证据片段",
+};
+
 const KG_DEFAULT_LANES = ["疾病", "检查", "分型与指标", "条件与风险", "治疗策略"];
 
 function buildTaskContext(overview) {
@@ -179,9 +196,49 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
 
   const catList = Array.isArray(categories) ? categories : [];
   const currentCat = catList.find((c) => c.id === activeCategory) || null;
+  const NODE_HALF = 74;
+  const legendTypes = useMemo(() => {
+    const order = [];
+    const seen = new Set();
+    for (const node of nodes) {
+      const type = String(node?.type || "concept");
+      if (!seen.has(type)) {
+        seen.add(type);
+        order.push(type);
+      }
+    }
+    return order;
+  }, [nodes]);
 
   return (
     <div className="kg-view">
+      <div className="kg-head">
+        <div className="kg-head-titles">
+          <h3 className="kg-title">
+            {currentCat?.icon ? <span className="kg-title-icon" aria-hidden="true">{currentCat.icon}</span> : null}
+            {currentCat?.label || "知识图谱"}
+          </h3>
+          {currentCat?.description ? <p className="kg-subtitle">{currentCat.description}</p> : null}
+        </div>
+        <div className="kg-toolbar">
+          <div className="kg-search">
+            <span className="kg-search-icon" aria-hidden="true">⌕</span>
+            <input
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") onSearch(query);
+              }}
+              placeholder="检索：取栓 / 大血管闭塞 / Tmax"
+            />
+          </div>
+          <button className="kg-btn kg-btn-primary" onClick={() => onSearch(query)} disabled={loading}>
+            {loading ? "检索中" : "检索"}
+          </button>
+          <button className="kg-btn kg-btn-ghost" onClick={onRebuild} disabled={loading}>重建</button>
+        </div>
+      </div>
+
       {catList.length ? (
         <div className="kg-category-tabs" role="tablist" aria-label="knowledge-graph-categories">
           {catList.map((cat) => {
@@ -197,42 +254,30 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
               >
                 <span className="kg-category-icon" aria-hidden="true">{cat.icon || "🔹"}</span>
                 <span className="kg-category-label">{cat.label}</span>
-                {isRelevant ? <span className="kg-category-badge">相关 {cat.relevant_count}</span> : null}
+                {isRelevant ? <span className="kg-category-badge">{cat.relevant_count}</span> : null}
               </button>
             );
           })}
         </div>
       ) : null}
-      {currentCat ? (
-        <p className="kg-category-desc">
-          {currentCat.description}
-          {taskAware && Number(currentCat.relevance || 0) > 0 && currentCat.matched_labels?.length ? (
-            <span className="kg-category-matched">　本轮相关章节：{currentCat.matched_labels.join("、")}</span>
-          ) : null}
-        </p>
+
+      {taskAware && currentCat && Number(currentCat.relevance || 0) > 0 && currentCat.matched_labels?.length ? (
+        <div className="kg-relevance-note">
+          <span className="kg-relevance-dot" aria-hidden="true" />
+          本轮任务相关章节：<strong>{currentCat.matched_labels.join(" · ")}</strong>
+        </div>
       ) : null}
-      <div className="kg-toolbar">
-        <label className="kg-search">
-          图谱检索
-          <input
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="取栓 / 大血管闭塞 / 不匹配比值"
-          />
-        </label>
-        <button onClick={() => onSearch(query)} disabled={loading}>
-          {loading ? "检索中..." : "检索图谱"}
-        </button>
-        <button onClick={onRebuild} disabled={loading}>重建图谱</button>
-      </div>
+
       {error ? <div className="error-box">{error}</div> : null}
+
       <div className="kg-stats">
         <span className="chip">节点 {stats.subgraph_node_count ?? nodes.length}</span>
         <span className="chip">关系 {stats.subgraph_edge_count ?? edges.length}</span>
         <span className="chip">证据 {evidence.length}</span>
         {taskAware && stats.relevant_node_count ? <span className="chip chip-relevant">本轮相关 {stats.relevant_node_count}</span> : null}
-        {stats.full_node_count ? <span className="chip">完整图谱 {stats.full_node_count} 节点</span> : null}
+        {stats.full_node_count ? <span className="chip chip-muted">完整图谱 {stats.full_node_count} 节点</span> : null}
       </div>
+
       <div className="kg-layout">
         <div className="kg-canvas-wrap">
           <svg className="kg-canvas" viewBox={`0 0 ${positioned.width} ${positioned.height}`} role="img" aria-label="临床决策知识图谱">
@@ -240,8 +285,9 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
               const x = 92 + lane.column * ((positioned.width - 184) / Math.max(1, positioned.lanes.length - 1));
               return (
                 <g key={lane.column} className="kg-lane">
-                  <line x1={x} y1="46" x2={x} y2={positioned.height - 42} />
-                  <text x={x} y="28">{lane.label}</text>
+                  <line x1={x} y1="52" x2={x} y2={positioned.height - 34} />
+                  <rect className="kg-lane-pill" x={x - 56} y="14" width="112" height="28" rx="14" />
+                  <text className="kg-lane-label" x={x} y="32">{lane.label}</text>
                 </g>
               );
             })}
@@ -253,20 +299,19 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
                 const edgeKey = edge.id || `${edge.source}-${edge.target}-${edge.type}`;
                 const active = !selected || activeEdgeIds.has(edgeKey);
                 const dimmed = selected && !active;
-                const midX = (a.x + b.x) / 2;
+                const forward = a.x <= b.x;
+                const x1 = forward ? a.x + NODE_HALF : a.x - NODE_HALF;
+                const x2 = forward ? b.x - NODE_HALF : b.x + NODE_HALF;
+                const cx = (x1 + x2) / 2;
+                const path = `M ${x1},${a.y} C ${cx},${a.y} ${cx},${b.y} ${x2},${b.y}`;
+                const midX = (x1 + x2) / 2;
                 const midY = (a.y + b.y) / 2; // AI辅助生成：GLM-5, 2026-03-09
                 return (
-                  <g key={edgeKey}>
-                    <line
-                      x1={a.x + 72}
-                      y1={a.y}
-                      x2={b.x - 72}
-                      y2={b.y}
-                      className={`kg-edge ${active ? "active" : ""} ${dimmed ? "dimmed" : ""}`}
-                    />
-                    {active ? (
-                      <text x={midX} y={midY - 6} className="kg-edge-label">
-                        {edge.label || edge.type} // AI辅助生成：GLM-5, 2026-03-10
+                  <g key={edgeKey} className={`kg-edge-group ${active ? "active" : ""} ${dimmed ? "dimmed" : ""}`}>
+                    <path d={path} className="kg-edge" fill="none" />
+                    {active && !dimmed ? (
+                      <text x={midX} y={midY - 7} className="kg-edge-label">
+                        {edge.label || edge.type}
                       </text>
                     ) : null}
                   </g>
@@ -277,6 +322,7 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
               .map((node) => {
                 const p = positioned.pos[node.id]; // AI辅助生成：GLM-5, 2026-03-11
                 const type = String(node.type || "concept");
+                const color = KG_NODE_COLORS[type] || "#2f88f2";
                 const active = selected?.id === node.id;
                 const related = activeNodeIds.has(node.id);
                 const dimmed = selected && !related;
@@ -289,49 +335,79 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
                     transform={`translate(${p.x} ${p.y})`}
                     onClick={() => setSelectedId(node.id)}
                   >
-                    {relevant ? (
-                      <rect className="kg-node-halo" x="-76" y="-24" width="152" height="48" rx="14" />
-                    ) : null}
-                    <rect x="-70" y="-18" width="140" height="36" rx="10" fill={KG_NODE_COLORS[type] || "#2f88f2"} />
-                    <text x="0" y="5">{label}</text>
-                    {relevant ? <text className="kg-node-flag" x="60" y="-22">★</text> : null}
+                    {relevant ? <rect className="kg-node-halo" x="-80" y="-24" width="160" height="48" rx="15" /> : null}
+                    <rect className="kg-node-box" x={-NODE_HALF} y="-19" width={NODE_HALF * 2} height="38" rx="12" stroke={color} />
+                    <rect className="kg-node-accent" x={-NODE_HALF + 3} y="-9" width="4" height="18" rx="2" fill={color} />
+                    <text className="kg-node-text" x="6" y="5">{label}</text>
+                    {relevant ? <circle className="kg-node-flag" cx={NODE_HALF - 10} cy="-11" r="5" /> : null}
                   </g>
                 );
               })}
           </svg>
+          {legendTypes.length ? (
+            <div className="kg-legend">
+              {legendTypes.map((type) => (
+                <span key={type} className="kg-legend-item">
+                  <span className="kg-legend-dot" style={{ background: KG_NODE_COLORS[type] || "#2f88f2" }} />
+                  {KG_TYPE_LABELS[type] || type}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
         <aside className="kg-detail">
-          <h4>{selected?.label || "选择一个节点"}</h4>
           {selected ? (
             <>
+              <div className="kg-detail-head">
+                <span className="kg-detail-swatch" style={{ background: KG_NODE_COLORS[selected.type] || "#2f88f2" }} />
+                <h4>{selected.label}</h4>
+              </div>
               <div className="kg-detail-meta">
-                <span className="chip">{selected.type || "node"}</span>
+                <span className="chip">{KG_TYPE_LABELS[selected.type] || selected.type || "节点"}</span>
                 {selected.relevant ? <span className="chip chip-relevant">本轮相关</span> : null}
-                {selected.confidence_grade ? <span className="chip">{selected.confidence_grade} {Math.round(Number(selected.confidence_score || 0) * 100)}%</span> : null}
-                {selected.evidence_count !== undefined ? <span className="chip">证据 {selected.evidence_count}</span> : null}
+                {selected.confidence_grade ? <span className={`chip kg-grade grade-${String(selected.confidence_grade).toLowerCase()}`}>{selected.confidence_grade} · {Math.round(Number(selected.confidence_score || 0) * 100)}%</span> : null}
+                {selected.evidence_count !== undefined ? <span className="chip chip-muted">证据 {selected.evidence_count}</span> : null}
               </div>
               {selected.description ? <p className="kg-snippet">{selected.description}</p> : null}
-              {selected.clinical_meaning ? <p className="kg-clinical-meaning">{selected.clinical_meaning}</p> : null}
+              {selected.clinical_meaning ? (
+                <p className="kg-clinical-meaning">
+                  <span className="kg-clinical-tag">临床意义</span>
+                  {selected.clinical_meaning}
+                </p>
+              ) : null}
               <h5>关联关系</h5>
-              <ul className="kg-list">
-                {selectedEdges.length ? selectedEdges.map((edge) => (
-                  <li key={edge.id || `${edge.source}-${edge.target}`}>
-                    {edge.source === selected.id ? "→" : "←"} {edge.label || edge.type}
-                    <span>{edge.source === selected.id ? nodeById[edge.target]?.label : nodeById[edge.source]?.label}</span>
-                  </li>
-                )) : <li>暂无直接关联关系</li>}
+              <ul className="kg-list kg-relations">
+                {selectedEdges.length ? selectedEdges.map((edge) => {
+                  const outgoing = edge.source === selected.id;
+                  const other = outgoing ? nodeById[edge.target] : nodeById[edge.source];
+                  return (
+                    <li key={edge.id || `${edge.source}-${edge.target}`} className="kg-relation">
+                      <span className={`kg-relation-dir ${outgoing ? "out" : "in"}`}>{outgoing ? "→" : "←"}</span>
+                      <span className="kg-relation-label">{edge.label || edge.type}</span>
+                      <span className="kg-relation-node">{other?.label || "-"}</span>
+                    </li>
+                  );
+                }) : <li className="kg-empty">暂无直接关联关系</li>}
               </ul>
               <h5>证据来源</h5>
-              <ul className="kg-list">
+              <ul className="kg-list kg-evidence">
                 {selectedEvidence.length ? selectedEvidence.map((item) => (
-                  <li key={item.evidence_id || item.node_id || item.source_ref}>
-                    <strong>{item.confidence_grade || "C"}</strong> {item.source_ref || item.doc_name}
-                    <p>{item.snippet}</p>
+                  <li key={item.evidence_id || item.node_id || item.source_ref} className="kg-evidence-item">
+                    <div className="kg-evidence-head">
+                      <span className={`kg-grade-tag grade-${String(item.confidence_grade || "C").toLowerCase()}`}>{item.confidence_grade || "C"}</span>
+                      <span className="kg-evidence-ref">{item.source_ref || item.doc_name || "-"}</span>
+                    </div>
+                    {item.snippet ? <p className="kg-evidence-snippet">{item.snippet}</p> : null}
                   </li>
-                )) : <li>暂无关联证据来源</li>}
+                )) : <li className="kg-empty">暂无关联证据来源</li>}
               </ul>
             </>
-          ) : null} // AI辅助生成：GLM-5, 2026-03-13
+          ) : (
+            <div className="kg-detail-empty">
+              <span className="kg-detail-empty-icon" aria-hidden="true">◔</span>
+              <p>点击左侧任意节点，查看其临床意义、关联关系与指南证据。</p>
+            </div>
+          )}
         </aside>
       </div>
     </div>
@@ -752,9 +828,10 @@ export default function App() {
   }
 
   if (!hasLoadedRun) {
+    const wideLauncher = launcherView === "kb" && kbView === "graph";
     return (
       <div className="page launcher-page">
-        <section className="launcher-hero glass">
+        <section className={`launcher-hero glass ${wideLauncher ? "launcher-hero--wide" : ""}`}>
           <p className="eyebrow">NeuroMatrix Agent Cockpit</p>
           <h1>运行入口</h1>
           <p className="launcher-subtitle">
