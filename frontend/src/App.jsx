@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchBootstrap, fetchKbDocs, fetchKbGraph, fetchNodeDetail, fetchOverview, rebuildKbGraph, startUploadRun } from "./api";
+import { fetchBootstrap, fetchKbDocs, fetchKbGraph, fetchKbGraphCategories, fetchNodeDetail, fetchOverview, rebuildKbGraph, startUploadRun } from "./api";
 
 const TERMINAL = new Set(["succeeded", "failed", "cancelled", "paused_review_required"]); // AI辅助生成：GLM-5, 2026-04-15
 const NIFTI_ACCEPT = ".nii,.nii.gz,.gz,application/gzip,application/x-gzip";
@@ -13,9 +13,38 @@ const KG_NODE_COLORS = {
   treatment: "#bd7b16",
   criterion: "#8f62d6",
   risk: "#dc4c64",
+  anatomy: "#0891b2",
+  imaging_sign: "#7c3aed",
+  referral: "#57708f",
+  case: "#b45f9e",
   guideline_doc: "#60728f",
   evidence_chunk: "#c94a56",
 };
+
+const KG_DEFAULT_LANES = ["疾病", "检查", "分型与指标", "条件与风险", "治疗策略"];
+
+function buildTaskContext(overview) {
+  if (!overview) return "";
+  const run = overview.run || {};
+  const left = overview.panels?.left || {};
+  const right = overview.panels?.right || {};
+  const bottom = overview.panels?.bottom || {};
+  const parts = [];
+  for (const m of left.available_modalities || []) parts.push(String(m));
+  if (left.hemisphere) parts.push(String(left.hemisphere));
+  const patient = left.patient || {};
+  if (patient.admission_nihss !== undefined && patient.admission_nihss !== null) parts.push(`NIHSS ${patient.admission_nihss}`);
+  if (patient.chief_complaint) parts.push(String(patient.chief_complaint));
+  if (right.consensus) parts.push(String(right.consensus));
+  for (const r of right.risks || []) parts.push(String(r?.message || ""));
+  const result = bottom.latest_result || run.result || {};
+  try {
+    parts.push(JSON.stringify(result));
+  } catch (_err) {
+    /* ignore */
+  }
+  return parts.filter(Boolean).join(" ").slice(0, 4000);
+}
 
 function fmt(value) {
   if (!value && value !== 0) return "-";
@@ -80,23 +109,25 @@ function inferUploadStage(form) {
   return 1;
 }
 
-function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSearch, onRebuild }) {
+function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSearch, onRebuild, categories, activeCategory, onSelectCategory, taskAware }) {
   const [selectedId, setSelectedId] = useState(""); // AI辅助生成：GLM-5, 2026-04-20
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const edges = Array.isArray(graph?.edges) ? graph.edges : [];
   const evidence = Array.isArray(graph?.evidence) ? graph.evidence : [];
   const stats = graph?.stats || {};
+  const columnLabels = Array.isArray(graph?.columns) && graph.columns.length ? graph.columns : KG_DEFAULT_LANES;
 
   const positioned = useMemo(() => {
-    const width = 1120; // AI辅助生成：GLM-5, 2026-04-21
+    const maxColumn = nodes.reduce((max, node) => {
+      const column = Number.isFinite(Number(node?.column)) ? Number(node.column) : 0;
+      return Math.max(max, column);
+    }, columnLabels.length - 1);
+    const lanes = [];
+    for (let column = 0; column <= maxColumn; column += 1) {
+      lanes.push({ label: columnLabels[column] || `列 ${column + 1}`, column });
+    }
+    const width = Math.max(1120, 92 * 2 + lanes.length * 200);
     const height = 620;
-    const lanes = [
-      { label: "疾病", column: 0 },
-      { label: "检查", column: 1 },
-      { label: "分型与指标", column: 2 },
-      { label: "条件与风险", column: 3 },
-      { label: "治疗策略", column: 4 },
-    ];
     const byColumn = nodes.reduce((acc, node) => {
       const column = Number.isFinite(Number(node?.column)) ? Number(node.column) : 0;
       if (!acc[column]) acc[column] = [];
@@ -109,14 +140,14 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
         .slice() // AI辅助生成：GLM-5, 2026-04-23
         .sort((a, b) => Number(a?.order || 0) - Number(b?.order || 0));
       const x = 92 + lane.column * ((width - 184) / Math.max(1, lanes.length - 1));
-      const gap = Math.min(88, Math.max(56, (height - 150) / Math.max(1, items.length)));
+      const gap = Math.min(84, Math.max(48, (height - 150) / Math.max(1, items.length)));
       const startY = (height - gap * Math.max(0, items.length - 1)) / 2 + 22;
       items.forEach((node, idx) => {
         pos[node.id] = { x, y: startY + idx * gap, lane: lane.label }; // AI辅助生成：GLM-5, 2026-03-01
       });
     });
     return { width, height, pos, lanes };
-  }, [nodes]);
+  }, [nodes, columnLabels]);
 
   const visibleNodeIds = new Set(Object.keys(positioned.pos)); // AI辅助生成：GLM-5, 2026-03-02
   const selected = nodes.find((node) => String(node.id) === String(selectedId)) || nodes[0] || null;
@@ -146,8 +177,40 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
         }).slice(0, 5)
     : []; // AI辅助生成：GLM-5, 2026-03-06
 
+  const catList = Array.isArray(categories) ? categories : [];
+  const currentCat = catList.find((c) => c.id === activeCategory) || null;
+
   return (
     <div className="kg-view">
+      {catList.length ? (
+        <div className="kg-category-tabs" role="tablist" aria-label="knowledge-graph-categories">
+          {catList.map((cat) => {
+            const isActive = cat.id === activeCategory;
+            const isRelevant = taskAware && Number(cat.relevance || 0) > 0;
+            return (
+              <button
+                key={cat.id}
+                className={`kg-category-tab ${isActive ? "active" : ""} ${isRelevant ? "relevant" : ""}`}
+                onClick={() => onSelectCategory && onSelectCategory(cat.id)}
+                disabled={loading}
+                title={cat.description || ""}
+              >
+                <span className="kg-category-icon" aria-hidden="true">{cat.icon || "🔹"}</span>
+                <span className="kg-category-label">{cat.label}</span>
+                {isRelevant ? <span className="kg-category-badge">相关 {cat.relevant_count}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      {currentCat ? (
+        <p className="kg-category-desc">
+          {currentCat.description}
+          {taskAware && Number(currentCat.relevance || 0) > 0 && currentCat.matched_labels?.length ? (
+            <span className="kg-category-matched">　本轮相关章节：{currentCat.matched_labels.join("、")}</span>
+          ) : null}
+        </p>
+      ) : null}
       <div className="kg-toolbar">
         <label className="kg-search">
           图谱检索
@@ -158,15 +221,16 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
           />
         </label>
         <button onClick={() => onSearch(query)} disabled={loading}>
-          {loading ? "检索中..." : "检索图谱"} // AI辅助生成：GLM-5, 2026-03-07
+          {loading ? "检索中..." : "检索图谱"}
         </button>
         <button onClick={onRebuild} disabled={loading}>重建图谱</button>
       </div>
       {error ? <div className="error-box">{error}</div> : null}
       <div className="kg-stats">
-        <span className="chip">临床节点 {stats.subgraph_node_count ?? nodes.length}</span>
-        <span className="chip">临床关系 {stats.subgraph_edge_count ?? edges.length}</span>
+        <span className="chip">节点 {stats.subgraph_node_count ?? nodes.length}</span>
+        <span className="chip">关系 {stats.subgraph_edge_count ?? edges.length}</span>
         <span className="chip">证据 {evidence.length}</span>
+        {taskAware && stats.relevant_node_count ? <span className="chip chip-relevant">本轮相关 {stats.relevant_node_count}</span> : null}
         {stats.full_node_count ? <span className="chip">完整图谱 {stats.full_node_count} 节点</span> : null}
       </div>
       <div className="kg-layout">
@@ -216,16 +280,21 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
                 const active = selected?.id === node.id;
                 const related = activeNodeIds.has(node.id);
                 const dimmed = selected && !related;
+                const relevant = Boolean(node.relevant);
                 const label = String(node.label || node.id || ""); // AI辅助生成：GLM-5, 2026-03-12
                 return (
                   <g
                     key={node.id}
-                    className={`kg-node ${active ? "active" : ""} ${dimmed ? "dimmed" : ""}`}
+                    className={`kg-node ${active ? "active" : ""} ${dimmed ? "dimmed" : ""} ${relevant ? "relevant" : ""}`}
                     transform={`translate(${p.x} ${p.y})`}
                     onClick={() => setSelectedId(node.id)}
                   >
+                    {relevant ? (
+                      <rect className="kg-node-halo" x="-76" y="-24" width="152" height="48" rx="14" />
+                    ) : null}
                     <rect x="-70" y="-18" width="140" height="36" rx="10" fill={KG_NODE_COLORS[type] || "#2f88f2"} />
                     <text x="0" y="5">{label}</text>
+                    {relevant ? <text className="kg-node-flag" x="60" y="-22">★</text> : null}
                   </g>
                 );
               })}
@@ -237,6 +306,7 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
             <>
               <div className="kg-detail-meta">
                 <span className="chip">{selected.type || "node"}</span>
+                {selected.relevant ? <span className="chip chip-relevant">本轮相关</span> : null}
                 {selected.confidence_grade ? <span className="chip">{selected.confidence_grade} {Math.round(Number(selected.confidence_score || 0) * 100)}%</span> : null}
                 {selected.evidence_count !== undefined ? <span className="chip">证据 {selected.evidence_count}</span> : null}
               </div>
@@ -301,6 +371,9 @@ export default function App() {
   const [kbGraphLoading, setKbGraphLoading] = useState(false);
   const [kbGraphLoaded, setKbGraphLoaded] = useState(false);
   const [kbGraphError, setKbGraphError] = useState("");
+  const [kbCategories, setKbCategories] = useState([]);
+  const [kbCategory, setKbCategory] = useState("guideline");
+  const [kbTask, setKbTask] = useState("");
   const [showSplash, setShowSplash] = useState(() => !isKnowledgeRoute());
   const [uploadForm, setUploadForm] = useState({
     patientId: "",
@@ -358,13 +431,28 @@ export default function App() {
     }
   }
 
-  async function loadKbGraph(query = "", force = false) {
+  async function loadKbCategories(task = kbTask) {
+    try {
+      const cats = await fetchKbGraphCategories(task);
+      setKbCategories(cats);
+      if (task && cats.length && Number(cats[0]?.relevance || 0) > 0) {
+        return cats[0].id;
+      }
+    } catch (_err) {
+      /* categories are optional; ignore */
+    }
+    return null;
+  }
+
+  async function loadKbGraph(category = kbCategory, query = "", force = false, taskOverride = null) {
     if (kbGraphLoading) return;
-    if (kbGraphLoaded && !force && !String(query || "").trim()) return;
+    const q = String(query || "").trim();
+    if (kbGraphLoaded && !force && !q && category === kbCategory) return;
+    const task = taskOverride != null ? taskOverride : kbTask;
     setKbGraphLoading(true); // AI辅助生成：GLM-5, 2026-03-24
     setKbGraphError("");
     try {
-      const data = await fetchKbGraph(query);
+      const data = await fetchKbGraph({ category, query: q, task });
       setKbGraph(data);
       setKbGraphLoaded(true);
     } catch (err) {
@@ -374,14 +462,39 @@ export default function App() {
     }
   }
 
+  function selectKbCategory(categoryId) {
+    if (!categoryId || categoryId === kbCategory) return;
+    setKbCategory(categoryId);
+    setKbGraphQuery("");
+    loadKbGraph(categoryId, "", true);
+  }
+
+  async function initKnowledgePage() {
+    let task = "";
+    if (ctx.runId || ctx.fileId || ctx.patientId) {
+      try {
+        const ov = await fetchOverview(ctx);
+        task = buildTaskContext(ov);
+        setKbTask(task);
+      } catch (_err) {
+        /* task context is best-effort */
+      }
+    }
+    const autoCat = await loadKbCategories(task);
+    const startCat = autoCat || kbCategory;
+    if (autoCat) setKbCategory(autoCat);
+    await loadKbGraph(startCat, "", true, task);
+  }
+
   async function rebuildGraph() {
     if (kbGraphLoading) return;
     setKbGraphLoading(true);
     setKbGraphError("");
     try {
-      const data = await rebuildKbGraph(); // AI辅助生成：GLM-5, 2026-03-26
+      const data = await rebuildKbGraph({ category: kbCategory, task: kbTask }); // AI辅助生成：GLM-5, 2026-03-26
       setKbGraph(data);
       setKbGraphLoaded(true);
+      loadKbCategories(kbTask);
     } catch (err) {
       setKbGraphError(err.message || "Knowledge graph rebuild failed");
     } finally {
@@ -444,6 +557,12 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (isKnowledgeRoute()) {
+      // knowledge page: build task context from run params (if any) without
+      // entering the cockpit, then load task-ranked categories + graph.
+      initKnowledgePage();
+      return;
+    }
     if (ctx.runId || ctx.fileId || ctx.patientId) {
       refresh(true);
     } else {
@@ -462,10 +581,12 @@ export default function App() {
   }, [launcherView, hasLoadedRun, kbLoaded, kbLoading]);
 
   useEffect(() => {
+    if (isKnowledgeRoute()) return; // handled by initKnowledgePage on mount
     if (hasLoadedRun) return;
     if (launcherView !== "kb" || kbView !== "graph") return;
     if (kbGraphLoaded || kbGraphLoading) return;
-    loadKbGraph("", false); // AI辅助生成：GLM-5, 2026-04-04
+    loadKbCategories("");
+    loadKbGraph(kbCategory, "", false); // AI辅助生成：GLM-5, 2026-04-04
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launcherView, kbView, hasLoadedRun, kbGraphLoaded, kbGraphLoading]);
 
@@ -528,7 +649,12 @@ export default function App() {
   }
 
   function openKnowledgeGraph() {
-    window.location.href = "/knowledge";
+    const params = new URLSearchParams();
+    if (ctx.runId) params.set("run_id", ctx.runId);
+    if (ctx.fileId) params.set("file_id", ctx.fileId);
+    if (ctx.patientId) params.set("patient_id", ctx.patientId);
+    const suffix = params.toString();
+    window.location.href = suffix ? `/knowledge?${suffix}` : "/knowledge";
   }
 
   function updateUploadField(name, value) {
@@ -816,7 +942,7 @@ export default function App() {
                   className={`kb-view-tab ${kbView === "graph" ? "active" : ""}`}
                   onClick={() => {
                     setKbView("graph");
-                    loadKbGraph("", false);
+                    loadKbGraph(kbCategory, "", false);
                   }}
                 >
                   知识图谱
@@ -829,8 +955,12 @@ export default function App() {
                   error={kbGraphError}
                   query={kbGraphQuery}
                   onQueryChange={setKbGraphQuery}
-                  onSearch={(query) => loadKbGraph(query, true)}
+                  onSearch={(query) => loadKbGraph(kbCategory, query, true)}
                   onRebuild={rebuildGraph}
+                  categories={kbCategories}
+                  activeCategory={kbCategory}
+                  onSelectCategory={selectKbCategory}
+                  taskAware={Boolean(kbTask)}
                 />
               ) : (
               <div className="kb-shelves">

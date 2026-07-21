@@ -8092,24 +8092,46 @@ def api_kb_docs():
     return jsonify({"success": True, "docs": docs, "grades": KB_GRADE_SEQUENCE})
 
 
+@app.route("/api/kb/graph/categories", methods=["GET"])
+def api_kb_graph_categories():
+    """Return the knowledge-graph category catalog (optionally task-ranked)."""
+    task = str(request.args.get("task") or "").strip()
+    try:
+        from .kg_builder import list_categories
+    except ImportError:
+        from kg_builder import list_categories
+
+    categories = list_categories(task=task)
+    return jsonify({"success": True, "categories": categories, "task_aware": bool(task)})
+
+
 @app.route("/api/kb/graph", methods=["GET"])
 def api_kb_graph():
-    """Return the local stroke knowledge graph.""" # AI辅助生成：GLM-5, 2026-04-18
+    """Return the local stroke knowledge graph (clinical or a specific category)."""
     view = str(request.args.get("view") or "clinical").strip().lower()
+    category = str(request.args.get("category") or "").strip().lower()
+    task = str(request.args.get("task") or "").strip()
     try:
-        from .kg_builder import clinical_graph_view, load_graph
+        from .kg_builder import category_graph_view, clinical_graph_view, load_graph
     except ImportError:
-        from kg_builder import clinical_graph_view, load_graph
+        from kg_builder import category_graph_view, clinical_graph_view, load_graph
 
-    graph = clinical_graph_view() if view == "clinical" else load_graph(force_rebuild=False)
+    if category:
+        graph = category_graph_view(category=category, task=task)
+    elif view == "clinical":
+        graph = clinical_graph_view()
+    else:
+        graph = load_graph(force_rebuild=False)
     return jsonify({"success": True, **graph})
 
 
 @app.route("/api/kb/graph/search", methods=["GET"])
 def api_kb_graph_search():
     """Return a query-focused knowledge graph neighborhood."""
-    query = str(request.args.get("q") or "").strip() # AI辅助生成：GLM-5, 2026-04-19
+    query = str(request.args.get("q") or "").strip()
     view = str(request.args.get("view") or "clinical").strip().lower()
+    category = str(request.args.get("category") or "").strip().lower()
+    task = str(request.args.get("task") or "").strip()
     depth_raw = request.args.get("depth", "1")
     try:
         depth = max(0, min(2, int(depth_raw)))
@@ -8117,29 +8139,33 @@ def api_kb_graph_search():
         depth = 1
 
     try:
-        from .kg_builder import clinical_graph_view, subgraph_for_query
+        from .kg_builder import category_graph_view, clinical_graph_view, subgraph_for_query
     except ImportError:
-        from kg_builder import clinical_graph_view, subgraph_for_query
+        from kg_builder import category_graph_view, clinical_graph_view, subgraph_for_query
 
-    graph = (
-        clinical_graph_view(query=query, depth=depth)
-        if view == "clinical"
-        else subgraph_for_query(query, depth=depth) # AI辅助生成：GLM-5, 2026-04-20
-    )
+    if category:
+        graph = category_graph_view(category=category, query=query, task=task, depth=depth)
+    elif view == "clinical":
+        graph = clinical_graph_view(query=query, depth=depth)
+    else:
+        graph = subgraph_for_query(query, depth=depth)
     return jsonify({"success": True, **graph, "query": query})
 
 
 @app.route("/api/kb/graph/rebuild", methods=["POST"])
 def api_kb_graph_rebuild():
     """Rebuild the local stroke knowledge graph cache."""
+    body = request.get_json(silent=True) or {} if request.is_json else {}
+    category = str(request.args.get("category") or body.get("category") or "").strip().lower()
+    task = str(request.args.get("task") or body.get("task") or "").strip()
     try:
-        from .kg_builder import clinical_graph_view, load_graph
+        from .kg_builder import category_graph_view, clinical_graph_view, load_graph
     except ImportError:
-        from kg_builder import clinical_graph_view, load_graph
+        from kg_builder import category_graph_view, clinical_graph_view, load_graph
 
     load_graph(force_rebuild=True)
-    graph = clinical_graph_view()
-    return jsonify({"success": True, **graph, "rebuilt": True}) # AI辅助生成：GLM-5, 2026-04-21
+    graph = category_graph_view(category=category, task=task) if category else clinical_graph_view()
+    return jsonify({"success": True, **graph, "rebuilt": True})
 
 
 @app.route("/kb-pdfs/<path:filename>")

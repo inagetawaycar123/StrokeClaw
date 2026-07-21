@@ -165,16 +165,39 @@ export async function fetchKbDocs() {
   return { ...data, docs };
 }
 
-export async function fetchKbGraph(query = "") {
-  const q = String(query || "").trim(); // AI辅助生成：GLM-5, 2026-04-13
-  const path = q
-    ? `/api/kb/graph/search?view=clinical&q=${encodeURIComponent(q)}`
-    : "/api/kb/graph?view=clinical";
-  return requestJson(path);
+export async function fetchKbGraphCategories(task = "") {
+  const params = new URLSearchParams();
+  const t = String(task || "").trim();
+  if (t) params.set("task", t);
+  const suffix = params.toString();
+  const data = await requestJson(`/api/kb/graph/categories${suffix ? `?${suffix}` : ""}`);
+  return Array.isArray(data?.categories) ? data.categories : [];
 }
 
-export async function rebuildKbGraph() {
-  return requestJson("/api/kb/graph/rebuild", {
+export async function fetchKbGraph({ category = "", query = "", task = "" } = {}) {
+  const q = String(query || "").trim();
+  const cat = String(category || "").trim();
+  const t = String(task || "").trim();
+  const params = new URLSearchParams();
+  if (cat) params.set("category", cat);
+  else params.set("view", "clinical");
+  if (t) params.set("task", t);
+
+  if (q) {
+    params.set("q", q);
+    return requestJson(`/api/kb/graph/search?${params.toString()}`);
+  }
+  return requestJson(`/api/kb/graph?${params.toString()}`);
+}
+
+export async function rebuildKbGraph({ category = "", task = "" } = {}) {
+  const params = new URLSearchParams();
+  const cat = String(category || "").trim();
+  const t = String(task || "").trim();
+  if (cat) params.set("category", cat);
+  if (t) params.set("task", t);
+  const suffix = params.toString();
+  return requestJson(`/api/kb/graph/rebuild${suffix ? `?${suffix}` : ""}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

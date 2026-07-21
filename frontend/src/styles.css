@@ -246,6 +246,97 @@ h4 {
   flex-wrap: wrap;
 }
 
+.kg-category-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kg-category-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid #d4dfef;
+  border-radius: 999px;
+  background: #fff;
+  color: #37506f;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.kg-category-tab:hover {
+  border-color: #9bc0f5;
+}
+
+.kg-category-tab.active {
+  background: #2f88f2;
+  border-color: #2f88f2;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(47, 136, 242, 0.28);
+}
+
+.kg-category-tab.relevant:not(.active) {
+  border-color: #f0a33a;
+  background: #fff8ee;
+}
+
+.kg-category-icon {
+  font-size: 1rem;
+}
+
+.kg-category-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #f0a33a;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.kg-category-tab.active .kg-category-badge {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.kg-category-desc {
+  margin: 2px 0 0;
+  color: #4f6685;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.kg-category-matched {
+  color: #b06d12;
+  font-weight: 700;
+}
+
+.chip-relevant {
+  background: #fff1dc !important;
+  border-color: #f0a33a !important;
+  color: #b06d12 !important;
+}
+
+.kg-node-halo {
+  fill: rgba(240, 163, 58, 0.16);
+  stroke: #f0a33a;
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.kg-node.relevant rect:not(.kg-node-halo) {
+  stroke: #f0a33a;
+  stroke-width: 2.4;
+}
+
+.kg-node-flag {
+  fill: #f0a33a;
+  font-size: 15px;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
 .kg-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.34fr);
