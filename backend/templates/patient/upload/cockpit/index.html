@@ -232,6 +232,28 @@
             <div class="kv"><span>secondary_deps</span><strong id="drawerNodeSecondaryDeps">0</strong></div>
         </div>
 
+        <div class="node-info-overview">
+            <div class="drawer-block node-info-block">
+                <h4 class="node-info-heading">Agent</h4>
+                <div class="kv"><span>agent_name</span><strong id="drawerNodeAgentName">-</strong></div>
+            </div>
+            <div class="drawer-block node-info-block">
+                <h4 class="node-info-heading">Skill</h4>
+                <div class="kv"><span>skill_id</span><strong id="drawerNodeSkillId">-</strong></div>
+                <div class="kv"><span>skill_name</span><strong id="drawerNodeSkillName">-</strong></div>
+            </div>
+            <div class="drawer-block node-info-block">
+                <h4 class="node-info-heading">Confidence</h4>
+                <div class="kv"><span>confidence_score</span><strong id="drawerNodeConfidenceScore">-</strong></div>
+                <div class="kv"><span>confidence_method</span><strong id="drawerNodeConfidenceMethod">-</strong></div>
+                <div class="kv"><span>level</span><strong id="drawerNodeConfidenceLevel" class="node-info-state confidence-unknown">未知</strong></div>
+            </div>
+            <div class="drawer-block node-info-block">
+                <h4 class="node-info-heading">Conflict</h4>
+                <div class="kv"><span>conflict_status</span><strong id="drawerNodeConflictStatus" class="node-info-state conflict-unknown">unknown</strong></div>
+            </div>
+        </div>
+
         <div class="drawer-tabs" id="drawerTabs">
             <button class="drawer-tab active" data-tab="clinical">临床视图</button>
             <button class="drawer-tab" data-tab="engineering">工程视图</button>
@@ -251,9 +273,32 @@
                 <h4>output summary</h4>
                 <pre id="drawerNodeOutput">-</pre>
             </div>
+            <div class="drawer-block node-summary-block">
+                <h4 class="node-info-heading">Input Summary</h4>
+                <pre id="drawerNodeInputSummary">暂无输入摘要</pre>
+            </div>
+            <div class="drawer-block node-summary-block">
+                <h4 class="node-info-heading">Output Summary</h4>
+                <pre id="drawerNodeOutputSummary">暂无输出摘要</pre>
+            </div>
         </div>
 
         <div class="drawer-tab-panel" id="drawerTabEngineering" hidden>
+            <div class="drawer-block skill-execution-result">
+                <h4 class="node-info-heading">Skill Execution Result</h4>
+                <div class="skill-result-grid">
+                    <div class="kv"><span>skill_status</span><strong id="drawerSkillResultStatus">暂无数据</strong></div>
+                    <div class="kv"><span>attempt / attempts</span><strong id="drawerSkillResultAttempt">暂无数据</strong></div>
+                    <div class="kv"><span>skill_version / version</span><strong id="drawerSkillResultVersion">暂无数据</strong></div>
+                    <div class="kv"><span>failure_strategy</span><strong id="drawerSkillResultFailureStrategy">暂无数据</strong></div>
+                    <div class="kv"><span>retryable</span><strong id="drawerSkillResultRetryable">暂无数据</strong></div>
+                    <div class="kv"><span>error_code</span><strong id="drawerSkillResultErrorCode">暂无数据</strong></div>
+                </div>
+                <div class="skill-result-output">
+                    <span>structured_output</span>
+                    <pre id="drawerSkillResultStructuredOutput">暂无数据</pre>
+                </div>
+            </div>
             <div class="drawer-block">
                 <h4>tool key</h4>
                 <pre id="drawerEngineeringToolKey">-</pre>
@@ -270,8 +315,8 @@
 
         <div class="drawer-tab-panel" id="drawerTabEvidence" hidden>
             <div class="drawer-block">
-                <h4>evidence refs</h4>
-                <div id="drawerNodeEvidence" class="evidence-chip-wrap"></div>
+                <h4 class="node-info-heading">Evidence Sources</h4>
+                <div id="drawerNodeEvidence" class="evidence-chip-wrap evidence-source-list"></div>
             </div>
         </div>
     </aside>

@@ -25,7 +25,7 @@ from flask import (
 try:
     from .ai_inference import get_ai_model
     from .compat.adapters import build_clinical_decision_bundle
-    from .compat.skill_registry import get_skill_registry
+    from .compat.skill_registry import get_skill_by_id, get_skill_registry, skill_id_for_tool
     from .extensions import NumpyJSONEncoder
     from .summary_assembler import build_summary_artifacts
     from .vessel_context import (
@@ -41,7 +41,7 @@ except ImportError:
     # 兼容直接运行 backend/app.py 的场景
     from ai_inference import get_ai_model
     from compat.adapters import build_clinical_decision_bundle
-    from compat.skill_registry import get_skill_registry
+    from compat.skill_registry import get_skill_by_id, get_skill_registry, skill_id_for_tool
     from extensions import NumpyJSONEncoder
     from summary_assembler import build_summary_artifacts
     from vessel_context import (
@@ -2381,7 +2381,9 @@ def _w0_mock_public_run(run):
     payload.pop("created_epoch", None)
     payload.pop("script", None)
     payload.pop("script_cursor", None)
-    return _ensure_w0_run_fields(payload)
+    run_id = str(payload.get("run_id") or "").strip()
+    events = copy.deepcopy(W0_MOCK_EVENTS.get(run_id, [])) if run_id else []
+    return _ensure_w0_run_fields(payload, events=events)
 
 
 def _w0_mock_refresh_run(run_id):
@@ -2499,6 +2501,242 @@ def _safe_agent_copy(obj):
     return copy.deepcopy(obj) if obj is not None else None
 
 
+_NODE_INFO_TOOL_ALIASES = {
+    "ctp_generate": "generate_ctp_maps",
+}
+
+
+def _node_info_tool_name(value):
+    key = str(value or "").strip()
+    return _NODE_INFO_TOOL_ALIASES.get(key, key)
+
+
+def _node_info_first(*values):
+    for value in values:
+        if value not in (None, "", [], {}):
+            return value
+    return None
+
+
+def _node_info_confidence(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        score = float(value)
+    except Exception:
+        return None
+    if score > 1.0 and score <= 100.0:
+        score = score / 100.0
+    if score < 0.0 or score > 1.0:
+        return None
+    return round(score, 4)
+
+
+def _node_info_evidence_refs(*payloads):
+    refs = []
+    seen = set()
+
+    def _append(value):
+        if isinstance(value, dict):
+            value = _node_info_first(
+                value.get("evidence_id"),
+                value.get("id"),
+                value.get("source_ref"),
+            )
+        token = str(value or "").strip()
+        if not token or token in seen:
+            return
+        seen.add(token)
+        refs.append(token)
+
+    def _scan(payload, depth=0):
+        if depth > 2:
+            return
+        if isinstance(payload, (list, tuple, set)):
+            for item in payload:
+                if isinstance(item, (dict, list, tuple, set)):
+                    _scan(item, depth + 1)
+                else:
+                    _append(item)
+            return
+        if not isinstance(payload, dict):
+            return
+        for key in ("evidence_refs", "evidence_ids", "evidence_used", "citations", "evidence"):
+            value = payload.get(key)
+            if isinstance(value, (list, tuple, set)):
+                for item in value:
+                    _append(item)
+        for key in ("claims", "findings", "evidence_items"):
+            _scan(payload.get(key), depth + 1)
+
+    for payload in payloads:
+        _scan(payload)
+    return refs
+
+
+def _node_info_conflict_status(*payloads):
+    explicit_values = []
+    has_explicit_zero = False
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        explicit_values.extend(
+            [payload.get("conflict_status"), payload.get("consistency_status")]
+        )
+        if payload.get("severe_conflict_exists") is True:
+            return "conflict"
+        conflicts = payload.get("conflicts")
+        if isinstance(conflicts, list) and conflicts:
+            return "conflict"
+        count = payload.get("conflict_count")
+        if count not in (None, ""):
+            try:
+                if int(count) > 0:
+                    return "conflict"
+                has_explicit_zero = True
+            except Exception:
+                pass
+
+    for value in explicit_values:
+        if isinstance(value, bool):
+            return "conflict" if value else "no_conflict"
+        token = str(value or "").strip().lower()
+        if token in {"conflict", "conflicted", "inconsistent", "has_conflict"}:
+            return "conflict"
+        if token in {"no_conflict", "none", "consistent", "passed", "pass"}:
+            return "no_conflict"
+    return "no_conflict" if has_explicit_zero else "unknown"
+
+
+def _build_cockpit_node_info(*, tool_name, step=None, event=None, tool_result=None):
+    step = step if isinstance(step, dict) else {}
+    event = event if isinstance(event, dict) else {}
+    tool_result = tool_result if isinstance(tool_result, dict) else {}
+    output_ref = event.get("output_ref") if isinstance(event.get("output_ref"), dict) else {}
+    structured_output = (
+        tool_result.get("structured_output")
+        if isinstance(tool_result.get("structured_output"), dict)
+        else {}
+    )
+    input_ref = event.get("input_ref") if isinstance(event.get("input_ref"), dict) else {}
+    canonical_tool = _node_info_tool_name(
+        _node_info_first(tool_name, event.get("tool_name"), step.get("key"))
+    )
+    skill_id = skill_id_for_tool(canonical_tool) if canonical_tool else "SKILL_UNKNOWN"
+    skill = get_skill_by_id(skill_id) or {}
+    confidence_score = _node_info_confidence(
+        _node_info_first(
+            event.get("confidence"),
+            event.get("confidence_score"),
+            output_ref.get("confidence"),
+            output_ref.get("confidence_score"),
+            output_ref.get("support_rate"),
+            tool_result.get("confidence"),
+            tool_result.get("confidence_score"),
+            structured_output.get("confidence"),
+            structured_output.get("confidence_score"),
+            structured_output.get("support_rate"),
+            step.get("confidence"),
+            step.get("confidence_score"),
+        )
+    )
+    input_summary = _node_info_first(
+        event.get("input_summary"),
+        step.get("input_summary"),
+        _agent_compact_value(input_ref) if input_ref else None,
+    )
+    output_summary = _node_info_first(
+        event.get("result_summary"),
+        event.get("output_summary"),
+        step.get("output_summary"),
+        _agent_compact_value(output_ref) if output_ref else None,
+        _agent_compact_value(structured_output) if structured_output else None,
+        step.get("message"),
+    )
+    return {
+        "node_id": canonical_tool,
+        "node_name": _agent_tool_title(canonical_tool) if canonical_tool else "-",
+        "agent_name": str(
+            _node_info_first(
+                event.get("agent_name"),
+                step.get("agent_name"),
+                tool_result.get("agent_name"),
+                skill.get("owner_agent"),
+            )
+            or ""
+        ),
+        "skill_id": skill_id,
+        "skill_name": str(skill.get("skill_name") or ""),
+        "tool_name": canonical_tool,
+        "input_summary": str(input_summary or ""),
+        "output_summary": str(output_summary or ""),
+        "confidence_score": confidence_score,
+        "confidence_method": str(
+            _node_info_first(
+                event.get("confidence_method"),
+                output_ref.get("confidence_method"),
+                structured_output.get("confidence_method"),
+                skill.get("confidence_method"),
+            )
+            or ""
+        ),
+        "evidence_refs": _node_info_evidence_refs(
+            event, output_ref, tool_result, structured_output
+        ),
+        "conflict_status": _node_info_conflict_status(
+            event, output_ref, tool_result, structured_output
+        ),
+    }
+
+
+def _enrich_agent_run_node_info(run, events=None):
+    if not isinstance(run, dict):
+        return run
+    event_by_tool = {}
+    for event in events or []:
+        if not isinstance(event, dict):
+            continue
+        key = _node_info_tool_name(event.get("tool_name") or event.get("node_name"))
+        if key:
+            event_by_tool[key] = event
+
+    result_by_tool = {}
+    for result in run.get("tool_results") or []:
+        if not isinstance(result, dict):
+            continue
+        key = _node_info_tool_name(
+            result.get("tool_name") or result.get("name") or result.get("step_key")
+        )
+        if key:
+            result_by_tool[key] = result
+
+    step_by_tool = {}
+    for step in run.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        key = _node_info_tool_name(
+            step.get("key") or step.get("tool_name") or step.get("node_name")
+        )
+        if not key:
+            continue
+        step_by_tool[key] = step
+        step["node_info"] = _build_cockpit_node_info(
+            tool_name=key,
+            step=step,
+            event=event_by_tool.get(key),
+            tool_result=result_by_tool.get(key),
+        )
+
+    for key, result in result_by_tool.items():
+        result["node_info"] = _build_cockpit_node_info(
+            tool_name=key,
+            step=step_by_tool.get(key),
+            event=event_by_tool.get(key),
+            tool_result=result,
+        )
+    return run
+
+
 def _build_w0_plan_frame(
     tool_sequence,
     imaging_path="",
@@ -2545,7 +2783,7 @@ def _infer_w0_termination_reason(run):
     return "unknown"
 
 
-def _ensure_w0_run_fields(run):
+def _ensure_w0_run_fields(run, events=None):
     if not isinstance(run, dict):
         return run
 
@@ -2602,7 +2840,7 @@ def _ensure_w0_run_fields(run):
         else:
             run["finalization"] = None
 
-    return run
+    return _enrich_agent_run_node_info(run, events=events)
 
 
 REVIEW_SECTION_SPECS = [
@@ -3547,6 +3785,53 @@ def _build_agent_event_clinical_fields(event):
         summary["risk_level"] = "none"
 
     return summary
+
+
+def _normalize_agent_events_for_api(run, events):
+    run = run if isinstance(run, dict) else {}
+    step_by_tool = {}
+    for step in run.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        key = _node_info_tool_name(
+            step.get("key") or step.get("tool_name") or step.get("node_name")
+        )
+        if key:
+            step_by_tool[key] = step
+
+    result_by_tool = {}
+    for result in run.get("tool_results") or []:
+        if not isinstance(result, dict):
+            continue
+        key = _node_info_tool_name(
+            result.get("tool_name") or result.get("name") or result.get("step_key")
+        )
+        if key:
+            result_by_tool[key] = result
+
+    normalized = []
+    for item in sorted(events or [], key=lambda x: int((x or {}).get("event_seq") or 0)):
+        event = dict(item or {})
+        event["event_type"] = str(
+            event.get("event_type") or _classify_agent_event_type(event)
+        )
+        event["phase"] = str(event.get("phase") or event.get("stage") or "")
+        event["node_name"] = str(
+            event.get("node_name") or event.get("tool_name") or ""
+        )
+        enrich = _build_agent_event_clinical_fields(event)
+        for field_name, field_value in enrich.items():
+            if field_name not in event or event.get(field_name) in (None, "", [], {}):
+                event[field_name] = field_value
+        key = _node_info_tool_name(event.get("tool_name") or event.get("node_name"))
+        event["node_info"] = _build_cockpit_node_info(
+            tool_name=key,
+            step=step_by_tool.get(key),
+            event=event,
+            tool_result=result_by_tool.get(key),
+        )
+        normalized.append(event)
+    return normalized
 
 
 def _append_agent_event(
@@ -10062,7 +10347,7 @@ def api_start_demo_scenario(scenario_id):
         )
         worker = threading.Thread(target=_run_agent_pipeline, args=(run_id,), daemon=True)
         worker.start()
-        run = _ensure_w0_run_fields(run)
+        run = _ensure_w0_run_fields(run, events=_get_agent_events(run_id))
         return jsonify(
             {
                 "success": True,
@@ -10160,9 +10445,10 @@ def api_create_w0_mock_run():
 
 @app.route("/api/strokeclaw/w0/mock-runs/<run_id>", methods=["GET"])
 def api_get_w0_mock_run(run_id):
-    run, _events = _w0_mock_refresh_run(str(run_id or "").strip())
+    run, events = _w0_mock_refresh_run(str(run_id or "").strip())
     if not run:
         return jsonify({"success": False, "error": "Mock run not found"}), 404
+    run = _ensure_w0_run_fields(run, events=events)
     return jsonify({"success": True, "run": run})
 
 
@@ -10171,7 +10457,8 @@ def api_get_w0_mock_run_events(run_id):
     run, events = _w0_mock_refresh_run(str(run_id or "").strip())
     if not run:
         return jsonify({"success": False, "error": "Mock run not found"}), 404
-    return jsonify({"success": True, "run_id": run_id, "events": events})
+    normalized = _normalize_agent_events_for_api(run, events)
+    return jsonify({"success": True, "run_id": run_id, "events": normalized})
 
 
 @app.route("/api/agent/runs", methods=["POST"])
@@ -10229,7 +10516,7 @@ def api_create_agent_run():
     worker = threading.Thread(target=_run_agent_pipeline, args=(run_id,), daemon=True)
     worker.start()
 
-    run = _ensure_w0_run_fields(run)
+    run = _ensure_w0_run_fields(run, events=_get_agent_events(run_id))
 
     return jsonify(
         {
@@ -10248,7 +10535,7 @@ def api_get_agent_run(run_id):
     run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-03-05
     if not run:
         return jsonify({"success": False, "error": "Run not found"}), 404
-    run = _ensure_w0_run_fields(run)
+    run = _ensure_w0_run_fields(run, events=_get_agent_events(run_id))
     return jsonify({"success": True, "run": run})
 
 
@@ -10258,19 +10545,7 @@ def api_get_agent_events(run_id):
     if not run:
         return jsonify({"success": False, "error": "Run not found"}), 404 # AI辅助生成：GLM-5, 2026-03-06
     events = _get_agent_events(run_id)
-    normalized = []
-    for item in sorted(events, key=lambda x: int((x or {}).get("event_seq") or 0)):
-        event = dict(item or {})
-        event["event_type"] = str(
-            event.get("event_type") or _classify_agent_event_type(event)
-        )
-        event["phase"] = str(event.get("phase") or event.get("stage") or "")
-        event["node_name"] = str(event.get("node_name") or event.get("tool_name") or "") # AI辅助生成：GLM-5, 2026-03-07
-        enrich = _build_agent_event_clinical_fields(event)
-        for field_name, field_value in enrich.items():
-            if field_name not in event or event.get(field_name) in (None, "", [], {}):
-                event[field_name] = field_value
-        normalized.append(event)
+    normalized = _normalize_agent_events_for_api(run, events)
     return jsonify({"success": True, "run_id": run_id, "events": normalized})
 
 
@@ -10778,13 +11053,13 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
     if rid:
         run = _get_agent_run(rid)
         if run:
-            run = _ensure_w0_run_fields(run) # AI辅助生成：GLM-5, 2026-04-01
             events = _get_agent_events(rid)
+            run = _ensure_w0_run_fields(run, events=events) # AI辅助生成：GLM-5, 2026-04-01
             return run, events, rid, "real"
 
         mock_run, mock_events = _w0_mock_refresh_run(rid)
         if mock_run:
-            mock_run = _ensure_w0_run_fields(mock_run)
+            mock_run = _ensure_w0_run_fields(mock_run, events=mock_events)
             return mock_run, (mock_events or []), rid, "mock"
 
     report_payload, meta, imaging, resolved_file_id = _load_cockpit_case_report_payload(
@@ -10976,6 +11251,16 @@ def _build_cockpit_dag(run, events):
             payload["tool_name"] = key
             latest_event_by_tool[key] = payload
 
+    latest_result_by_tool = {}
+    for result in (run or {}).get("tool_results") or []:
+        if not isinstance(result, dict):
+            continue
+        key = _canonical_tool_name(
+            result.get("tool_name") or result.get("name") or result.get("step_key")
+        )
+        if key:
+            latest_result_by_tool[key] = result
+
     nodes = []
     edges = [] # AI辅助生成：GLM-5, 2026-04-15
     normalized_sequence = _ensure_ctp_step(tool_sequence)
@@ -11059,33 +11344,42 @@ def _build_cockpit_dag(run, events):
                     "verdicts": [],
                     "message": "共识裁决已完成（前序校验均通过或策略性跳过）",
                 }
-        nodes.append(
-            {
-                "id": tool_name,
-                "step_key": tool_name,
-                "title": _agent_tool_title(tool_name),
-                "description": _agent_tool_description(tool_name),
-                "order": idx,
-                "status": status,
-                "stage": stage,
-                "lane": stage,
-                "lane_title": lane_titles.get(stage, stage),
-                "latency_ms": evt.get("latency_ms"),
-                "attempt": evt.get("attempt") or step.get("attempts"),
-                "retryable": bool(
-                    evt.get("retryable")
-                    if evt.get("retryable") is not None
-                    else step.get("retryable") # AI辅助生成：GLM-5, 2026-04-20
-                ),
-                "error_code": evt.get("error_code"),
-                "confidence": confidence,
-                "message": node_message,
-                "input_payload": input_payload,
-                "output_payload": output_payload,
-                "event_id": evt.get("event_id"),
-                "event_seq": evt.get("event_seq"),
-            }
+        node_event = dict(evt)
+        node_event["input_ref"] = input_payload
+        node_event["output_ref"] = output_payload
+        node_event["result_summary"] = node_event.get("result_summary") or node_message
+        node_payload = {
+            "id": tool_name,
+            "step_key": tool_name,
+            "title": _agent_tool_title(tool_name),
+            "description": _agent_tool_description(tool_name),
+            "order": idx,
+            "status": status,
+            "stage": stage,
+            "lane": stage,
+            "lane_title": lane_titles.get(stage, stage),
+            "latency_ms": evt.get("latency_ms"),
+            "attempt": evt.get("attempt") or step.get("attempts"),
+            "retryable": bool(
+                evt.get("retryable")
+                if evt.get("retryable") is not None
+                else step.get("retryable") # AI辅助生成：GLM-5, 2026-04-20
+            ),
+            "error_code": evt.get("error_code"),
+            "confidence": confidence,
+            "message": node_message,
+            "input_payload": input_payload,
+            "output_payload": output_payload,
+            "event_id": evt.get("event_id"),
+            "event_seq": evt.get("event_seq"),
+        }
+        node_payload["node_info"] = _build_cockpit_node_info(
+            tool_name=tool_name,
+            step=step,
+            event=node_event,
+            tool_result=latest_result_by_tool.get(tool_name),
         )
+        nodes.append(node_payload)
         if idx > 1:
             edges.append(
                 {
@@ -12199,9 +12493,3 @@ def api_save_and_generate_report():
         )
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
-
-
-
-
-
