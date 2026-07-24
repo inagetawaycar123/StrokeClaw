@@ -1,0 +1,95 @@
+{
+  "version": "stroke-multi-kg-v1",
+  "graphs": [
+    {
+      "kg_type": "guideline",
+      "label": "指南决策",
+      "description": "卒中急诊评估、再灌注治疗、转诊和时间窗相关的指南知识。",
+      "version": "2026.1",
+      "enabled": true,
+      "status": "review_required",
+      "order": 1
+    },
+    {
+      "kg_type": "imaging_sign",
+      "label": "影像征象",
+      "description": "NCCT、CTA/多期 CTA 与灌注影像中的关键征象和评分。",
+      "version": "2026.1",
+      "enabled": true,
+      "status": "review_required",
+      "order": 2
+    },
+    {
+      "kg_type": "vessel_anatomy",
+      "label": "血管解剖",
+      "description": "责任血管、闭塞节段、供血区和侧支循环关系。",
+      "version": "2026.1",
+      "enabled": true,
+      "status": "review_required",
+      "order": 3
+    },
+    {
+      "kg_type": "perfusion",
+      "label": "灌注评估",
+      "description": "核心区、半暗带、Tmax、CBF/CBV 与 mismatch 的解释关系。",
+      "version": "2026.1",
+      "enabled": true,
+      "status": "review_required",
+      "order": 4
+    },
+    {
+      "kg_type": "risk_contraindication",
+      "label": "风险禁忌",
+      "description": "再灌注治疗前需要识别的出血、用药、血压和病史风险。",
+      "version": "2026.1",
+      "enabled": true,
+      "status": "review_required",
+      "order": 5
+    },
+    {
+      "kg_type": "workflow",
+      "label": "诊疗流程",
+      "description": "从病例接收、影像分析到医生复核和报告归档的任务流程。",
+      "version": "2026.1",
+      "enabled": true,
+      "status": "active",
+      "order": 6
+    },
+    {
+      "kg_type": "model_explanation",
+      "label": "模型解释",
+      "description": "系统模型输入、输出、限制和需要人工复核的条件。",
+      "version": "2026.1",
+      "enabled": true,
+      "status": "active",
+      "order": 7
+    },
+    {
+      "kg_type": "report_evidence",
+      "label": "报告证据",
+      "description": "报告结论、结构化字段、图谱节点与证据来源的映射。",
+      "version": "2026.1",
+      "enabled": true,
+      "status": "active",
+      "order": 8
+    },
+    {
+      "kg_type": "consistency_check",
+      "label": "一致性校验",
+      "description": "跨模态、模型、量化结果和治疗建议之间的冲突检查。",
+      "version": "2026.1",
+      "enabled": true,
+      "status": "review_required",
+      "order": 9
+    },
+    {
+      "kg_type": "case_experience",
+      "label": "病例经验",
+      "description": "经脱敏、授权和审核后的病例模式与反馈；当前版本不启用。",
+      "version": "planned",
+      "enabled": false,
+      "status": "planned",
+      "order": 10
+    }
+  ]
+}

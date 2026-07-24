@@ -8085,6 +8085,21 @@ def api_chat_clinical():
         return jsonify({"success": False, "error": str(e)}), 500 # AI辅助生成：GLM-5, 2026-04-17
 
 
+def _build_kg_run_context(run, events, current_dag_node="", question=""):
+    """Build a privacy-minimized routing context from an existing agent run."""
+    try:
+        from .kg_context import build_run_context
+    except ImportError:
+        from kg_context import build_run_context
+    return build_run_context(
+        run or {},
+        events or [],
+        current_dag_node=current_dag_node,
+        question=question,
+        modality_normalizer=_normalize_uploaded_modalities,
+    )
+
+
 @app.route("/api/kb/docs", methods=["GET"])
 def api_kb_docs():
     """Return merged knowledge-base PDFs with grading metadata."""
@@ -8096,6 +8111,27 @@ def api_kb_docs():
 def api_kb_graph():
     """Return the local stroke knowledge graph.""" # AI辅助生成：GLM-5, 2026-04-18
     view = str(request.args.get("view") or "clinical").strip().lower()
+    kg_type = str(request.args.get("kg_type") or "").strip()
+    if kg_type:
+        try:
+            from .kg_store import graph_for_types
+        except ImportError:
+            from kg_store import graph_for_types
+        selected_types = None if kg_type == "all" else [kg_type]
+        try:
+            graph = graph_for_types(selected_types)
+        except KeyError:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"unknown kg_type: {kg_type}",
+                    }
+                ),
+                400,
+            )
+        return jsonify({"success": True, **graph})
+
     try:
         from .kg_builder import clinical_graph_view, load_graph
     except ImportError:
@@ -8103,6 +8139,182 @@ def api_kb_graph():
 
     graph = clinical_graph_view() if view == "clinical" else load_graph(force_rebuild=False)
     return jsonify({"success": True, **graph})
+
+
+@app.route("/api/kb/graphs", methods=["GET"])
+def api_kb_graphs():
+    """Return the versioned multi-section knowledge graph catalogue."""
+    enabled_raw = str(request.args.get("enabled") or "").strip().lower()
+    enabled = None
+    if enabled_raw:
+        if enabled_raw not in {"true", "false", "1", "0"}:
+            return jsonify({"success": False, "error": "enabled must be true or false"}), 400
+        enabled = enabled_raw in {"true", "1"}
+    try:
+        from .kg_store import list_graphs
+    except ImportError:
+        from kg_store import list_graphs
+    return jsonify({"success": True, **list_graphs(enabled=enabled)})
+
+
+@app.route("/api/kb/graph/route-query", methods=["POST"])
+def api_kb_graph_route_query():
+    """Route a doctor question and the current run to relevant KG sections."""
+    data = request.get_json(silent=True) or {}
+    run_id = str(data.get("run_id") or "").strip()
+    file_id = str(data.get("file_id") or "").strip()
+    patient_id_raw = data.get("patient_id")
+    patient_id = None
+    if patient_id_raw not in (None, ""):
+        try:
+            patient_id = int(patient_id_raw)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "invalid patient_id"}), 400
+    if run_id.lower().startswith("case:") and not file_id:
+        file_id = run_id.split(":", 1)[1].strip()
+    explicit_question = str(data.get("question") or "").strip()
+    current_dag_node = str(data.get("current_dag_node") or "").strip()
+    try:
+        depth = max(0, min(2, int(data.get("depth", 1))))
+    except Exception:
+        depth = 1
+
+    run = None
+    events = []
+    resolved_run_id = ""
+    source_tag = "none"
+    has_case_locator = bool(run_id or file_id or patient_id is not None)
+    if has_case_locator:
+        run, events, resolved_run_id, source_tag = _resolve_cockpit_run_and_events(
+            run_id=run_id,
+            file_id=file_id,
+            patient_id=patient_id,
+        )
+        if not run:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Run or case context not found",
+                        "run_id": run_id or None,
+                        "file_id": file_id or None,
+                        "patient_id": patient_id,
+                    }
+                ),
+                404,
+            )
+    if not has_case_locator and not explicit_question:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "run_id, file_id/patient_id, or question is required",
+                }
+            ),
+            400,
+        )
+
+    context = _build_kg_run_context(
+        run or {},
+        events,
+        current_dag_node=current_dag_node,
+        question=explicit_question,
+    )
+    effective_question = explicit_question or context.get("original_question") or ""
+    try:
+        from .knowledge_graph_lookup import knowledge_graph_lookup
+    except ImportError:
+        from knowledge_graph_lookup import knowledge_graph_lookup
+    result = knowledge_graph_lookup(
+        effective_question,
+        context=context,
+        depth=depth,
+    )
+    source = {
+        "real": "real_run",
+        "case": "case_recovered",
+        "mock": "mock_run",
+    }.get(source_tag, "question_only" if not run else source_tag or "unknown")
+    feature_presence = {
+        "question": bool(effective_question),
+        "modalities": bool(context.get("modalities")),
+        "tasks": bool(context.get("task_keys")),
+        "findings": bool(context.get("result_terms") or context.get("risk_terms")),
+    }
+    context_warnings = []
+    confidence_cap = None
+    if source == "case_recovered":
+        confidence_cap = 0.75
+        context_warnings.append("历史病例使用已保存数据恢复，缺少完整运行事件。")
+        raw_confidence = float(result.get("confidence") or 0.0)
+        result["raw_confidence"] = raw_confidence
+        result["confidence"] = min(confidence_cap, raw_confidence)
+        capped_routes = []
+        for route in result.get("routes") or []:
+            route_item = dict(route)
+            route_item["confidence"] = min(
+                confidence_cap,
+                float(route_item.get("confidence") or 0.0),
+            )
+            capped_routes.append(route_item)
+        result["routes"] = capped_routes
+        display_plan = dict(result.get("display_plan") or {})
+        display_plan["context_confidence_cap"] = confidence_cap
+        display_plan["context_degraded"] = True
+        result["display_plan"] = display_plan
+    resolved_file_id = str((run or {}).get("file_id") or file_id or "").strip()
+    resolved_patient_id = (run or {}).get("patient_id")
+    if resolved_patient_id in (None, ""):
+        resolved_patient_id = patient_id
+    return jsonify(
+        {
+            "success": True,
+            "run_id": resolved_run_id or run_id or None,
+            "effective_question": effective_question,
+            "context_meta": {
+                "source": source,
+                "resolved_run_id": resolved_run_id or run_id or None,
+                "file_id": resolved_file_id or None,
+                "patient_id": resolved_patient_id,
+                "completeness": round(
+                    sum(1 for value in feature_presence.values() if value)
+                    / len(feature_presence),
+                    4,
+                ),
+                "available_features": [
+                    key for key, value in feature_presence.items() if value
+                ],
+                "missing_features": [
+                    key for key, value in feature_presence.items() if not value
+                ],
+                "confidence_cap": confidence_cap,
+                "warnings": context_warnings,
+            },
+            "context_summary": {
+                "modalities": context.get("modalities") or [],
+                "task_keys": context.get("task_keys") or [],
+                "raw_task_keys": context.get("raw_task_keys") or [],
+                "result_terms": context.get("result_terms") or [],
+                "negative_result_terms": context.get("negative_result_terms") or [],
+                "uncertain_result_terms": context.get("uncertain_result_terms") or [],
+                "risk_terms": context.get("risk_terms") or [],
+            },
+            **result,
+        }
+    )
+
+
+@app.route("/api/kb/node/<node_id>", methods=["GET"])
+def api_kb_node_detail(node_id):
+    """Return a multi-section KG node with relations and evidence metadata."""
+    try:
+        from .kg_store import get_node_detail
+    except ImportError:
+        from kg_store import get_node_detail
+    detail = get_node_detail(node_id)
+    if not detail:
+        return jsonify({"success": False, "error": "Knowledge node not found"}), 404
+    return jsonify({"success": True, **detail})
 
 
 @app.route("/api/kb/graph/search", methods=["GET"])

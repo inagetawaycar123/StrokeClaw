@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchBootstrap, fetchKbDocs, fetchKbGraph, fetchNodeDetail, fetchOverview, rebuildKbGraph, startUploadRun } from "./api";
+import { fetchBootstrap, fetchKbDocs, fetchKbGraph, fetchKbGraphs, fetchNodeDetail, fetchOverview, rebuildKbGraph, routeKbGraph, startUploadRun } from "./api";
 
 const TERMINAL = new Set(["succeeded", "failed", "cancelled", "paused_review_required"]); // AI辅助生成：GLM-5, 2026-04-15
 const NIFTI_ACCEPT = ".nii,.nii.gz,.gz,application/gzip,application/x-gzip";
@@ -15,6 +15,15 @@ const KG_NODE_COLORS = {
   risk: "#dc4c64",
   guideline_doc: "#60728f",
   evidence_chunk: "#c94a56",
+  guideline: "#2563eb",
+  imaging_sign: "#0284c7",
+  vessel_anatomy: "#0f766e",
+  perfusion: "#0891b2",
+  risk_contraindication: "#dc4c64",
+  workflow: "#7c3aed",
+  model_explanation: "#8f62d6",
+  report_evidence: "#bd7b16",
+  consistency_check: "#c2415d",
 };
 
 function fmt(value) {
@@ -80,23 +89,53 @@ function inferUploadStage(form) {
   return 1;
 }
 
-function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSearch, onRebuild }) {
+function KnowledgeGraphView({
+  graph,
+  catalog,
+  routeResult,
+  selectedType,
+  loading,
+  contextLoading,
+  showContextPicker,
+  candidates,
+  candidateLoading,
+  error,
+  query,
+  onQueryChange,
+  onSearch,
+  onRebuild,
+  onSelectType,
+  onSelectCandidate,
+  onRefreshCandidates,
+}) {
   const [selectedId, setSelectedId] = useState(""); // AI辅助生成：GLM-5, 2026-04-20
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const edges = Array.isArray(graph?.edges) ? graph.edges : [];
   const evidence = Array.isArray(graph?.evidence) ? graph.evidence : [];
   const stats = graph?.stats || {};
+  const routes = Array.isArray(routeResult?.routes) ? routeResult.routes : [];
+  const contextSummary = routeResult?.context_summary || {};
+  const contextMeta = routeResult?.context_meta || {};
+  const fallback = routeResult?.fallback || {};
+  const contextSourceLabel = {
+    real_run: "Agent 任务",
+    case_recovered: "历史病例恢复",
+    mock_run: "模拟任务",
+    question_only: "仅问题检索",
+  }[contextMeta.source] || contextMeta.source || "";
 
   const positioned = useMemo(() => {
     const width = 1120; // AI辅助生成：GLM-5, 2026-04-21
     const height = 620;
-    const lanes = [
-      { label: "疾病", column: 0 },
-      { label: "检查", column: 1 },
-      { label: "分型与指标", column: 2 },
-      { label: "条件与风险", column: 3 },
-      { label: "治疗策略", column: 4 },
-    ];
+    const lanes = Array.isArray(graph?.lanes) && graph.lanes.length
+      ? graph.lanes
+      : [
+          { label: "疾病", column: 0 },
+          { label: "检查", column: 1 },
+          { label: "分型与指标", column: 2 },
+          { label: "条件与风险", column: 3 },
+          { label: "治疗策略", column: 4 },
+        ];
     const byColumn = nodes.reduce((acc, node) => {
       const column = Number.isFinite(Number(node?.column)) ? Number(node.column) : 0;
       if (!acc[column]) acc[column] = [];
@@ -116,7 +155,7 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
       });
     });
     return { width, height, pos, lanes };
-  }, [nodes]);
+  }, [nodes, graph?.lanes]);
 
   const visibleNodeIds = new Set(Object.keys(positioned.pos)); // AI辅助生成：GLM-5, 2026-03-02
   const selected = nodes.find((node) => String(node.id) === String(selectedId)) || nodes[0] || null;
@@ -148,22 +187,137 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
 
   return (
     <div className="kg-view">
+      <div className="kg-chapters" role="tablist" aria-label="knowledge-graph-chapters">
+        <button
+          className={`kg-chapter ${selectedType === "related" ? "active" : ""}`}
+          onClick={() => onSelectType("related")}
+        >
+          本轮相关
+        </button>
+        <button
+          className={`kg-chapter ${selectedType === "all" ? "active" : ""}`}
+          onClick={() => onSelectType("all")}
+        >
+          完整图谱
+        </button>
+        {(catalog || []).map((item) => (
+          <button
+            key={item.kg_type}
+            className={`kg-chapter ${selectedType === item.kg_type ? "active" : ""}`}
+            onClick={() => onSelectType(item.kg_type)}
+            disabled={!item.enabled}
+            title={!item.enabled ? "该章节当前仅保留规划入口" : item.description}
+          >
+            {item.label}
+            {!item.enabled ? <small>规划中</small> : <small>{item.node_count || 0}</small>}
+          </button>
+        ))}
+      </div>
       <div className="kg-toolbar">
         <label className="kg-search">
-          图谱检索
+          医生问题 / 图谱检索
           <input
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="取栓 / 大血管闭塞 / 不匹配比值"
+            placeholder="例如：为什么提示大血管闭塞？是否需要取栓评估？"
           />
         </label>
         <button onClick={() => onSearch(query)} disabled={loading}>
-          {loading ? "检索中..." : "检索图谱"} // AI辅助生成：GLM-5, 2026-03-07
+          {loading ? "检索中..." : "展示相关章节"}
         </button>
-        <button onClick={onRebuild} disabled={loading}>重建图谱</button>
+        <button onClick={onRebuild} disabled={loading}>重建证据缓存</button>
       </div>
       {error ? <div className="error-box">{error}</div> : null}
+      {selectedType === "related" && contextLoading ? (
+        <section className="kg-context-picker kg-context-loading" aria-live="polite">
+          <strong>正在解析本轮任务</strong>
+          <p>正在确认任务标识并加载相关知识章节，请稍候。</p>
+        </section>
+      ) : null}
+      {selectedType === "related" && showContextPicker ? (
+        <section className="kg-context-picker">
+          <div className="kg-context-picker-head">
+            <div>
+              <strong>选择本轮任务</strong>
+              <p>当前页面没有可用的任务上下文。请选择医生本轮处理的任务，或在上方直接输入问题。</p>
+            </div>
+            <button onClick={onRefreshCandidates} disabled={loading || candidateLoading}>
+              {candidateLoading ? "刷新中..." : "刷新任务"}
+            </button>
+          </div>
+          <div className="kg-run-options">
+            {(candidates || []).slice(0, 8).map((candidate) => (
+              <button
+                key={`${candidate.run_id || "-"}:${candidate.file_id || "-"}:${candidate.patient_id || "-"}`}
+                className="kg-run-option"
+                onClick={() => onSelectCandidate(candidate)}
+                disabled={loading || candidateLoading}
+              >
+                <span className="kg-run-option-head">
+                  <strong>
+                    {candidate.run_id
+                      ? `Agent 任务 ${candidate.run_id}`
+                      : `历史病例 ${candidate.file_id || candidate.patient_id || "-"}`}
+                  </strong>
+                  <span className="chip">
+                    {candidate.run_id
+                      ? candidate.status || candidate.stage || "unknown"
+                      : "病例上下文"}
+                  </span>
+                </span>
+                <span className="kg-run-option-meta">
+                  <span>patient_id {candidate.patient_id || "-"}</span>
+                  <span>file_id {candidate.file_id || "-"}</span>
+                  <span>{candidate.timestamp || candidate.updated_at || candidate.created_at || ""}</span>
+                </span>
+              </button>
+            ))}
+            {(candidates || []).length === 0 ? (
+              <p className="kg-context-empty">暂无可选择的最近任务。请从任务页进入知识图谱，或在上方输入问题后检索。</p>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+      {!contextLoading && !showContextPicker ? (
+        <>
+      {selectedType === "related" && routeResult ? (
+        <section className="kg-route-summary">
+          <div>
+            <strong>本轮知识路由</strong>
+            <span className="chip">置信度 {Math.round(Number(routeResult.confidence || 0) * 100)}%</span>
+            {contextSourceLabel ? <span className="chip">来源 {contextSourceLabel}</span> : null}
+            {contextMeta.completeness !== undefined ? (
+              <span className="chip">上下文完整度 {Math.round(Number(contextMeta.completeness || 0) * 100)}%</span>
+            ) : null}
+            {routeResult.effective_question ? <span className="chip">问题：{routeResult.effective_question}</span> : null}
+          </div>
+          {(contextMeta.warnings || []).map((warning) => (
+            <p key={warning} className="kg-context-warning">{warning}</p>
+          ))}
+          <div className="kg-route-list">
+            {routes.map((route) => (
+              <article key={route.kg_type}>
+                <strong>{route.label}</strong>
+                <span>{(route.reasons || []).join("；") || "由任务上下文命中"}</span>
+              </article>
+            ))}
+            {!routes.length ? <p>{fallback.message || "未命中结构化章节。"}</p> : null}
+          </div>
+          <div className="kg-context-tags">
+            {(contextSummary.modalities || []).map((item) => <span key={`m-${item}`} className="chip">模态 {item}</span>)}
+            {(contextSummary.task_keys || []).slice(0, 6).map((item) => <span key={`t-${item}`} className="chip">任务 {item}</span>)}
+            {(contextSummary.result_terms || []).slice(0, 6).map((item) => <span key={`r-${item}`} className="chip">结果 {item}</span>)}
+            {(contextSummary.negative_result_terms || []).slice(0, 4).map((item) => <span key={`n-${item}`} className="chip">已否定 {item}</span>)}
+            {(contextSummary.uncertain_result_terms || []).slice(0, 4).map((item) => <span key={`u-${item}`} className="chip">不确定 {item}</span>)}
+            {(contextSummary.risk_terms || []).slice(0, 4).map((item) => <span key={`risk-${item}`} className="chip">风险 {item}</span>)}
+          </div>
+          {routeResult?.display_plan?.review_required ? (
+            <p className="kg-review-warning">当前相关医学节点含待审核内容，仅用于证据导航，不能替代医生诊疗决策。</p>
+          ) : null}
+        </section>
+      ) : null}
       <div className="kg-stats">
+        {Array.isArray(graph?.kg_types) ? <span className="chip">章节 {graph.kg_types.length}</span> : null}
         <span className="chip">临床节点 {stats.subgraph_node_count ?? nodes.length}</span>
         <span className="chip">临床关系 {stats.subgraph_edge_count ?? edges.length}</span>
         <span className="chip">证据 {evidence.length}</span>
@@ -212,7 +366,7 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
               .filter((node) => visibleNodeIds.has(node.id))
               .map((node) => {
                 const p = positioned.pos[node.id]; // AI辅助生成：GLM-5, 2026-03-11
-                const type = String(node.type || "concept");
+                const type = String(node.kg_type || node.type || "concept");
                 const active = selected?.id === node.id;
                 const related = activeNodeIds.has(node.id);
                 const dimmed = selected && !related;
@@ -236,7 +390,9 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
           {selected ? (
             <>
               <div className="kg-detail-meta">
-                <span className="chip">{selected.type || "node"}</span>
+                <span className="chip">{selected.chapter_label || selected.kg_type || selected.type || "node"}</span>
+                {selected.node_type ? <span className="chip">{selected.node_type}</span> : null}
+                {selected.review_status ? <span className={`chip review-${selected.review_status}`}>{selected.review_status}</span> : null}
                 {selected.confidence_grade ? <span className="chip">{selected.confidence_grade} {Math.round(Number(selected.confidence_score || 0) * 100)}%</span> : null}
                 {selected.evidence_count !== undefined ? <span className="chip">证据 {selected.evidence_count}</span> : null}
               </div>
@@ -255,8 +411,12 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
               <ul className="kg-list">
                 {selectedEvidence.length ? selectedEvidence.map((item) => (
                   <li key={item.evidence_id || item.node_id || item.source_ref}>
-                    <strong>{item.confidence_grade || "C"}</strong> {item.source_ref || item.doc_name}
+                    <strong>{item.confidence_grade || "C"}</strong> {item.title || item.doc_name}
+                    {item.organization ? <span>{item.organization}</span> : null}
                     <p>{item.snippet}</p>
+                    {item.section ? <p>章节：{item.section}</p> : null}
+                    {item.url ? <a href={item.url} target="_blank" rel="noreferrer">打开官方来源</a> : null}
+                    {!item.url && item.local_path ? <p className="kg-source-ref">{item.local_path}</p> : null}
                   </li>
                 )) : <li>暂无关联证据来源</li>}
               </ul>
@@ -264,6 +424,8 @@ function KnowledgeGraphView({ graph, loading, error, query, onQueryChange, onSea
           ) : null} // AI辅助生成：GLM-5, 2026-03-13
         </aside>
       </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -296,11 +458,22 @@ export default function App() {
   const [kbLoaded, setKbLoaded] = useState(false);
   const [kbError, setKbError] = useState("");
   const [kbView, setKbView] = useState(() => (isKnowledgeRoute() ? "graph" : "shelf"));
+  const [kbCatalog, setKbCatalog] = useState([]);
+  const [kbCatalogLoaded, setKbCatalogLoaded] = useState(false);
   const [kbGraph, setKbGraph] = useState(null);
   const [kbGraphQuery, setKbGraphQuery] = useState(""); // AI辅助生成：GLM-5, 2026-03-17
   const [kbGraphLoading, setKbGraphLoading] = useState(false);
   const [kbGraphLoaded, setKbGraphLoaded] = useState(false);
   const [kbGraphError, setKbGraphError] = useState("");
+  const [kbRouteResult, setKbRouteResult] = useState(null);
+  const [kbContextResolving, setKbContextResolving] = useState(() => {
+    const initial = parseInitialContext();
+    return Boolean(isKnowledgeRoute() && !initial.runId && (initial.fileId || initial.patientId));
+  });
+  const [kbSelectedType, setKbSelectedType] = useState(() => {
+    const initial = parseInitialContext();
+    return initial.runId || initial.fileId || initial.patientId ? "related" : "all";
+  });
   const [showSplash, setShowSplash] = useState(() => !isKnowledgeRoute());
   const [uploadForm, setUploadForm] = useState({
     patientId: "",
@@ -358,17 +531,65 @@ export default function App() {
     }
   }
 
-  async function loadKbGraph(query = "", force = false) {
-    if (kbGraphLoading) return;
-    if (kbGraphLoaded && !force && !String(query || "").trim()) return;
-    setKbGraphLoading(true); // AI辅助生成：GLM-5, 2026-03-24
-    setKbGraphError("");
+  async function loadKbCatalog(force = false) {
+    if (kbCatalogLoaded && !force) return;
     try {
-      const data = await fetchKbGraph(query);
-      setKbGraph(data);
+      const data = await fetchKbGraphs();
+      setKbCatalog(Array.isArray(data?.graphs) ? data.graphs : []);
+      setKbCatalogLoaded(true);
+    } catch (err) {
+      setKbGraphError(err.message || "Knowledge graph catalogue failed to load");
+    }
+  }
+
+  async function loadKbGraph(query = "", force = false, requestedType = kbSelectedType, contextOverride = null) {
+    if (kbGraphLoading) return;
+    if (kbGraphLoaded && !force && !String(query || "").trim() && requestedType === kbSelectedType) return;
+    const activeContext = contextOverride || ctx;
+    const runId = String(
+      activeContext.runId || (contextOverride ? "" : run.run_id) || ""
+    ).trim();
+    const fileId = String(
+      activeContext.fileId || (contextOverride ? "" : run.file_id) || ""
+    ).trim();
+    const patientId = String(
+      activeContext.patientId || (contextOverride ? "" : run.patient_id) || ""
+    ).trim();
+    const q = String(query || "").trim();
+    setKbSelectedType(requestedType);
+    setKbGraphError("");
+    setKbRouteResult(null);
+    if (requestedType === "related" && !runId && !fileId && !patientId && !q) {
+      setKbGraph(null);
+      setKbGraphLoaded(true);
+      if (!bootstrapData && !bootstrapping) loadBootstrap(false);
+      return;
+    }
+    setKbGraphLoading(true); // AI辅助生成：GLM-5, 2026-03-24
+    if (requestedType === "related") setKbGraph(null);
+    try {
+      if (requestedType === "related") {
+        const data = await routeKbGraph({
+          runId,
+          fileId,
+          patientId,
+          question: q,
+          depth: 1,
+        });
+        setKbRouteResult(data);
+        setKbGraph(data?.subgraph || null);
+      } else {
+        const kgType = requestedType || "all";
+        const data = await fetchKbGraph("", { kgType });
+        setKbGraph(data);
+      }
       setKbGraphLoaded(true);
     } catch (err) {
       setKbGraphError(err.message || "Knowledge graph failed to load"); // AI辅助生成：GLM-5, 2026-03-25
+      setKbGraphLoaded(true);
+      if (requestedType === "related" && !bootstrapData && !bootstrapping) {
+        loadBootstrap(false);
+      }
     } finally {
       setKbGraphLoading(false);
     }
@@ -379,8 +600,33 @@ export default function App() {
     setKbGraphLoading(true);
     setKbGraphError("");
     try {
-      const data = await rebuildKbGraph(); // AI辅助生成：GLM-5, 2026-03-26
-      setKbGraph(data);
+      await rebuildKbGraph(); // AI辅助生成：GLM-5, 2026-03-26
+      const runId = String(ctx.runId || run.run_id || "").trim();
+      const fileId = String(ctx.fileId || run.file_id || "").trim();
+      const patientId = String(ctx.patientId || run.patient_id || "").trim();
+      if (kbSelectedType === "related") {
+        const query = String(kbGraphQuery || "").trim();
+        if (runId || fileId || patientId || query) {
+          const data = await routeKbGraph({
+            runId,
+            fileId,
+            patientId,
+            question: query,
+            depth: 1,
+          });
+          setKbRouteResult(data);
+          setKbGraph(data?.subgraph || null);
+        } else {
+          setKbRouteResult(null);
+          setKbGraph(null);
+        }
+      } else {
+        const data = await fetchKbGraph("", {
+          kgType: kbSelectedType,
+        });
+        setKbRouteResult(null);
+        setKbGraph(data);
+      }
       setKbGraphLoaded(true);
     } catch (err) {
       setKbGraphError(err.message || "Knowledge graph rebuild failed");
@@ -391,15 +637,23 @@ export default function App() {
 
   async function refresh(manual = false, overrideCtx = null) {
     const activeCtx = overrideCtx || ctx; // AI辅助生成：GLM-5, 2026-03-27
-    if (!activeCtx.runId && !activeCtx.fileId && !activeCtx.patientId) return;
+    if (!activeCtx.runId && !activeCtx.fileId && !activeCtx.patientId) return null;
     if (manual) setLoading(true);
     setError("");
     try {
       const next = await fetchOverview(activeCtx);
       setOverview(next); // AI辅助生成：GLM-5, 2026-03-28
       const resolvedRunId = String(next?.run?.run_id || "").trim();
-      if (resolvedRunId && resolvedRunId !== activeCtx.runId) {
-        const updated = { ...activeCtx, runId: resolvedRunId };
+      const updated = {
+        runId: resolvedRunId || String(activeCtx.runId || "").trim(),
+        fileId: String(activeCtx.fileId || next?.run?.file_id || "").trim(),
+        patientId: String(activeCtx.patientId || next?.run?.patient_id || "").trim(),
+      };
+      if (
+        updated.runId !== String(activeCtx.runId || "").trim()
+        || updated.fileId !== String(activeCtx.fileId || "").trim()
+        || updated.patientId !== String(activeCtx.patientId || "").trim()
+      ) {
         setCtx(updated);
         const params = new URLSearchParams();
         if (updated.runId) params.set("run_id", updated.runId); // AI辅助生成：GLM-5, 2026-03-29
@@ -407,8 +661,10 @@ export default function App() {
         if (updated.patientId) params.set("patient_id", updated.patientId);
         window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
       }
+      return { overview: next, context: updated };
     } catch (err) {
       setError(err.message || "加载失败");
+      return null;
     } finally {
       if (manual) setLoading(false);
     }
@@ -444,30 +700,51 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (ctx.runId || ctx.fileId || ctx.patientId) {
-      refresh(true);
-    } else {
-      // do not auto-enter while splash is visible; preload list only
-      loadBootstrap(false); // AI辅助生成：GLM-5, 2026-04-02
+    async function initializeContext() {
+      if (ctx.runId || ctx.fileId || ctx.patientId) {
+        const needsRunResolution = Boolean(
+          isKnowledgeRoute() && !ctx.runId && (ctx.fileId || ctx.patientId)
+        );
+        if (needsRunResolution) setKbContextResolving(true);
+        const resolved = await refresh(true, ctx);
+        if (needsRunResolution) {
+          const resolvedContext = resolved?.context || null;
+          if (resolvedContext?.runId) {
+            await loadKbGraph("", true, "related", resolvedContext);
+          } else {
+            setKbSelectedType("related");
+            setKbRouteResult(null);
+            setKbGraph(null);
+            setKbGraphLoaded(true);
+            setKbGraphError("无法根据当前 file_id/patient_id 定位有效任务，请重新选择本轮任务。");
+            if (!bootstrapData && !bootstrapping) loadBootstrap(false);
+          }
+          setKbContextResolving(false);
+        }
+      } else {
+        // do not auto-enter while splash is visible; preload list only
+        loadBootstrap(false); // AI辅助生成：GLM-5, 2026-04-02
+      }
     }
+    initializeContext();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (hasLoadedRun) return;
     if (launcherView !== "kb") return;
     if (kbLoaded || kbLoading) return;
     loadKb(false); // AI辅助生成：GLM-5, 2026-04-03
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [launcherView, hasLoadedRun, kbLoaded, kbLoading]);
+  }, [launcherView, kbLoaded, kbLoading]);
 
   useEffect(() => {
-    if (hasLoadedRun) return;
     if (launcherView !== "kb" || kbView !== "graph") return;
+    loadKbCatalog(false);
+    if (kbContextResolving) return;
     if (kbGraphLoaded || kbGraphLoading) return;
-    loadKbGraph("", false); // AI辅助生成：GLM-5, 2026-04-04
+    loadKbGraph("", false, kbSelectedType); // AI辅助生成：GLM-5, 2026-04-04
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [launcherView, kbView, hasLoadedRun, kbGraphLoaded, kbGraphLoading]);
+  }, [launcherView, kbView, kbGraphLoaded, kbGraphLoading, kbContextResolving]);
 
   useEffect(() => {
     if (!overview || isTerminal) return;
@@ -517,6 +794,39 @@ export default function App() {
     await refresh(true, nextCtx);
   }
 
+  async function selectKnowledgeCandidate(candidate) {
+    if (!candidate || kbContextResolving) return;
+    const candidateContext = {
+      runId: String(candidate.run_id || "").trim(),
+      fileId: String(candidate.file_id || "").trim(),
+      patientId: String(candidate.patient_id || "").trim(),
+    };
+    setKbSelectedType("related");
+    setKbRouteResult(null);
+    setKbGraph(null);
+    setKbGraphLoaded(false);
+    setKbGraphError("");
+    setKbContextResolving(true);
+    try {
+      const resolved = await refresh(false, candidateContext);
+      const resolvedContext = resolved?.context || null;
+      if (!resolvedContext?.runId) {
+        setKbGraphLoaded(true);
+        setKbGraphError("所选记录无法解析出有效 run_id，请选择其他任务或直接输入问题。");
+        return;
+      }
+      setCtx(resolvedContext);
+      const params = new URLSearchParams();
+      params.set("run_id", resolvedContext.runId);
+      if (resolvedContext.fileId) params.set("file_id", resolvedContext.fileId);
+      if (resolvedContext.patientId) params.set("patient_id", resolvedContext.patientId);
+      window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+      await loadKbGraph("", true, "related", resolvedContext);
+    } finally {
+      setKbContextResolving(false);
+    }
+  }
+
   function enterSystem() {
     setShowSplash(false);
     // after user enters, attempt to auto-enter latest run or refresh
@@ -528,7 +838,15 @@ export default function App() {
   }
 
   function openKnowledgeGraph() {
-    window.location.href = "/knowledge";
+    const params = new URLSearchParams();
+    const runId = String(ctx.runId || run.run_id || "").trim();
+    const fileId = String(ctx.fileId || run.file_id || "").trim();
+    const patientId = String(ctx.patientId || run.patient_id || "").trim();
+    if (runId) params.set("run_id", runId);
+    if (fileId) params.set("file_id", fileId);
+    if (patientId) params.set("patient_id", patientId);
+    const suffix = params.toString();
+    window.location.href = suffix ? `/knowledge?${suffix}` : "/knowledge";
   }
 
   function updateUploadField(name, value) {
@@ -625,7 +943,7 @@ export default function App() {
     );
   }
 
-  if (!hasLoadedRun) {
+  if (isKnowledgeRoute() || !hasLoadedRun) {
     return (
       <div className="page launcher-page">
         <section className="launcher-hero glass">
@@ -797,9 +1115,23 @@ export default function App() {
                 </div>
               </div>
               <p className="kb-manager-subtitle">按置信度等级从高到低分层展示（S/A/B/C/D）。越靠上代表证据质量越高。</p>
+              {isKnowledgeRoute() && (ctx.runId || run.run_id) ? (
+                <div className="kg-run-context">
+                  <strong>当前任务知识上下文</strong>
+                  <span className="chip">run_id {ctx.runId || run.run_id}</span>
+                  {(left.available_modalities || []).map((item) => <span key={item} className="chip">{item}</span>)}
+                  {(run?.planner_input?.question || run?.planner_input?.goal_question) ? (
+                    <span className="chip">问题：{run.planner_input.question || run.planner_input.goal_question}</span>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="launcher-meta">
                 <span className="chip">docs {(kbDocs || []).length}</span>
-                <span className="chip">kg nodes {kbGraph?.stats?.node_count || kbGraph?.nodes?.length || 0}</span>
+                <span className="chip">
+                  {kbSelectedType === "related" && !kbGraph
+                    ? "kg nodes 待选择任务"
+                    : `kg nodes ${kbGraph?.stats?.node_count || kbGraph?.nodes?.length || 0}`}
+                </span>
                 {KB_GRADES.map((grade) => (
                   <span key={grade} className="chip">{grade}: {kbBuckets[grade]?.length || 0}</span>
                 ))}
@@ -825,12 +1157,36 @@ export default function App() {
               {kbView === "graph" ? (
                 <KnowledgeGraphView
                   graph={kbGraph}
+                  catalog={kbCatalog}
+                  routeResult={kbRouteResult}
+                  selectedType={kbSelectedType}
                   loading={kbGraphLoading}
+                  contextLoading={kbContextResolving || (bootstrapping && !bootstrapData)}
+                  showContextPicker={
+                    kbSelectedType === "related"
+                    && !kbRouteResult
+                    && !kbGraphLoading
+                    && !kbContextResolving
+                    && !(bootstrapping && !bootstrapData)
+                  }
+                  candidates={bootstrapData?.candidates || []}
+                  candidateLoading={bootstrapping}
                   error={kbGraphError}
                   query={kbGraphQuery}
                   onQueryChange={setKbGraphQuery}
-                  onSearch={(query) => loadKbGraph(query, true)}
+                  onSearch={(query) => {
+                    setKbSelectedType("related");
+                    loadKbGraph(query, true, "related");
+                  }}
                   onRebuild={rebuildGraph}
+                  onSelectType={(kgType) => {
+                    if (kgType === kbSelectedType && kbGraphLoaded) return;
+                    setKbSelectedType(kgType);
+                    setKbGraphLoaded(false);
+                    loadKbGraph("", true, kgType);
+                  }}
+                  onSelectCandidate={selectKnowledgeCandidate}
+                  onRefreshCandidates={() => loadBootstrap(false)}
                 />
               ) : (
               <div className="kb-shelves">

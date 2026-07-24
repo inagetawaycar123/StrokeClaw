@@ -217,6 +217,197 @@ h4 {
   gap: 12px;
 }
 
+.kg-run-context,
+.kg-context-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kg-run-context {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #c8daf2;
+  border-radius: 10px;
+  color: #24476f;
+  background: #f5f9ff;
+}
+
+.kg-chapters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.kg-chapter {
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  min-height: 52px;
+  padding: 9px 11px;
+  border: 1px solid #d4dfef;
+  border-radius: 10px;
+  color: #37506f;
+  background: #fff;
+  cursor: pointer;
+}
+
+.kg-chapter small {
+  color: #7a8ea8;
+  font-size: 0.72rem;
+}
+
+.kg-chapter.active {
+  color: #fff;
+  border-color: #2f88f2;
+  background: linear-gradient(135deg, #2f88f2, #246dcc);
+}
+
+.kg-chapter.active small {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.kg-chapter:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  background: #f1f4f8;
+}
+
+.kg-context-picker {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #c8daf2;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8fbff, #eef6ff);
+}
+
+.kg-context-picker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.kg-context-picker p {
+  margin: 5px 0 0;
+  color: #627693;
+  line-height: 1.5;
+}
+
+.kg-context-loading {
+  min-height: 96px;
+  align-content: center;
+}
+
+.kg-run-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 9px;
+}
+
+.kg-run-option {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px 12px;
+  text-align: left;
+  border: 1px solid #d4dfef;
+  border-radius: 10px;
+  color: #314864;
+  background: rgba(255, 255, 255, 0.94);
+  cursor: pointer;
+}
+
+.kg-run-option:hover:not(:disabled) {
+  border-color: #75a9e8;
+  box-shadow: 0 9px 20px rgba(55, 102, 164, 0.12);
+}
+
+.kg-run-option-head,
+.kg-run-option-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.kg-run-option-head {
+  justify-content: space-between;
+}
+
+.kg-run-option-head strong {
+  overflow-wrap: anywhere;
+}
+
+.kg-run-option-meta {
+  color: #6d819c;
+  font-size: 0.78rem;
+}
+
+.kg-context-empty {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border: 1px dashed #c9d7e9;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.kg-route-summary {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid #c8daf2;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f5f9ff, #eef7ff);
+}
+
+.kg-route-summary > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kg-route-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.kg-route-list article {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid #d7e5f6;
+  border-radius: 9px;
+  color: #314864;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.kg-route-list article span {
+  color: #627693;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.kg-review-warning {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid #c2415d;
+  color: #8f2941;
+  background: #fff3f5;
+}
+
+.kg-context-warning {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid #c9912f;
+  color: #76551a;
+  background: #fff8e8;
+}
+
 .kg-toolbar {
   display: flex;
   align-items: flex-end;
@@ -360,6 +551,16 @@ h4 {
   margin-bottom: 10px;
 }
 
+.review-review_required {
+  color: #9b2c46;
+  background: #fff0f3;
+}
+
+.review-approved {
+  color: #166534;
+  background: #ecfdf3;
+}
+
 .kg-snippet,
 .kg-clinical-meaning,
 .kg-source-ref {
@@ -394,6 +595,18 @@ h4 {
 .kg-list li span {
   margin-left: 6px;
   color: #627693;
+}
+
+.kg-list a {
+  display: inline-block;
+  margin-top: 5px;
+  color: #1d67bb;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.kg-list a:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 960px) {
