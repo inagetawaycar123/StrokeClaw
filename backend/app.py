@@ -1171,6 +1171,7 @@ UPLOAD_JOB_STEP_DEFS = [
 ]
 
 UPLOAD_JOBS = {} # AI辅助生成：GLM-5, 2026-04-21
+UPLOAD_JOB_PAYLOADS = {}
 UPLOAD_JOBS_LOCK = threading.Lock()
 
 
@@ -1249,6 +1250,15 @@ def _create_upload_job(job_id, patient_id, file_id, modalities):
         "result": None,
         "error": None,
         "warnings": [],
+        "dag_review": {
+            "review_status": "pending",
+            "doctor_final_decision": "pending",
+            "reviewer": None,
+            "reviewed_at": None,
+            "dag_id": None,
+            "available_modalities": list(modalities or []),
+        },
+        "execution_authorized": False,
         "created_at": _job_now(),
         "updated_at": _job_now(),
     }
@@ -1329,6 +1339,14 @@ def _add_job_warning(job_id, warning):
 def _get_upload_job(job_id):
     with UPLOAD_JOBS_LOCK:
         return _safe_job_copy(UPLOAD_JOBS.get(job_id))
+
+
+def _get_upload_step_status(job_id, step_key):
+    job = _get_upload_job(job_id) or {}
+    for step in job.get("steps") or []:
+        if step.get("key") == step_key:
+            return str(step.get("status") or "pending").strip().lower()
+    return "pending"
 
 
 def _normalize_uploaded_modalities(modalities):
@@ -1535,6 +1553,7 @@ def _invoke_internal_upload(payload):
         "model_type": payload.get("model_type", "mrdpm"),
         "upload_mode": payload.get("upload_mode", "ncct"),
         "defer_stroke_analysis": "true",
+        "upload_job_id": str(payload.get("job_id") or ""),
     }
     if payload.get("cta_phase"):
         form["cta_phase"] = payload["cta_phase"]
@@ -1590,6 +1609,9 @@ def _invoke_internal_generate_report(patient_id, file_id, run_id=None):
         resp = client.get(url)
         data = resp.get_json(silent=True) or {} # AI辅助生成：GLM-5, 2026-03-23
         if resp.status_code != 200:
+            detail = data.get("message") or data.get("error")
+            if detail:
+                return False, str(detail), data
             return False, f"鎶ュ憡鎺ュ彛杩斿洖 {resp.status_code}", data
         if data.get("status") != "success":
             return False, data.get("message", "鎶ュ憡鐢熸垚澶辫触"), data
@@ -1710,7 +1732,8 @@ def _run_upload_processing_job(job_id, payload):
 
         ok, upload_msg, upload_result = _invoke_internal_upload(payload)
         if not ok:
-            _update_step(job_id, "three_class", "failed", upload_msg)
+            if _get_upload_step_status(job_id, "three_class") != "completed":
+                _update_step(job_id, "three_class", "failed", upload_msg)
             if should_ctp_generate:
                 _update_step(job_id, "ctp_generate", "failed", upload_msg)
             else:
@@ -1758,7 +1781,12 @@ def _run_upload_processing_job(job_id, payload):
             and "异常" not in three_class_display
         )
 
-        if gradcam_status or summary_has_counts or summary_has_output or rgb_has_three_class or display_is_ok:
+        three_class_already_completed = (
+            _get_upload_step_status(job_id, "three_class") == "completed"
+        )
+        if three_class_already_completed:
+            pass
+        elif gradcam_status or summary_has_counts or summary_has_output or rgb_has_three_class or display_is_ok:
             done_msg = three_class_display or "三分类与 Grad-CAM 完成"
             _update_step(job_id, "three_class", "completed", done_msg)
         else:
@@ -4884,6 +4912,8 @@ def _tool_generate_medgemma_report(run):
             "report": data.get("report"),
             "report_payload": report_payload,
             "json_path": data.get("json_path"),
+            "is_mock": bool(data.get("is_mock", False)),
+            "warning": data.get("warning"),
         },
         None,
     )
@@ -8085,21 +8115,6 @@ def api_chat_clinical():
         return jsonify({"success": False, "error": str(e)}), 500 # AI辅助生成：GLM-5, 2026-04-17
 
 
-def _build_kg_run_context(run, events, current_dag_node="", question=""):
-    """Build a privacy-minimized routing context from an existing agent run."""
-    try:
-        from .kg_context import build_run_context
-    except ImportError:
-        from kg_context import build_run_context
-    return build_run_context(
-        run or {},
-        events or [],
-        current_dag_node=current_dag_node,
-        question=question,
-        modality_normalizer=_normalize_uploaded_modalities,
-    )
-
-
 @app.route("/api/kb/docs", methods=["GET"])
 def api_kb_docs():
     """Return merged knowledge-base PDFs with grading metadata."""
@@ -8111,27 +8126,6 @@ def api_kb_docs():
 def api_kb_graph():
     """Return the local stroke knowledge graph.""" # AI辅助生成：GLM-5, 2026-04-18
     view = str(request.args.get("view") or "clinical").strip().lower()
-    kg_type = str(request.args.get("kg_type") or "").strip()
-    if kg_type:
-        try:
-            from .kg_store import graph_for_types
-        except ImportError:
-            from kg_store import graph_for_types
-        selected_types = None if kg_type == "all" else [kg_type]
-        try:
-            graph = graph_for_types(selected_types)
-        except KeyError:
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": f"unknown kg_type: {kg_type}",
-                    }
-                ),
-                400,
-            )
-        return jsonify({"success": True, **graph})
-
     try:
         from .kg_builder import clinical_graph_view, load_graph
     except ImportError:
@@ -8139,182 +8133,6 @@ def api_kb_graph():
 
     graph = clinical_graph_view() if view == "clinical" else load_graph(force_rebuild=False)
     return jsonify({"success": True, **graph})
-
-
-@app.route("/api/kb/graphs", methods=["GET"])
-def api_kb_graphs():
-    """Return the versioned multi-section knowledge graph catalogue."""
-    enabled_raw = str(request.args.get("enabled") or "").strip().lower()
-    enabled = None
-    if enabled_raw:
-        if enabled_raw not in {"true", "false", "1", "0"}:
-            return jsonify({"success": False, "error": "enabled must be true or false"}), 400
-        enabled = enabled_raw in {"true", "1"}
-    try:
-        from .kg_store import list_graphs
-    except ImportError:
-        from kg_store import list_graphs
-    return jsonify({"success": True, **list_graphs(enabled=enabled)})
-
-
-@app.route("/api/kb/graph/route-query", methods=["POST"])
-def api_kb_graph_route_query():
-    """Route a doctor question and the current run to relevant KG sections."""
-    data = request.get_json(silent=True) or {}
-    run_id = str(data.get("run_id") or "").strip()
-    file_id = str(data.get("file_id") or "").strip()
-    patient_id_raw = data.get("patient_id")
-    patient_id = None
-    if patient_id_raw not in (None, ""):
-        try:
-            patient_id = int(patient_id_raw)
-        except (TypeError, ValueError):
-            return jsonify({"success": False, "error": "invalid patient_id"}), 400
-    if run_id.lower().startswith("case:") and not file_id:
-        file_id = run_id.split(":", 1)[1].strip()
-    explicit_question = str(data.get("question") or "").strip()
-    current_dag_node = str(data.get("current_dag_node") or "").strip()
-    try:
-        depth = max(0, min(2, int(data.get("depth", 1))))
-    except Exception:
-        depth = 1
-
-    run = None
-    events = []
-    resolved_run_id = ""
-    source_tag = "none"
-    has_case_locator = bool(run_id or file_id or patient_id is not None)
-    if has_case_locator:
-        run, events, resolved_run_id, source_tag = _resolve_cockpit_run_and_events(
-            run_id=run_id,
-            file_id=file_id,
-            patient_id=patient_id,
-        )
-        if not run:
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Run or case context not found",
-                        "run_id": run_id or None,
-                        "file_id": file_id or None,
-                        "patient_id": patient_id,
-                    }
-                ),
-                404,
-            )
-    if not has_case_locator and not explicit_question:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": "run_id, file_id/patient_id, or question is required",
-                }
-            ),
-            400,
-        )
-
-    context = _build_kg_run_context(
-        run or {},
-        events,
-        current_dag_node=current_dag_node,
-        question=explicit_question,
-    )
-    effective_question = explicit_question or context.get("original_question") or ""
-    try:
-        from .knowledge_graph_lookup import knowledge_graph_lookup
-    except ImportError:
-        from knowledge_graph_lookup import knowledge_graph_lookup
-    result = knowledge_graph_lookup(
-        effective_question,
-        context=context,
-        depth=depth,
-    )
-    source = {
-        "real": "real_run",
-        "case": "case_recovered",
-        "mock": "mock_run",
-    }.get(source_tag, "question_only" if not run else source_tag or "unknown")
-    feature_presence = {
-        "question": bool(effective_question),
-        "modalities": bool(context.get("modalities")),
-        "tasks": bool(context.get("task_keys")),
-        "findings": bool(context.get("result_terms") or context.get("risk_terms")),
-    }
-    context_warnings = []
-    confidence_cap = None
-    if source == "case_recovered":
-        confidence_cap = 0.75
-        context_warnings.append("历史病例使用已保存数据恢复，缺少完整运行事件。")
-        raw_confidence = float(result.get("confidence") or 0.0)
-        result["raw_confidence"] = raw_confidence
-        result["confidence"] = min(confidence_cap, raw_confidence)
-        capped_routes = []
-        for route in result.get("routes") or []:
-            route_item = dict(route)
-            route_item["confidence"] = min(
-                confidence_cap,
-                float(route_item.get("confidence") or 0.0),
-            )
-            capped_routes.append(route_item)
-        result["routes"] = capped_routes
-        display_plan = dict(result.get("display_plan") or {})
-        display_plan["context_confidence_cap"] = confidence_cap
-        display_plan["context_degraded"] = True
-        result["display_plan"] = display_plan
-    resolved_file_id = str((run or {}).get("file_id") or file_id or "").strip()
-    resolved_patient_id = (run or {}).get("patient_id")
-    if resolved_patient_id in (None, ""):
-        resolved_patient_id = patient_id
-    return jsonify(
-        {
-            "success": True,
-            "run_id": resolved_run_id or run_id or None,
-            "effective_question": effective_question,
-            "context_meta": {
-                "source": source,
-                "resolved_run_id": resolved_run_id or run_id or None,
-                "file_id": resolved_file_id or None,
-                "patient_id": resolved_patient_id,
-                "completeness": round(
-                    sum(1 for value in feature_presence.values() if value)
-                    / len(feature_presence),
-                    4,
-                ),
-                "available_features": [
-                    key for key, value in feature_presence.items() if value
-                ],
-                "missing_features": [
-                    key for key, value in feature_presence.items() if not value
-                ],
-                "confidence_cap": confidence_cap,
-                "warnings": context_warnings,
-            },
-            "context_summary": {
-                "modalities": context.get("modalities") or [],
-                "task_keys": context.get("task_keys") or [],
-                "raw_task_keys": context.get("raw_task_keys") or [],
-                "result_terms": context.get("result_terms") or [],
-                "negative_result_terms": context.get("negative_result_terms") or [],
-                "uncertain_result_terms": context.get("uncertain_result_terms") or [],
-                "risk_terms": context.get("risk_terms") or [],
-            },
-            **result,
-        }
-    )
-
-
-@app.route("/api/kb/node/<node_id>", methods=["GET"])
-def api_kb_node_detail(node_id):
-    """Return a multi-section KG node with relations and evidence metadata."""
-    try:
-        from .kg_store import get_node_detail
-    except ImportError:
-        from kg_store import get_node_detail
-    detail = get_node_detail(node_id)
-    if not detail:
-        return jsonify({"success": False, "error": "Knowledge node not found"}), 404
-    return jsonify({"success": True, **detail})
 
 
 @app.route("/api/kb/graph/search", methods=["GET"])
@@ -9117,7 +8935,13 @@ def process_ai_inference(
         traceback.print_exc() # AI辅助生成：GLM-5, 2026-04-11
         return {"success": False, "error": str(e), "ai_url": "", "ai_npy_url": ""}
 def process_rgb_synthesis(
-    mcta_path, vcta_path, dcta_path, ncct_path, output_dir, model_type="mrdpm"
+    mcta_path,
+    vcta_path,
+    dcta_path,
+    ncct_path,
+    output_dir,
+    model_type="mrdpm",
+    progress_callback=None,
 ):
     """处理 RGB 合成，支持多模型 AI 推理。"""
     try:
@@ -9299,6 +9123,16 @@ def process_rgb_synthesis(
                     print(
                         f"开始 {model_key.upper()} 模型推理切片 {slice_idx}（使用 {current_model_type}）"
                     )
+                    if callable(progress_callback):
+                        try:
+                            progress_callback(
+                                slice_number=slice_idx + 1,
+                                total_slices=num_slices,
+                                model_key=model_key,
+                                phase="model_running",
+                            )
+                        except Exception as progress_exc:
+                            print(f"[WARN] CTP progress callback failed: {progress_exc}")
                     ai_result = process_ai_inference(
                         rgb_result,
                         mask_result,
@@ -9335,6 +9169,16 @@ def process_rgb_synthesis(
             # 为当前切片标记是否有任一 AI 结果
             slice_result["has_ai"] = slice_has_any_ai
             rgb_files.append(slice_result)
+            if callable(progress_callback):
+                try:
+                    progress_callback(
+                        slice_number=slice_idx + 1,
+                        total_slices=num_slices,
+                        model_key="",
+                        phase="slice_completed",
+                    )
+                except Exception as progress_exc:
+                    print(f"[WARN] CTP progress callback failed: {progress_exc}")
 
         # 统计信息
         print(f"\n=== AI 模型处理统计 ===")
@@ -9829,18 +9673,25 @@ def api_upload_start():
 
         payload["agent_run_id"] = agent_run_id
 
-        worker = threading.Thread(
-            target=_run_upload_processing_job, args=(job_id, payload), daemon=True
-        )
-        worker.start()
+        # Keep uploaded files staged until the doctor confirms the clinical DAG.
+        # This makes the review gate authoritative: algorithms and Agent/Skill
+        # execution do not start merely because the upload request completed.
+        with UPLOAD_JOBS_LOCK:
+            UPLOAD_JOB_PAYLOADS[job_id] = payload
+            staged_job = UPLOAD_JOBS.get(job_id)
+            if staged_job:
+                staged_job["status"] = "awaiting_review"
+                staged_job["current_step"] = "dag_review"
+                staged_job["updated_at"] = _job_now()
 
         return jsonify(
             {
                 "success": True,
                 "job_id": job_id,
                 "file_id": file_id,
-                "status": "queued",
+                "status": "awaiting_review",
                 "progress_url": f"/api/upload/progress/{job_id}",
+                "dag_review_required": True,
                 "agent_run_id": agent_run_id,
             }
         )
@@ -9854,6 +9705,83 @@ def api_upload_progress(job_id):
     if not job:
         return jsonify({"success": False, "error": "任务不存在或已过期"}), 404
     return jsonify({"success": True, "job": job})
+
+
+@app.route("/api/upload/jobs/<job_id>/dag-review", methods=["POST"])
+def api_review_upload_dag(job_id):
+    """Confirm the doctor-facing clinical DAG before starting execution."""
+    data = request.get_json(silent=True) or {}
+    decision = str(data.get("doctor_final_decision") or "").strip().lower()
+    reviewer = str(data.get("reviewer") or "").strip()
+    dag_id = str(data.get("dag_id") or "").strip()
+    submitted_modalities = data.get("available_modalities")
+
+    if decision not in {"approved", "rejected"}:
+        return jsonify({"success": False, "error": "doctor_final_decision must be approved or rejected"}), 400
+    if decision == "approved" and not reviewer:
+        return jsonify({"success": False, "error": "reviewer is required"}), 400
+
+    payload_to_start = None
+    with UPLOAD_JOBS_LOCK:
+        job = UPLOAD_JOBS.get(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "任务不存在或已过期"}), 404
+
+        job_modalities = _normalize_uploaded_modalities(job.get("modalities") or [])
+        if isinstance(submitted_modalities, list):
+            normalized_submitted = _normalize_uploaded_modalities(submitted_modalities)
+            if set(normalized_submitted) != set(job_modalities):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "available_modalities changed; regenerate the clinical DAG",
+                            "available_modalities": job_modalities,
+                        }
+                    ),
+                    409,
+                )
+
+        reviewed_at = datetime.now().isoformat(timespec="seconds")
+        job["dag_review"] = {
+            "review_status": "completed",
+            "doctor_final_decision": decision,
+            "reviewer": reviewer or None,
+            "reviewed_at": reviewed_at,
+            "dag_id": dag_id or None,
+            "available_modalities": list(job_modalities),
+        }
+
+        if decision == "approved" and not job.get("execution_authorized"):
+            payload_to_start = UPLOAD_JOB_PAYLOADS.pop(job_id, None)
+            if payload_to_start is None:
+                return jsonify({"success": False, "error": "staged upload payload is unavailable"}), 409
+            job["execution_authorized"] = True
+            job["status"] = "queued"
+            job["current_step"] = None
+        elif decision == "rejected" and not job.get("execution_authorized"):
+            job["status"] = "review_rejected"
+            job["current_step"] = "dag_review"
+
+        job["updated_at"] = _job_now()
+        response_job = _safe_job_copy(job)
+
+    if payload_to_start is not None:
+        worker = threading.Thread(
+            target=_run_upload_processing_job,
+            args=(job_id, payload_to_start),
+            daemon=True,
+        )
+        worker.start()
+
+    return jsonify(
+        {
+            "success": True,
+            "job": response_job,
+            "dag_review": response_job.get("dag_review"),
+            "execution_started": payload_to_start is not None,
+        }
+    )
 
 
 @app.route("/api/strokeclaw/tasks", methods=["GET"])
@@ -11971,6 +11899,34 @@ def upload_files():
         defer_stroke_analysis = (
             request.form.get("defer_stroke_analysis", "false") == "true"
         )
+        upload_job_id = str(request.form.get("upload_job_id") or "").strip()
+
+        def report_ctp_progress(slice_number, total_slices, model_key="", phase="model_running"):
+            if not upload_job_id:
+                return
+            model_keys = list(REQUIRED_CTP_MODELS)
+            total_slices = max(1, int(total_slices or 1))
+            slice_number = max(1, min(total_slices, int(slice_number or 1)))
+            units_per_slice = max(1, len(model_keys))
+            total_units = total_slices * units_per_slice
+            if phase == "slice_completed":
+                completed_units = slice_number * units_per_slice
+                progress_text = f"切片 {slice_number}/{total_slices} 已完成"
+            else:
+                try:
+                    model_offset = model_keys.index(model_key)
+                except ValueError:
+                    model_offset = 0
+                completed_units = (slice_number - 1) * units_per_slice + model_offset
+                model_label = str(model_key or "CTP").upper()
+                progress_text = f"{model_label} · 切片 {slice_number}/{total_slices}"
+            percent = min(99, max(0, int((completed_units / total_units) * 100)))
+            _update_step(
+                upload_job_id,
+                "ctp_generate",
+                "running",
+                f"正在生成 CTP 灌注图：{progress_text} · {percent}%",
+            )
 
         # 检查是否仅上传了完整 CTA 功能图像
         skip_ai = True
@@ -12152,10 +12108,36 @@ def upload_files():
                 print(f"[ERROR] {err}")
                 return jsonify({"success": False, "error": err})
 
+            if upload_job_id:
+                three_class_summary = three_class_view.get("summary") or {}
+                three_class_message = (
+                    str(three_class_summary.get("display") or "").strip()
+                    if isinstance(three_class_summary, dict)
+                    else ""
+                )
+                _update_step(
+                    upload_job_id,
+                    "three_class",
+                    "completed",
+                    three_class_message or "NCCT 三分类与 Grad-CAM 完成",
+                )
+                _update_step(
+                    upload_job_id,
+                    "ctp_generate",
+                    "running",
+                    "三分类完成，开始基于 mCTA 生成 CBF/CBV/Tmax",
+                )
+
             # 处理 RGB 合成并执行多模型 AI 推理
             print("NCCT 三分类完成，开始处理 RGB 合成和多模型 AI 推理...")
             result = process_rgb_synthesis(
-                mcta_path, vcta_path, dcta_path, ncct_path, output_dir, model_type
+                mcta_path,
+                vcta_path,
+                dcta_path,
+                ncct_path,
+                output_dir,
+                model_type,
+                progress_callback=report_ctp_progress,
             )
 
             if result["success"]:
@@ -12224,6 +12206,8 @@ def upload_files():
                 )
             else:
                 print(f"RGB 合成处理失败: {result['error']}")
+                if upload_job_id:
+                    _update_step(upload_job_id, "ctp_generate", "failed", result["error"])
                 return jsonify({"success": False, "error": result["error"]})
 
     except Exception as e:
@@ -12411,9 +12395,3 @@ def api_save_and_generate_report():
         )
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
-
-
-
-
-

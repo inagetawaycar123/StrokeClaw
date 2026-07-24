@@ -235,8 +235,8 @@ function processFiles() {
             if (runInfoEl) {
                 runInfoEl.style.display = 'block';
                 runInfoEl.textContent = data.agent_run_id
-                    ? `上传成功，正在进入 Runtime Feed（run_id=${data.agent_run_id}）...`
-                    : '上传成功，正在进入 Runtime Feed...';
+                    ? `上传成功，正在生成临床任务 DAG（run_id=${data.agent_run_id}）...`
+                    : '上传成功，正在进入临床任务 DAG 审阅页...';
             }
             if (data.agent_run_id) {
                 localStorage.setItem(`latest_agent_run_${data.file_id}`, data.agent_run_id);
@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadInfo = document.querySelector('.upload-info');
     if (uploadInfo && !uploadInfo.dataset.runtimeHint) {
         uploadInfo.dataset.runtimeHint = '1';
-        uploadInfo.innerHTML += '<br>上传成功后将自动进入 StrokeClaw 运行等待页，查看多节点协作过程。';
+        uploadInfo.innerHTML += '<br>上传成功后将先进入临床任务 DAG 审阅页；医生确认后才显示 Agent 与 Skill。';
     }
 
     const uploadModeSelect = document.getElementById('uploadModeSelect');

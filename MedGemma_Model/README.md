@@ -251,21 +251,21 @@ card](https://ai.google.dev/gemma/docs/core/model_card_3).
 *   **Output modality**: Text only
 *   **Attention mechanism**: Grouped-query attention (GQA)
 *   **Context length**: Supports long context, at least 128K tokens
-*   **Key publication**: [https://arxiv.org/abs/2507.05201](https://arxiv.org/abs/2507.05201)
+*   **Key publication**: [https://arxiv.org/abs/2604.05081](https://arxiv.org/abs/2604.05081)
 *   **Model created**: **4B multimodal**: Jan 13, 2026
 *   **Model version**: **4B multimodal**: 1.5.0
 
 ### Citation
 
-When using this model, please cite: Sellergren et al. "MedGemma Technical
-Report." *arXiv preprint arXiv:2507.05201* (2025).
+When using this model, please cite: 
+Sellergren et al. "MedGemma 1.5 Technical Report." *arXiv preprint arXiv:2604.05081* (2026).
 
 ```none
-@article{sellergren2025medgemma,
-  title={MedGemma Technical Report},
-  author={Sellergren, Andrew and Kazemzadeh, Sahar and Jaroensri, Tiam and Kiraly, Atilla and Traverse, Madeleine and Kohlberger, Timo and Xu, Shawn and Jamil, Fayaz and Hughes, Cían and Lau, Charles and others},
-  journal={arXiv preprint arXiv:2507.05201},
-  year={2025}
+@article{sellergren2026medgemma,
+  title={MedGemma 1.5 Technical Report},
+  author={Sellergren, Andrew and Gao, Chufan and Mahvar, Fereshteh and Kohlberger, Timo and Jamil, Fayaz and Traverse, Madeleine and Tono, Alberto and Sadjad, Bashir and Yang, Lin and Lau, Charles and others},
+  journal={arXiv preprint arXiv:2604.05081},
+  year={2026}
 }
 ```
 
@@ -341,7 +341,7 @@ described in [Ahmed et al. (2024, arXiv)](https://arxiv.org/pdf/2406.19578).
 EyePACS is a dataset of fundus images with classification labels based on
 5-level diabetic retinopathy severity (None, Mild, Moderate, Severe,
 Proliferative). A subset of these datasets are described in more detail in the
-[MedGemma Technical Report](https://arxiv.org/abs/2507.05201).
+[MedGemma 1.5 Technical Report](https://arxiv.org/abs/2604.05081).
 
 \*\* Based on radiologist adjudicated labels, described in [Yang (2024,
 arXiv)](https://arxiv.org/pdf/2405.03162) Section A.1.1.

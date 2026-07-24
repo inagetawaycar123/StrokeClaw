@@ -43,6 +43,57 @@ test.afterEach(() => {
     delete global.localStorage;
 });
 
+test("clinical DAG changes with NCCT-only input", () => {
+    const dag = processing.buildClinicalDag(["ncct"]);
+    const nodeIds = dag.nodes.map((node) => node.id);
+
+    assert.equal(dag.path, "ncct_only");
+    assert.equal(dag.valid, true);
+    assert.ok(nodeIds.includes("ncct_triage"));
+    assert.ok(nodeIds.includes("internal_check"));
+    assert.ok(!nodeIds.includes("vessel_occlusion"));
+    assert.ok(!nodeIds.includes("pseudo_ctp"));
+});
+
+test("single-phase CTA adds vessel assessment without multi-phase perfusion tasks", () => {
+    const dag = processing.buildClinicalDag(["ncct", "mcta"]);
+    const nodeIds = dag.nodes.map((node) => node.id);
+
+    assert.equal(dag.path, "ncct_single_phase_cta");
+    assert.ok(nodeIds.includes("vessel_occlusion"));
+    assert.ok(!nodeIds.includes("collateral_score"));
+    assert.ok(!nodeIds.includes("pseudo_ctp"));
+});
+
+test("three-phase mCTA adds collateral and pseudo-CTP branches", () => {
+    const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
+    const nodeIds = dag.nodes.map((node) => node.id);
+
+    assert.equal(dag.path, "ncct_mcta");
+    assert.ok(nodeIds.includes("collateral_score"));
+    assert.ok(nodeIds.includes("pseudo_ctp"));
+    assert.ok(nodeIds.includes("stroke_analysis"));
+    assert.ok(dag.edges.some((edge) => edge.from === "pseudo_ctp" && edge.to === "stroke_analysis"));
+});
+
+test("uploaded CTP replaces the pseudo-CTP generation branch", () => {
+    const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"]);
+    const nodeIds = dag.nodes.map((node) => node.id);
+
+    assert.equal(dag.path, "ncct_mcta_ctp");
+    assert.ok(nodeIds.includes("ctp_review"));
+    assert.ok(!nodeIds.includes("pseudo_ctp"));
+});
+
+test("clinical DAG structure key stays stable across polling with unchanged modalities", () => {
+    const first = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
+    const nextPoll = processing.buildClinicalDag(["dcta", "vcta", "mcta", "ncct"]);
+    const changed = processing.buildClinicalDag(["ncct", "mcta"]);
+
+    assert.equal(processing.clinicalDagStructureKey(first), processing.clinicalDagStructureKey(nextPoll));
+    assert.notEqual(processing.clinicalDagStructureKey(first), processing.clinicalDagStructureKey(changed));
+});
+
 test("normStatus keeps issue idempotent", () => {
     assert.equal(processing.normStatus("issue"), "issue");
     assert.equal(processing.normStatus(processing.normStatus("failed")), "issue");

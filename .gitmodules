@@ -1,0 +1,4 @@
+[submodule "dinov3/dinov3"]
+	path = dinov3/dinov3
+	url = https://github.com/facebookresearch/dinov3.git
+	branch = main

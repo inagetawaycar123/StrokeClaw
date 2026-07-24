@@ -45,3 +45,10 @@ backend/three_class/best_model.pt
 
 # .idea
 .idea/
+
+# Local test/cache artifacts
+.pytest_cache/
+
+# DINOv3 model assets are too large for ordinary Git. Keep source as a submodule.
+dinov3/*.pth
+dinov3/ckpt/

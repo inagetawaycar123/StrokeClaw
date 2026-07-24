@@ -165,41 +165,12 @@ export async function fetchKbDocs() {
   return { ...data, docs };
 }
 
-export async function fetchKbGraphs() {
-  return requestJson("/api/kb/graphs");
-}
-
-export async function fetchKbGraph(query = "", options = {}) {
+export async function fetchKbGraph(query = "") {
   const q = String(query || "").trim(); // AI辅助生成：GLM-5, 2026-04-13
-  const kgType = String(options?.kgType || "").trim();
-  let path = "/api/kb/graph?view=clinical";
-  if (kgType) {
-    path = `/api/kb/graph?view=multi&kg_type=${encodeURIComponent(kgType)}`;
-  } else if (q) {
-    path = `/api/kb/graph/search?view=clinical&q=${encodeURIComponent(q)}`;
-  }
+  const path = q
+    ? `/api/kb/graph/search?view=clinical&q=${encodeURIComponent(q)}`
+    : "/api/kb/graph?view=clinical";
   return requestJson(path);
-}
-
-export async function routeKbGraph(payload = {}) {
-  return requestJson("/api/kb/graph/route-query", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      run_id: String(payload?.runId || "").trim() || undefined,
-      file_id: String(payload?.fileId || "").trim() || undefined,
-      patient_id: String(payload?.patientId || "").trim() || undefined,
-      question: String(payload?.question || "").trim() || undefined,
-      current_dag_node: String(payload?.currentDagNode || "").trim() || undefined,
-      depth: Number.isFinite(Number(payload?.depth)) ? Number(payload.depth) : 1,
-    }),
-  });
-}
-
-export async function fetchKbNode(nodeId) {
-  return requestJson(`/api/kb/node/${encodeURIComponent(String(nodeId || "").trim())}`);
 }
 
 export async function rebuildKbGraph() {
