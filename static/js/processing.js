@@ -30,6 +30,7 @@ const TOOL_META = Object.freeze({
     consensus_lite: ["Consensus_Lite.resolve()", "证据裁决", "Consensus"],
     generate_medgemma_report: ["Final_Report.compose()", "报告生成", "Report"],
     human_confirm: ["Human_Confirm.await_action()", "人工确认节点", "Human_Confirm"],
+    human_review: ["Human_Confirm.await_action()", "人工复核节点", "Human_Review"],
     emr_sync_writeback: ["EMR_Sync.writeback()", "回写归档", "EMR_Sync"],
 });
 
@@ -42,6 +43,7 @@ const TEMPLATES = Object.freeze({
     vessel_occlusion: ["系统正在执行血管闭塞三分类。", "执行血管闭塞三分类评估。", "辅助判断取栓相关风险与责任血管分型。"],
     stroke_analysis: ["系统正在做病灶分割与体积评估。", "计算病灶侧别与关键指标。", "形成治疗决策依据。"],
     ai_report: ["系统正在组装结构化报告。", "汇总推理证据与关键结论。", "减少医生重复录入负担。"],
+    human_confirm: ["系统已进入人工复核节点。", "请逐段确认报告内容。", "确认完成后流程才会归档闭环。"],
     icv: ["系统正在执行 ICV 核验。", "检查关键指标一致性。", "降低指标冲突风险。"],
     ekv: ["系统正在执行 EKV 核验。", "对照循证与指南规则。", "提升结论可信度。"],
     consensus_lite: ["系统正在做证据共识裁决。", "融合多路结论并去冲突。", "输出可落地的一致建议。"],
@@ -1448,6 +1450,9 @@ async function reviewHandleAction(action) {
                     auto_finalize: true,
                 });
                 reviewSetState(data.review_state);
+                if (data?.run_status) {
+                    state.latestRun = { ...(state.latestRun || {}), status: data.run_status };
+                }
                 if (typeof data?.final_report === "string" && data.final_report.trim()) {
                     persistReport(state.fileId, {
                         report: data.final_report,
@@ -1456,7 +1461,7 @@ async function reviewHandleAction(action) {
                 }
                 state.review.offlineMode = false; // AI辅助生成：GLM-5, 2026-04-17
                 reviewClearLocalOps();
-                state.review.info = data?.all_confirmed ? "全部章节确认完成，准备进入 Viewer。" : "章节确认成功，已解锁下一段。";
+                state.review.info = data?.all_confirmed ? "全部章节确认完成，人工复核节点已完成，准备进入 Viewer。" : "章节确认成功，已解锁下一段。";
             } catch (err) {
                 const next = reviewLocalConfirm(sectionId, draftText, doctorNote);
                 reviewSetState(next);
@@ -1482,6 +1487,9 @@ async function reviewHandleAction(action) {
             try {
                 const data = await reviewApiPost("finalize_review", {});
                 reviewSetState(data.review_state, { keepCurrent: true });
+                if (data?.run_status) {
+                    state.latestRun = { ...(state.latestRun || {}), status: data.run_status };
+                }
                 if (typeof data?.final_report === "string" && data.final_report.trim()) {
                     persistReport(state.fileId, {
                         report: data.final_report,
@@ -1490,7 +1498,7 @@ async function reviewHandleAction(action) {
                 }
                 state.review.offlineMode = false;
                 reviewClearLocalOps(); // AI辅助生成：GLM-5, 2026-04-19
-                state.review.info = "最终确认版报告已生成。";
+                state.review.info = "最终确认版报告已生成，人工复核节点已完成。";
                 render();
                 scheduleViewer(true);
                 return;
@@ -1546,11 +1554,11 @@ async function pollRun() {
         const s = token(state.latestRun.status);
         if (!TERMINAL.has(s)) { state.awaitingReport = false; state.runTerminalAt = 0; state.reportResultRetryUntil = 0; }
         if (TERMINAL.has(s)) {
-            if (s !== "succeeded") {
+            if (s === "failed" || s === "cancelled") {
                 clearInterval(state.runTimer); state.runTimer = null; state.awaitingReport = false;
                 state.review.required = false; state.review.visible = false;
             }
-            else {
+            else if (s === "succeeded" || s === "paused_review_required") {
                 if (!state.runTerminalAt) { state.runTerminalAt = Date.now(); state.reportResultRetryUntil = state.runTerminalAt + RUN_RESULT_FETCH_MAX_WAIT_MS; }
                 await fetchRunResultOnce(); const ready = reportReady(); state.awaitingReport = !ready;
                 if (state.uploadDone) {
@@ -1559,8 +1567,8 @@ async function pollRun() {
                         state.awaitingReport = false;
                         const ok = await ensureReviewState(false);
                         if (ok) {
-                            if (state.runTimer) { clearInterval(state.runTimer); state.runTimer = null; }
-                            if (reviewCanEnterViewer()) scheduleViewer(true);
+                            if (s === "succeeded" && state.runTimer) { clearInterval(state.runTimer); state.runTimer = null; }
+                            if (s === "succeeded" && reviewCanEnterViewer()) scheduleViewer(true);
                         }
                     } else if (Date.now() >= state.reportResultRetryUntil) {
                         clearInterval(state.runTimer); state.runTimer = null; state.awaitingReport = false; state.error = "报告尚未就绪，已暂停自动跳转。请稍后手动进入 Viewer。";

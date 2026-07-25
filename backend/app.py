@@ -2125,9 +2125,16 @@ def _run_upload_processing_job(job_id, payload):
 
 # AI妯″瀷閰嶇疆 - 鎵╁睍涓轰笁涓ā鍨?
 # ==================== Agent Runtime (Week3 Phase 1) ====================
-CANONICAL_RUN_STATUSES = {"queued", "running", "succeeded", "failed", "cancelled"}
-CANONICAL_STEP_STATUSES = {"pending", "running", "completed", "failed", "skipped"}
-CANONICAL_STAGES = {"triage", "tooling", "icv", "ekv", "consensus", "summary", "done"}
+CANONICAL_RUN_STATUSES = {
+    "queued",
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "paused_review_required",
+}
+CANONICAL_STEP_STATUSES = {"pending", "running", "completed", "failed", "skipped", "waiting"}
+CANONICAL_STAGES = {"triage", "tooling", "icv", "ekv", "consensus", "summary", "review", "done"}
 
 AGENT_TOOL_SEQUENCE_MAP = {
     "ncct_only": [
@@ -2137,6 +2144,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "ekv",
         "consensus_lite",
         "generate_medgemma_report",
+        "human_confirm",
     ],
     "ncct_single_phase_cta": [
         "detect_modalities",
@@ -2146,6 +2154,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "ekv",
         "consensus_lite",
         "generate_medgemma_report",
+        "human_confirm",
     ],
     "ncct_mcta": [
         "detect_modalities",
@@ -2157,6 +2166,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "ekv",
         "consensus_lite",
         "generate_medgemma_report",
+        "human_confirm",
     ],
     "ncct_mcta_ctp": [
         "detect_modalities",
@@ -2167,6 +2177,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "ekv",
         "consensus_lite",
         "generate_medgemma_report",
+        "human_confirm",
     ],
 }
 
@@ -2178,6 +2189,7 @@ POST_UPLOAD_SUMMARY_TOOL_SEQUENCE = [
     "ekv",
     "consensus_lite",
     "generate_medgemma_report",
+    "human_confirm",
 ]
 
 AGENT_TOOL_RETRY_LIMITS = {
@@ -2194,6 +2206,7 @@ AGENT_TOOL_STAGE_MAP = {
     "ekv": "ekv",
     "consensus_lite": "consensus",
     "generate_medgemma_report": "summary",
+    "human_confirm": "review",
 }
 
 AGENT_TOOL_LABELS = {
@@ -2206,6 +2219,7 @@ AGENT_TOOL_LABELS = {
     "ekv": "Evidence_Check.ekv()",
     "consensus_lite": "Evidence_Check.consensus()",
     "generate_medgemma_report": "Report_Generate.compose()",
+    "human_confirm": "Human_Confirm.await_action()",
 }
 
 AGENT_TOOL_DESCRIPTIONS = {
@@ -2218,6 +2232,7 @@ AGENT_TOOL_DESCRIPTIONS = {
     "ekv": "执行外部证据与指南核验",
     "consensus_lite": "聚合校验结果形成一致性结论",
     "generate_medgemma_report": "生成结构化结论与最终摘要",
+    "human_confirm": "人工复核报告分段，确认后完成闭环",
 }
 
 TOOL_ERROR_SUGGESTIONS = {
@@ -3805,6 +3820,10 @@ def _upsert_agent_step(run_id, tool_name, status, message="", retryable=False, a
             step["started_at"] = step["started_at"] or now
             step["ended_at"] = None
             run["current_tool"] = tool_name
+        elif status == "waiting":
+            step["started_at"] = step["started_at"] or now
+            step["ended_at"] = None
+            run["current_tool"] = tool_name
         elif status in {"completed", "failed", "skipped"}:
             step["started_at"] = step["started_at"] or now # AI辅助生成：GLM-5, 2026-03-23
             step["ended_at"] = now
@@ -5085,6 +5104,219 @@ def _tool_generate_medgemma_report(run):
     )
 
 
+def _tool_human_confirm(run):
+    """Park the pipeline for doctor report review (terminal human node)."""
+    review_state = run.get("review_state") if isinstance(run.get("review_state"), dict) else None
+    if review_state is None:
+        review_state = _review_build_state(run)
+    else:
+        review_state = _review_recompute_state(review_state)
+
+    def _attach(state):
+        _review_attach_to_run_state(state, review_state)
+
+    _update_agent_run(run.get("run_id"), _attach)
+
+    pending_sections = [
+        str(sec.get("section_id") or "")
+        for sec in (review_state.get("sections") or [])
+        if str(sec.get("review_status") or "").strip().lower() != "confirmed"
+    ]
+    return True, {
+        "status": "waiting",
+        "action_required": "请医生完成报告分段审阅并确认后继续。",
+        "review_initialized": True,
+        "all_confirmed": bool(review_state.get("all_confirmed")),
+        "pending_sections": [x for x in pending_sections if x],
+        "current_section_id": review_state.get("current_section_id"),
+    }, None
+
+
+def _build_pipeline_result(run, planner_output=None, tool_sequence=None):
+    planner_output = planner_output or (run.get("planner_output") or {})
+    tool_sequence = tool_sequence or planner_output.get("tool_sequence") or []
+    context = _build_context_from_completed_tools(run)
+    return {
+        "summary": "Week6 summary + evidence chain completed",
+        "path_decision": (planner_output.get("path_decision") or {}),
+        "tool_sequence": tool_sequence,
+        "tool_results": run.get("tool_results", []),
+        "patient_context": context.get("patient_context"),
+        "analysis_result": context.get("analysis_result"),
+        "vessel_occlusion_result": context.get("vessel_occlusion_result"),
+        "icv": context.get("icv_result"),
+        "ekv": context.get("ekv_result"),
+        "consensus": context.get("consensus_result"),
+        "report_result": context.get("report_result"),
+        "human_confirm_result": context.get("human_confirm_result"),
+        "uncertainties": [],
+        "next_actions": [],
+    }
+
+
+def _pause_for_human_confirm(run_id, tool_name="human_confirm", tool_result=None):
+    run = _get_agent_run(run_id)
+    if not run:
+        return None
+    planner_output = run.get("planner_output") or {}
+    tool_sequence = planner_output.get("tool_sequence") or []
+    final_result = _build_pipeline_result(run, planner_output, tool_sequence)
+    output = (tool_result or {}).get("structured_output") or {}
+    checkpoint = {
+        "required": True,
+        "tool_name": tool_name,
+        "reason": output.get("action_required") or "manual_review_required",
+        "risk_level": "high",
+        "pending_items": output.get("pending_sections") or [],
+        "paused_at": _agent_now(),
+    }
+
+    def _pause(state):
+        state["status"] = "paused_review_required"
+        state["stage"] = "review"
+        state["current_tool"] = tool_name
+        state["error"] = None
+        state["result"] = final_result
+        state["termination_reason"] = "human_review_required"
+        state["human_checkpoint"] = checkpoint
+
+    updated = _update_agent_run(run_id, _pause)
+    _agent_log(
+        run_id=run_id,
+        stage="review",
+        tool=tool_name,
+        attempt=(tool_result or {}).get("attempt") or 1,
+        status="paused_review_required",
+        error_code=None,
+        latency_ms=(tool_result or {}).get("latency_ms"),
+        message="awaiting_human_confirm",
+    )
+    return updated
+
+
+def _complete_human_confirm_checkpoint(run_id, *, action="finalize_review", note=None):
+    """Mark the terminal human_confirm node completed and succeed the run."""
+    run = _get_agent_run(run_id)
+    if not run:
+        return None, "Run not found"
+
+    status = str(run.get("status") or "").strip().lower()
+    waiting_step = None
+    for step in run.get("steps") or []:
+        if step.get("key") in {"human_confirm", "human_review"} and str(
+            step.get("status") or ""
+        ).strip().lower() in {"waiting", "running", "pending"}:
+            waiting_step = step
+            break
+
+    # Backward compatible: older runs without human_confirm keep prior finalize behavior.
+    if waiting_step is None and status != "paused_review_required":
+        return run, None
+
+    tool_name = (waiting_step or {}).get("key") or "human_confirm"
+    planner_output = run.get("planner_output") or {}
+    tool_sequence = planner_output.get("tool_sequence") or []
+    completed_output = {
+        "status": "completed",
+        "action": action,
+        "action_log": note or "人工复核已完成并允许流程归档。",
+        "approved": True,
+        "completed_at": _agent_now(),
+    }
+
+    def _complete(state):
+        now = _agent_now()
+        for step in state.get("steps") or []:
+            if step.get("key") == tool_name:
+                step["status"] = "completed"
+                step["message"] = "Human review completed"
+                step["ended_at"] = now
+                step["started_at"] = step.get("started_at") or now
+        if state.get("current_tool") == tool_name:
+            state["current_tool"] = None
+
+        updated_existing = False
+        for result in reversed(state.get("tool_results") or []):
+            if result.get("tool_name") == tool_name:
+                result["status"] = "completed"
+                result["structured_output"] = completed_output
+                result["error_code"] = None
+                result["error_message"] = None
+                updated_existing = True
+                break
+        if not updated_existing:
+            state.setdefault("tool_results", []).append(
+                {
+                    "tool_name": tool_name,
+                    "status": "completed",
+                    "error_code": None,
+                    "retryable": False,
+                    "structured_output": completed_output,
+                    "raw_ref": {"tool_name": tool_name},
+                    "latency_ms": 0,
+                    "attempt": 1,
+                }
+            )
+
+        state["result"] = _build_pipeline_result(state, planner_output, tool_sequence)
+        state["status"] = "succeeded"
+        state["stage"] = "done"
+        state["error"] = None
+        state["termination_reason"] = "normal_completion"
+        state["human_checkpoint"] = {
+            "required": False,
+            "tool_name": tool_name,
+            "reason": "human_review_completed",
+            "risk_level": "none",
+            "pending_items": [],
+            "completed_at": now,
+            "action": action,
+        }
+        state["finalization"] = {
+            "status": "pending_archive",
+            "writeback_status": "not_started",
+            "signed": True,
+            "version": "w0-draft",
+        }
+
+    updated = _update_agent_run(run_id, _complete)
+    _append_agent_event(
+        run_id=run_id,
+        agent_name="Human Review Agent",
+        tool_name=tool_name,
+        status="completed",
+        input_ref={"run_id": run_id, "action": action},
+        output_ref=completed_output,
+        latency_ms=0,
+        error_code=None,
+        retryable=False,
+        attempt=1,
+    )
+    _append_agent_event(
+        run_id=run_id,
+        agent_name="Clinical Summary Agent",
+        tool_name="summary",
+        status="completed",
+        input_ref={"run_id": run_id},
+        output_ref={"status": "succeeded"},
+        latency_ms=0,
+        error_code=None,
+        retryable=False,
+        attempt=1,
+    )
+    _agent_log(
+        run_id=run_id,
+        stage="done",
+        tool=tool_name,
+        attempt=1,
+        status="run_done",
+        error_code=None,
+        latency_ms=0,
+        message="human_confirm_completed",
+    )
+    return updated, None
+
+
 def _execute_agent_tool(run_id, tool_name):
     run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-03-17
     if not run:
@@ -5142,6 +5374,9 @@ def _execute_agent_tool(run_id, tool_name):
         elif tool_name == "generate_medgemma_report":
             ok, output, err = _tool_generate_medgemma_report(run)
             agent_name = "Clinical Summary Agent"
+        elif tool_name in {"human_confirm", "human_review"}:
+            ok, output, err = _tool_human_confirm(run)
+            agent_name = "Human Review Agent"
         else:
             ok = False # AI辅助生成：GLM-5, 2026-03-21
             output = None
@@ -5174,6 +5409,8 @@ def _execute_agent_tool(run_id, tool_name):
             output_status = str(output.get("status") or "").strip().lower()
             if output_status == "skipped":
                 result_status = "skipped"
+            elif output_status == "waiting":
+                result_status = "waiting"
         tool_result = {
             "tool_name": tool_name,
             "status": result_status,
@@ -5185,11 +5422,15 @@ def _execute_agent_tool(run_id, tool_name):
             "attempt": attempt,
         }
         _append_agent_tool_result(run_id, tool_result) # AI辅助生成：GLM-5, 2026-03-24
-        step_message = (
-            "Tool skipped by policy"
-            if result_status == "skipped"
-            else "Tool completed"
-        )
+        if result_status == "waiting":
+            step_message = "Awaiting human review"
+            event_status = "paused_review_required"
+        elif result_status == "skipped":
+            step_message = "Tool skipped by policy"
+            event_status = result_status
+        else:
+            step_message = "Tool completed"
+            event_status = result_status
         _upsert_agent_step(
             run_id,
             tool_name,
@@ -5202,7 +5443,7 @@ def _execute_agent_tool(run_id, tool_name):
             run_id=run_id,
             agent_name=agent_name,
             tool_name=tool_name,
-            status=result_status,
+            status=event_status,
             input_ref=input_ref,
             output_ref=output,
             latency_ms=latency_ms,
@@ -5266,6 +5507,7 @@ def _build_context_from_completed_tools(run):
         "ekv_result": None,
         "consensus_result": None,
         "report_result": None,
+        "human_confirm_result": None,
     }
     for result in run.get("tool_results", []):
         tool_name = result.get("tool_name")
@@ -5277,6 +5519,8 @@ def _build_context_from_completed_tools(run):
             context["vessel_occlusion_result"] = normalize_vessel_occlusion_result(
                 output
             )
+        if tool_name in {"human_confirm", "human_review"} and isinstance(output, dict):
+            context["human_confirm_result"] = output
         if result.get("status") != "completed":
             continue # AI辅助生成：GLM-5, 2026-03-25
         if tool_name == "load_patient_context":
@@ -5293,6 +5537,8 @@ def _build_context_from_completed_tools(run):
             context["consensus_result"] = output
         elif tool_name == "generate_medgemma_report":
             context["report_result"] = output
+        elif tool_name in {"human_confirm", "human_review"}:
+            context["human_confirm_result"] = output
     return context
 
 
@@ -5440,23 +5686,12 @@ def _run_agent_pipeline(run_id, start_tool=None):
             )
             return
 
+        if isinstance(tool_result, dict) and tool_result.get("status") == "waiting":
+            _pause_for_human_confirm(run_id, tool_name=tool_name, tool_result=tool_result)
+            return
+
     run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-04-03
-    context = _build_context_from_completed_tools(run)
-    final_result = {
-        "summary": "Week6 summary + evidence chain completed",
-        "path_decision": (planner_output.get("path_decision") or {}),
-        "tool_sequence": tool_sequence,
-        "tool_results": run.get("tool_results", []),
-        "patient_context": context.get("patient_context"),
-        "analysis_result": context.get("analysis_result"),
-        "vessel_occlusion_result": context.get("vessel_occlusion_result"),
-        "icv": context.get("icv_result"),
-        "ekv": context.get("ekv_result"),
-        "consensus": context.get("consensus_result"),
-        "report_result": context.get("report_result"),
-        "uncertainties": [],
-        "next_actions": [],
-    }
+    final_result = _build_pipeline_result(run, planner_output, tool_sequence)
 
     def _complete(state):
         state["status"] = "succeeded"
@@ -10763,7 +10998,7 @@ def api_get_agent_result(run_id):
     if not run:
         return jsonify({"success": False, "error": "Run not found"}), 404
 
-    if run.get("status") != "succeeded":
+    if run.get("status") not in {"succeeded", "paused_review_required"}:
         return (
             jsonify(
                 {
@@ -10813,6 +11048,7 @@ def api_get_agent_run_review(run_id):
         review_state = _review_recompute_state(review_state)
 
     run = _ensure_w0_run_fields(run)
+    run_status = str(run.get("status") or "").strip().lower()
     return jsonify(
         {
             "success": True,
@@ -10820,7 +11056,10 @@ def api_get_agent_run_review(run_id):
             "review_state": review_state,
             "all_confirmed": bool(review_state.get("all_confirmed")),
             "current_section_id": review_state.get("current_section_id"),
-            "can_enter_viewer": bool(review_state.get("all_confirmed")),
+            "can_enter_viewer": bool(review_state.get("all_confirmed"))
+            and run_status == "succeeded",
+            "run_status": run_status,
+            "human_checkpoint": run.get("human_checkpoint"),
         }
     )
 
@@ -10912,6 +11151,14 @@ def api_review_agent_run(run_id):
         )
         if not updated_run:
             return jsonify(persist_result), 500 # AI辅助生成：GLM-5, 2026-03-13
+        updated_run, complete_err = _complete_human_confirm_checkpoint(
+            run_id,
+            action="finalize_review",
+            note="报告分段审阅已全部确认，人工复核节点完成。",
+        )
+        if complete_err:
+            return jsonify({"success": False, "error": complete_err}), 500
+        updated_run = _ensure_w0_run_fields(updated_run or _get_agent_run(run_id))
         return jsonify(
             {
                 "success": True,
@@ -10921,6 +11168,8 @@ def api_review_agent_run(run_id):
                 "all_confirmed": True,
                 "final_report": final_report_text,
                 "persist_result": persist_result,
+                "run_status": (updated_run or {}).get("status"),
+                "human_checkpoint": (updated_run or {}).get("human_checkpoint"),
             }
         )
 
@@ -11023,6 +11272,20 @@ def api_review_agent_run(run_id):
         if not updated_run:
             return jsonify(persist_result), 500
 
+        human_checkpoint = None
+        run_status = None
+        if review_state.get("all_confirmed") and auto_finalize:
+            updated_run, complete_err = _complete_human_confirm_checkpoint(
+                run_id,
+                action="confirm_section_auto_finalize",
+                note="报告分段审阅已全部确认，人工复核节点完成。",
+            )
+            if complete_err:
+                return jsonify({"success": False, "error": complete_err}), 500
+            updated_run = _ensure_w0_run_fields(updated_run or _get_agent_run(run_id))
+            human_checkpoint = (updated_run or {}).get("human_checkpoint")
+            run_status = (updated_run or {}).get("status")
+
         return jsonify(
             {
                 "success": True,
@@ -11033,6 +11296,8 @@ def api_review_agent_run(run_id):
                 "all_confirmed": bool(review_state.get("all_confirmed")),
                 "final_report": final_report_text,
                 "persist_result": persist_result,
+                "run_status": run_status,
+                "human_checkpoint": human_checkpoint,
             }
         )
 
