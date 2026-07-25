@@ -1563,6 +1563,102 @@ function getReportCacheState(fileId = currentFileId) {
     return { status: 'idle', errorMessage: '', hasReport: false, isGenerating: false, reportText: '' };
 }
 
+function escapeReportHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function readStructuredReportFromCache(fileId = currentFileId) {
+    try {
+        const raw = localStorage.getItem(getReportStorageKeys(fileId).payload);
+        const payload = raw ? JSON.parse(raw) : null;
+        const report = payload && payload.structured_report_v2;
+        return report && typeof report === 'object' ? report : null;
+    } catch (_error) {
+        return null;
+    }
+}
+
+function buildStructuredViewerSummaryHtml(report, reportUrl = '') {
+    if (!report || typeof report !== 'object') return '';
+    const meta = report.report_meta || {};
+    const review = report.clinician_review || {};
+    const fields = Array.isArray(report.patient_summary?.fields) ? report.patient_summary.fields : [];
+    const metrics = Array.isArray(report.quantitative_metrics) ? report.quantitative_metrics : [];
+    const allMetrics = [...fields, ...metrics];
+    const metricIds = [
+        'age',
+        'onset_to_admission_hours',
+        'admission_nihss',
+        'core_infarct_volume',
+        'penumbra_volume',
+        'mismatch_ratio',
+    ];
+    const byId = {};
+    allMetrics.forEach((item) => {
+        const id = item.field_id || item.metric_id;
+        if (id) byId[id] = item;
+    });
+    const metricHtml = metricIds
+        .map((id) => byId[id])
+        .filter(Boolean)
+        .slice(0, 6)
+        .map((item) => {
+            const value = item.value === null || item.value === undefined || item.value === ''
+                ? '未获得'
+                : `${escapeReportHtml(item.value)}${item.unit ? ` ${escapeReportHtml(item.unit)}` : ''}`;
+            return `
+                <div style="border:1px solid #334155;border-radius:7px;padding:9px;background:#111827;">
+                    <div style="font-size:10px;color:#94a3b8;margin-bottom:4px;">${escapeReportHtml(item.display_name || item.field_id || item.metric_id)}</div>
+                    <strong style="font-size:15px;color:#f1f5f9;">${value}</strong>
+                </div>
+            `;
+        })
+        .join('');
+    const statusText = {
+        low: '低风险',
+        medium: '中风险',
+        high: '高风险',
+        routine: '常规',
+        attention: '需关注',
+        urgent: '紧急',
+        pending: '待确认',
+        confirmed: '已确认',
+    };
+    const risk = String(meta.risk_level || 'unknown').toLowerCase();
+    const urgency = String(meta.urgency || 'unknown').toLowerCase();
+    const reviewStatus = String(review.overall_status || meta.review_status || 'pending').toLowerCase();
+    const missingCount = Array.isArray(report.missing_information) ? report.missing_information.length : 0;
+    const conflictCount = [
+        ...(Array.isArray(report.warnings) ? report.warnings : []),
+        ...(Array.isArray(report.uncertainties) ? report.uncertainties : []),
+    ].filter((item) => String(item?.status || '').toLowerCase() === 'conflict').length;
+    const safeUrl = escapeReportHtml(reportUrl || '#');
+    return `
+        <div class="viewer-structured-report-summary" style="background:#0f172a;border:1px solid #334155;border-left:3px solid #64748b;padding:12px;border-radius:8px;color:#e2e8f0;">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px;">
+                <div>
+                    <div style="font-size:11px;font-weight:700;color:#93c5fd;">StrokeClaw 结构化报告</div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:4px;">
+                        风险：${escapeReportHtml(statusText[risk] || risk)} ·
+                        紧急程度：${escapeReportHtml(statusText[urgency] || urgency)} ·
+                        审核：${escapeReportHtml(statusText[reviewStatus] || reviewStatus)}
+                    </div>
+                </div>
+                <a href="${safeUrl}" target="_blank" rel="noopener" style="color:#bfdbfe;border:1px solid #486184;border-radius:6px;padding:6px 10px;text-decoration:none;font-size:11px;">查看完整报告</a>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:7px;">${metricHtml}</div>
+            <div style="margin-top:10px;padding-top:9px;border-top:1px solid #334155;font-size:11px;color:#cbd5e1;">
+                缺失项 ${missingCount} · 冲突 ${conflictCount} · 最终诊疗决策需医生确认
+            </div>
+        </div>
+    `;
+}
+
 function getTopbarReportButton() {
     return document.getElementById('topbarReportBtn');
 }
@@ -1958,6 +2054,17 @@ function displayAIReport(report, isMock) {
     if (!aiReportSection || !aiReportContent) return;
     aiReportSection.style.display = 'block';
 
+    const structuredReport = readStructuredReportFromCache(currentFileId);
+    const structuredSummary = buildStructuredViewerSummaryHtml(
+        structuredReport,
+        getReportUrl()
+    );
+    if (structuredSummary) {
+        aiReportContent.innerHTML = structuredSummary;
+        removeLegacyValidationBlocks();
+        return;
+    }
+
     aiReportContent.innerHTML = `
         <div style="background: #eff6ff; padding: 12px; border-radius: 6px; border-left: 3px solid #2563eb; margin-bottom: 8px;">
             <div style="font-size: 11px; font-weight: 600; color: #2563eb; margin-bottom: 8px;">
@@ -2085,6 +2192,7 @@ if (typeof module !== 'undefined' && module.exports) {
         toggleAnalysisPanel,
         validateAgentRunForCase,
         viewerDataMatchesFileId,
+        buildStructuredViewerSummaryHtml,
     };
 }
 

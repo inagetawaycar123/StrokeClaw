@@ -9,6 +9,7 @@ const {
     toggleAnalysisPanel,
     validateAgentRunForCase,
     viewerDataMatchesFileId,
+    buildStructuredViewerSummaryHtml,
 } = require("../../static/js/viewer.js");
 
 test("viewer_data must match the file requested by the URL", () => {
@@ -120,4 +121,36 @@ test("stroke analysis panel opens and closes", () => {
     } finally {
         delete global.document;
     }
+});
+
+test("Viewer renders only a compact structured report summary", () => {
+    const html = buildStructuredViewerSummaryHtml(
+        {
+            report_meta: { risk_level: "high", urgency: "urgent" },
+            clinician_review: { overall_status: "pending" },
+            patient_summary: {
+                fields: [
+                    { field_id: "age", display_name: "年龄", value: 89, unit: "岁" },
+                    { field_id: "admission_nihss", display_name: "NIHSS", value: 9, unit: "分" },
+                ],
+            },
+            quantitative_metrics: [
+                {
+                    metric_id: "core_infarct_volume",
+                    display_name: "核心梗死体积",
+                    value: 6.14,
+                    unit: "mL",
+                },
+            ],
+            missing_information: [{ issue_id: "missing-vessel" }],
+            warnings: [{ status: "conflict" }],
+        },
+        "/report/909?file_id=file-a"
+    );
+
+    assert.match(html, /StrokeClaw 结构化报告/);
+    assert.match(html, /6\.14 mL/);
+    assert.match(html, /缺失项 1 · 冲突 1/);
+    assert.match(html, /查看完整报告/);
+    assert.doesNotMatch(html, /自然语言总结/);
 });

@@ -11,11 +11,13 @@ try:
         VESSEL_OCCLUSION_CLASS_RESULT,
         vessel_result_from_sources,
     )
+    from .structured_report import build_structured_report_v2
 except ImportError:
     from vessel_context import (
         VESSEL_OCCLUSION_CLASS_RESULT,
         vessel_result_from_sources,
     )
+    from structured_report import build_structured_report_v2
 
 
 KEY_CLAIM_IDS: List[str] = [
@@ -40,6 +42,7 @@ CLAIM_TITLES = {
     "core_infarct_volume": "核心梗死体积",
     "penumbra_volume": "半暗带体积",
     "mismatch_ratio": "不匹配比值",
+    "three_class_label": "NCCT 三分类结果",
     "significant_mismatch": "显著不匹配",
     "treatment_window_notice": "治疗时间窗提示",
 }
@@ -49,6 +52,7 @@ QUESTION_FOCUS_KEYWORDS = {
     "core_infarct_volume": ["核心", "梗死核心", "core", "infarct volume"],
     "penumbra_volume": ["半暗带", "penumbra"],
     "mismatch_ratio": ["不匹配", "mismatch ratio"],
+    "three_class_label": ["ncct", "三分类", "脑出血", "脑缺血"],
     "significant_mismatch": ["显著不匹配", "mismatch", "可挽救"],
     "treatment_window_notice": ["时间窗", "时窗", "window", "治疗"],
 }
@@ -64,6 +68,13 @@ def _as_dict(value: Any) -> Dict[str, Any]:
 
 def _as_list(value: Any) -> List[Any]:
     return value if isinstance(value, list) else []
+
+
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is not None and value != "":
+            return value
+    return None
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -439,29 +450,63 @@ def _detect_question_focus_claims(question: str) -> List[str]:
     return hits
 
 
+def _deidentify_text_for_llm(value: Any, patient_context: Dict[str, Any]) -> str:
+    text = str(value or "")
+    patient_name = str(patient_context.get("patient_name") or "").strip()
+    if len(patient_name) >= 2:
+        text = text.replace(patient_name, "[姓名已去标识]")
+
+    for key in ("file_id", "run_id"):
+        token = str(patient_context.get(key) or "").strip()
+        if len(token) >= 6:
+            text = text.replace(token, f"[{key}已去标识]")
+
+    patient_ids = {
+        str(patient_context.get(key) or "").strip()
+        for key in ("patient_id", "id", "ID")
+        if str(patient_context.get(key) or "").strip()
+    }
+    for token in patient_ids:
+        text = re.sub(
+            rf"(?i)((?:patient[\s_-]*id|患者\s*ID|患者编号)\s*[：:=#]?\s*){re.escape(token)}\b",
+            r"\1[已去标识]",
+            text,
+        )
+    text = re.sub(
+        r"(?<!\d)\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?(?![0-9A-Za-z])",
+        "[精确时间已去标识]",
+        text,
+    )
+    return text
+
+
 def _build_llm_question_prompt(
     *,
     question: str,
     key_points: List[str],
+    allowed_claim_ids: List[str],
     patient_context: Dict[str, Any],
     consensus_decision: str,
     next_actions: List[str],
     uncertainties: List[str],
 ) -> str:
-    """构建发送给百川M3的问题分析 prompt。"""
-    # 患者基本信息
-    patient_name = patient_context.get("patient_name", "未知")
+    """构建发送给百川M3的去标识化问题分析 prompt。"""
     patient_age = patient_context.get("patient_age", "未知") # AI辅助生成：GLM-5, 2026-03-18
     patient_sex = patient_context.get("patient_sex", "未知")
     nihss = patient_context.get("admission_nihss", "未记录")
     onset_hours = patient_context.get("onset_to_admission_hours", "未记录")
+    safe_question = _deidentify_text_for_llm(question, patient_context)
 
     # 量化数据
     core_volume = patient_context.get("core_infarct_volume", "未知")
     penumbra_volume = patient_context.get("penumbra_volume", "未知") # AI辅助生成：GLM-5, 2026-03-19
     mismatch_ratio = patient_context.get("mismatch_ratio", "未知")
     three_class_confidence = patient_context.get("three_class_confidence", "未知")
-    three_class_label = patient_context.get("three_class_label", "脑缺血")
+    three_class_label = (
+        patient_context.get("three_class_label_cn")
+        or patient_context.get("three_class_label")
+        or "未获得模型结果"
+    )
     vessel_result = vessel_result_from_sources(patient_context)
     vessel_occlusion_label = vessel_result.get("vessel_occlusion_class_result")
     vessel_occlusion_line = (
@@ -479,9 +524,22 @@ def _build_llm_question_prompt(
             "机械取栓适应证；应明确提示需要影像与人工复核。"
         )
 
-    findings_text = "\n".join(f"  - {p}" for p in key_points) if key_points else "  （无）"
-    actions_text = "\n".join(f"  - {a}" for a in next_actions) if next_actions else "  （无）"
-    uncertainties_text = "\n".join(f"  - {u}" for u in uncertainties) if uncertainties else "  （无）"
+    findings_text = (
+        "\n".join(
+            f"  - {_deidentify_text_for_llm(p, patient_context)}"
+            for p in key_points
+        )
+        if key_points
+        else "  （无）"
+    )
+    uncertainties_text = (
+        "\n".join(
+            f"  - {_deidentify_text_for_llm(u, patient_context)}"
+            for u in uncertainties
+        )
+        if uncertainties
+        else "  （无）"
+    )
 
     decision_map = {
         "accept": "接受（数据一致性良好）",
@@ -497,7 +555,7 @@ def _build_llm_question_prompt(
             from ekv_retrieval import search_guideline_evidence_with_graph
         graph_query = " ".join(
             [
-                str(question or ""),
+                safe_question,
                 str(vessel_occlusion_label or ""),
                 f"core {core_volume}",
                 f"penumbra {penumbra_volume}",
@@ -530,15 +588,17 @@ def _build_llm_question_prompt(
                 if path.get("source") and path.get("target")
             ) or graph_context_text # AI辅助生成：GLM-5, 2026-03-24
     except Exception as graph_exc:
-        graph_context_text = f"  - Graph evidence retrieval unavailable: {graph_exc}"
+        graph_context_text = "  - Graph evidence retrieval unavailable."
+    graph_context_text = _deidentify_text_for_llm(
+        graph_context_text, patient_context
+    )
 
     prompt = f"""你是一位资深的神经内科/卒中专科医生。请根据以下患者数据和系统分析结果，针对用户提出的临床问题，给出专业、详细、有条理的中文回答。
 
 【用户问题】
-{question}
+{safe_question}
 
-【患者基本信息】
-- 姓名：{patient_name}
+【去标识化临床信息】
 - 年龄：{patient_age}
 - 性别：{patient_sex}
 - 入院NIHSS评分：{nihss}
@@ -564,19 +624,49 @@ def _build_llm_question_prompt(
 {uncertainties_text}
 
 【写作要求】
-1. 必须全部使用中文回答，不得出现英文。
+1. 必须全部使用中文，不得补充输入中不存在的数据、模型置信度、指南名称、文献或条款。
+2. 只能引用 Knowledge Graph Evidence Paths 中确实存在的指南来源；没有路径时明确写“指南证据未绑定”。
 3. 回答需要结合患者的具体数据（核心梗死体积、半暗带体积、不匹配比值等）进行分析。
-4. 参考《中国急性缺血性脑卒中诊治指南》等权威指南给出建议。
-5. 回答应包含以下方面（根据问题相关性选择）：
+4. 回答应包含以下方面（根据问题相关性选择）：
    a) 对患者当前影像数据（含 NCCT 三分类）的解读
    b) 可挽救脑组织的评估（如适用）
    c) 治疗建议及依据
-6. 回答应专业但易于理解，长度控制在500-900字，避免无限扩写。
-7. 不要使用Markdown格式，使用纯文本段落。
-8. 回答必须完整结束，不要停在半句话、编号或未完成的治疗建议处，最后用一句完整总结句收尾。
+5. 不得把内部规则满足直接写成确定的溶栓或取栓适应证。
+6. 只输出一个 JSON 对象，不要使用 Markdown 或代码块，格式为：
+   {{"direct_answer":"500-900字中文回答","claim_ids":["只能从允许列表选择"],"limitations":["限制项"]}}
+7. 允许的 claim_id：{json.dumps(allowed_claim_ids, ensure_ascii=False)}
+8. 回答必须完整结束，最后用一句完整总结句收尾。
 {vessel_occlusion_requirement}"""
 
     return prompt
+
+
+def _parse_llm_answer_payload(
+    raw_answer: Optional[str], allowed_claim_ids: List[str]
+) -> Tuple[Optional[str], List[str], List[str]]:
+    text = str(raw_answer or "").strip()
+    if not text:
+        return None, [], []
+    candidate = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE)
+    try:
+        parsed = json.loads(candidate)
+    except Exception:
+        return text, [], []
+    if not isinstance(parsed, dict):
+        return text, [], []
+    direct_answer = str(parsed.get("direct_answer") or "").strip()
+    allowed = set(str(x) for x in allowed_claim_ids)
+    claim_ids = [
+        str(x)
+        for x in _as_list(parsed.get("claim_ids"))
+        if str(x) in allowed
+    ]
+    limitations = [
+        str(x).strip()
+        for x in _as_list(parsed.get("limitations"))
+        if str(x).strip()
+    ]
+    return direct_answer or None, claim_ids, limitations
 
 
 def _env_int(name: str, default: int, *, minimum: int = 1, maximum: int = 32768) -> int:
@@ -783,7 +873,8 @@ def _build_question_answer(
     patient_context: Optional[Dict[str, Any]] = None,
     llm_callback: Optional[Callable[[str], str]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    question = str(goal_question or "").strip() or "请基于当前病例给出综合诊疗建议。"
+    explicit_question = str(goal_question or "").strip()
+    question = explicit_question or "请基于当前病例给出综合诊疗建议。"
     focus_claims = _detect_question_focus_claims(question)
     selected_findings = [
         item
@@ -859,21 +950,32 @@ def _build_question_answer(
         }
 
     consensus_decision = str(consensus.get("decision") or "accept").strip().lower()
+    allowed_llm_claim_ids = [
+        str(item.get("claim_id") or "")
+        for item in selected_findings
+        if str(item.get("claim_id") or "")
+    ]
 
     # ---- 尝试调用LLM生成详细回答 ----
     llm_answer: Optional[str] = None
+    llm_claim_ids: List[str] = []
+    llm_limitations: List[str] = []
     p_ctx = patient_context if isinstance(patient_context, dict) else {} # AI辅助生成：GLM-5, 2026-04-13
-    if p_ctx or key_points:
+    if explicit_question and (p_ctx or key_points):
         try:
             llm_prompt = _build_llm_question_prompt(
                 question=question,
                 key_points=key_points,
+                allowed_claim_ids=allowed_llm_claim_ids,
                 patient_context=p_ctx,
                 consensus_decision=consensus_decision,
                 next_actions=next_actions,
                 uncertainties=uncertainties,
             )
-            llm_answer = _call_llm_for_answer(llm_prompt, llm_callback)
+            raw_llm_answer = _call_llm_for_answer(llm_prompt, llm_callback)
+            llm_answer, llm_claim_ids, llm_limitations = _parse_llm_answer_payload(
+                raw_llm_answer, allowed_llm_claim_ids
+            )
         except Exception as exc:
             print(f"[SUMMARY] LLM问题回答生成失败: {exc}")
 
@@ -934,18 +1036,21 @@ def _build_question_answer(
                 mr_val = float(mr) # AI辅助生成：GLM-5, 2026-04-18
                 penumbra_val = float(penumbra_vol)
                 core_val = float(core_vol)
-                if mr_val >= 1.8 and penumbra_val > core_val:
+                if mr_val > 1.8 and penumbra_val > core_val:
                     data_summary += (
-                        f"不匹配比值{mr_val}≥1.8，提示存在显著的缺血半暗带，"
-                        f"即存在潜在可挽救的脑组织（约{round(penumbra_val - core_val, 2)} ml）。"
+                        f"不匹配比值{mr_val}>1.8，提示存在显著灌注不匹配，"
+                        "可作为进一步评估潜在可挽救脑组织的依据之一。"
                     )
                     if core_val < 70:
-                        data_summary += "核心梗死体积较小，患者可能从血管内治疗中获益。" # AI辅助生成：GLM-5, 2026-04-19
+                        data_summary += (
+                            "核心梗死体积未达到当前内部规则的高负荷界值，"
+                            "可进一步评估再通治疗条件，但不能据此直接形成治疗结论。"
+                        ) # AI辅助生成：GLM-5, 2026-04-19
                     else:
                         data_summary += "但核心梗死体积较大，需谨慎评估治疗获益与风险。"
                 else:
                     data_summary += (
-                        f"不匹配比值{mr_val}未达到显著不匹配标准（≥1.8），"
+                        f"不匹配比值{mr_val}未高于当前内部规则阈值（>1.8），"
                         "可挽救脑组织有限，需综合评估治疗方案。"
                     )
             except (ValueError, TypeError):
@@ -1009,6 +1114,8 @@ def _build_question_answer(
         "uncertainties": answer_uncertainties,
         "consensus_decision": consensus_decision,
         "llm_enhanced": llm_answer is not None,
+        "llm_claim_ids": llm_claim_ids,
+        "llm_limitations": llm_limitations,
     }
 
     ledger = {
@@ -1123,22 +1230,34 @@ def build_summary_artifacts(
         "next_actions": next_actions,
     }
 
-    # 从 report_payload 中提取患者上下文（如果未显式传入）
+    # 人口学字段保留患者上下文；本轮报告中的算法输出覆盖旧患者字段。
     effective_patient_ctx = dict(patient_context) if isinstance(patient_context, dict) else {}
-    if not effective_patient_ctx:
-        effective_patient_ctx = {}
-        # 尝试从 payload 中提取量化数据
-        for key in (
-            "core_infarct_volume", "penumbra_volume", "mismatch_ratio",
-            "hemisphere", "patient_name", "patient_age", "patient_sex",
-            "three_class_label_cn", "three_class_confidence",
-            "vessel_occlusion_result", "vessel_occlusion_status",
-            "vessel_occlusion_class_result", "vessel_occlusion_confidence",
-            "predicted_class",
-        ):
-            val = payload.get(key)
-            if val is not None:
-                effective_patient_ctx[key] = val
+    report_ctp = _as_dict(_as_dict(payload.get("sections")).get("ctp"))
+    for key in (
+        "core_infarct_volume",
+        "penumbra_volume",
+        "mismatch_ratio",
+    ):
+        val = _first_present(payload.get(key), report_ctp.get(key))
+        if val is not None:
+            effective_patient_ctx[key] = val
+    for key in (
+        "hemisphere",
+        "patient_name",
+        "patient_age",
+        "patient_sex",
+        "three_class_label",
+        "three_class_label_cn",
+        "three_class_confidence",
+        "vessel_occlusion_result",
+        "vessel_occlusion_status",
+        "vessel_occlusion_class_result",
+        "vessel_occlusion_confidence",
+        "predicted_class",
+    ):
+        val = payload.get(key)
+        if val is not None:
+            effective_patient_ctx.setdefault(key, val)
     effective_vessel_result = vessel_result_from_sources(effective_patient_ctx, payload)
     effective_patient_ctx["vessel_occlusion_result"] = effective_vessel_result
     effective_patient_ctx["vessel_occlusion_status"] = effective_vessel_result.get("status")
@@ -1174,6 +1293,17 @@ def build_summary_artifacts(
     payload["answer_metrics"] = dict(tool_metrics or {})
     if isinstance(decision_trace, list):
         payload["decision_trace"] = decision_trace
+    payload["structured_report_v2"] = build_structured_report_v2(
+        run_id=run_id,
+        file_id=file_id,
+        report_payload=payload,
+        patient_context=effective_patient_ctx,
+        icv=icv_payload,
+        ekv=ekv_payload,
+        consensus=consensus_payload,
+        review_state=_as_dict(payload.get("review_state")),
+        legacy_report_text=str(payload.get("report") or ""),
+    )
 
     try:
         print(

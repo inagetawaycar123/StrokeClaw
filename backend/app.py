@@ -10,6 +10,7 @@ import threading
 import shutil
 import os
 import unicodedata
+from typing import Any
 from urllib.parse import quote, urlencode
 import requests  # 添加 requests 导入，用于调用百川 M3 API
 from flask import (
@@ -28,6 +29,7 @@ try:
     from .compat.skill_registry import get_skill_registry
     from .extensions import NumpyJSONEncoder
     from .summary_assembler import build_summary_artifacts
+    from .structured_report import ensure_structured_report_v2
     from .vessel_context import (
         VESSEL_OCCLUSION_CLASS_RESULT,
         VESSEL_OCCLUSION_UNAVAILABLE_TEXT,
@@ -44,6 +46,7 @@ except ImportError:
     from compat.skill_registry import get_skill_registry
     from extensions import NumpyJSONEncoder
     from summary_assembler import build_summary_artifacts
+    from structured_report import ensure_structured_report_v2
     from vessel_context import (
         VESSEL_OCCLUSION_CLASS_RESULT,
         VESSEL_OCCLUSION_UNAVAILABLE_TEXT,
@@ -428,6 +431,66 @@ def _sync_notes_to_result_json(
             sync_result["failed_files"].append({"path": path, "error": str(e)})
 
     return sync_result
+
+
+def _sync_report_payload_to_result_json(json_path: str, report_payload: dict):
+    """Best-effort sync of the post-assembly payload into the generated result JSON."""
+    result = {"success": False, "path": json_path or None, "error": None}
+    if not json_path or not isinstance(report_payload, dict):
+        result["error"] = "Missing json_path or report_payload"
+        return result
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            document = json.load(f)
+        if not isinstance(document, dict):
+            raise ValueError("report json root is not an object")
+        document["report_payload"] = report_payload
+        document["structured_report_v2"] = report_payload.get(
+            "structured_report_v2"
+        )
+        temp_path = f"{json_path}.tmp"
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(document, f, ensure_ascii=False, indent=2)
+        os.replace(temp_path, json_path)
+        result["success"] = True
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+def _persist_report_payload_best_effort(
+    patient_id: Any, file_id: str, report_payload: dict
+):
+    result = {"success": False, "mode": "none", "error": None}
+    if not SUPABASE_AVAILABLE:
+        result["error"] = "Supabase unavailable"
+        return result
+    if not file_id or not isinstance(report_payload, dict):
+        result["error"] = "Missing file_id or report_payload"
+        return result
+    try:
+        def _persist_once():
+            query = (
+                supabase.table("patient_imaging")
+                .update({"report_payload": report_payload})
+                .eq("case_id", file_id)
+            )
+            if patient_id not in (None, ""):
+                query = query.eq("patient_id", patient_id)
+            response = query.execute()
+            return response
+
+        response = _run_with_supabase_retry(
+            "persist_structured_report_payload", _persist_once
+        )
+        if response.data and len(response.data) > 0:
+            result["success"] = True
+            result["mode"] = "updated"
+        else:
+            result["error"] = "patient_imaging row not found"
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
 
 
 def save_report_notes(patient_id: int, file_id: str, payload: dict):
@@ -1667,6 +1730,88 @@ def _resolve_vessel_result(run=None, imaging=None, structured=None):
     if isinstance(structured, dict):
         sources.append(structured)
     return vessel_result_from_sources(*sources)
+
+
+def _resolve_ncct_classification(run=None, imaging=None, structured=None):
+    """Resolve a real NCCT classifier result without inventing an ischemia default."""
+    sources = []
+    if isinstance(run, dict):
+        sources.extend(
+            [
+                run.get("planner_input") or {},
+                run.get("result") or {},
+            ]
+        )
+        for item in reversed(run.get("tool_results") or []):
+            if not isinstance(item, dict):
+                continue
+            if item.get("tool_name") in {"three_class", "ncct_three_class"}:
+                sources.append(item.get("structured_output") or {})
+    if isinstance(imaging, dict):
+        sources.extend(
+            [
+                imaging.get("analysis_result") or {},
+                imaging.get("three_class_summary") or {},
+                imaging,
+            ]
+        )
+    if isinstance(structured, dict):
+        sources.append(structured)
+
+    label = None
+    label_cn = None
+    confidence = None
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        nested_candidates = [
+            source,
+            source.get("three_class_summary") or {},
+            source.get("three_class_result") or {},
+            source.get("output") or {},
+        ]
+        for candidate in nested_candidates:
+            if not isinstance(candidate, dict):
+                continue
+            if not label:
+                label = (
+                    candidate.get("three_class_label")
+                    or candidate.get("predicted_label")
+                    or candidate.get("pred_label")
+                )
+            if not label_cn:
+                label_cn = (
+                    candidate.get("three_class_label_cn")
+                    or candidate.get("predicted_label_cn")
+                    or candidate.get("label_cn")
+                )
+            if confidence is None:
+                raw_confidence = (
+                    candidate.get("three_class_confidence")
+                    if candidate.get("three_class_confidence") is not None
+                    else candidate.get("confidence")
+                )
+                try:
+                    parsed_confidence = float(raw_confidence)
+                    if 0.0 <= parsed_confidence <= 1.0:
+                        confidence = parsed_confidence
+                except (TypeError, ValueError):
+                    pass
+        if label or label_cn:
+            break
+
+    normalized_label = str(label or "").strip().lower() or None
+    normalized_label_cn = str(label_cn or "").strip() or None
+    if normalized_label and not normalized_label_cn:
+        normalized_label_cn = _THREE_CLASS_LABEL_CN.get(
+            normalized_label, normalized_label
+        )
+    return {
+        "status": "completed" if (normalized_label or normalized_label_cn) else "unavailable",
+        "three_class_label": normalized_label,
+        "three_class_label_cn": normalized_label_cn,
+        "three_class_confidence": confidence,
+    }
 
 
 def _vessel_result_from_run(run):
@@ -3047,6 +3192,38 @@ def _review_compose_final_report(review_state):
     return "\n".join(lines).strip() # AI辅助生成：GLM-5, 2026-04-07
 
 
+def _review_refresh_structured_report(report_payload, run):
+    if not isinstance(report_payload, dict):
+        return report_payload
+    run = run if isinstance(run, dict) else {}
+    result = run.get("result") if isinstance(run.get("result"), dict) else {}
+    patient_context = (
+        copy.deepcopy(result.get("patient_context"))
+        if isinstance(result.get("patient_context"), dict)
+        else {}
+    )
+    analysis_result = (
+        result.get("analysis_result")
+        if isinstance(result.get("analysis_result"), dict)
+        else {}
+    )
+    patient_context.update(
+        {key: value for key, value in analysis_result.items() if value is not None}
+    )
+    planner_input = (
+        run.get("planner_input")
+        if isinstance(run.get("planner_input"), dict)
+        else {}
+    )
+    return ensure_structured_report_v2(
+        report_payload,
+        run_id=str(run.get("run_id") or ""),
+        file_id=str(run.get("file_id") or planner_input.get("file_id") or ""),
+        patient_context=patient_context,
+        legacy_report_text=str(report_payload.get("final_confirmed_report") or ""),
+    )
+
+
 def _review_attach_to_run_state(state, review_state, final_report_text=None):
     state["review_state"] = copy.deepcopy(_review_recompute_state(review_state))
 
@@ -3067,6 +3244,7 @@ def _review_attach_to_run_state(state, review_state, final_report_text=None):
         report_payload["review_finalized_at"] = _review_now_iso()
         report_result["report"] = str(final_report_text) # AI辅助生成：GLM-5, 2026-04-09
 
+    report_payload = _review_refresh_structured_report(report_payload, state)
     report_result["report_payload"] = report_payload
     run_result["report_result"] = report_result
     state["result"] = run_result
@@ -3116,6 +3294,7 @@ def _persist_review_state_best_effort(
         if final_report_text:
             report_payload["final_confirmed_report"] = str(final_report_text)
             report_payload["review_finalized_at"] = _review_now_iso() # AI辅助生成：GLM-5, 2026-04-13
+        report_payload = _review_refresh_structured_report(report_payload, run)
 
         def _upsert_once():
             update_query = (
@@ -4878,12 +5057,29 @@ def _tool_generate_medgemma_report(run):
             f"[SUMMARY] assembler_failed run_id={run.get('run_id')} file_id={file_id} error={summary_exc}"
         )
 
+    persistence_warnings = []
+    json_sync = _sync_report_payload_to_result_json(
+        data.get("json_path"), report_payload
+    )
+    if not json_sync.get("success"):
+        persistence_warnings.append(
+            f"result_json_sync_failed: {json_sync.get('error')}"
+        )
+    db_sync = _persist_report_payload_best_effort(
+        patient_id, file_id, report_payload
+    )
+    if not db_sync.get("success"):
+        persistence_warnings.append(
+            f"report_payload_persist_failed: {db_sync.get('error')}"
+        )
+
     return (
         True,
         {
             "report": data.get("report"),
             "report_payload": report_payload,
             "json_path": data.get("json_path"),
+            "persistence_warnings": persistence_warnings,
         },
         None,
     )
@@ -6316,7 +6512,7 @@ def api_generate_report(patient_id):
                     str(admission_time).replace("Z", "+00:00")
                 )
                 onset_to_admission_hours = round(
-                    (admission_dt - onset_dt).total_seconds() / 3600, 1
+                    (admission_dt - onset_dt).total_seconds() / 3600, 2
                 )
             except Exception as e:
                 print(f"Onset-to-admission calc failed: {e}")
@@ -6325,6 +6521,10 @@ def api_generate_report(patient_id):
             (imaging_data or {}).get("hemisphere") # AI辅助生成：GLM-5, 2026-04-14
             or patient_data.get("hemisphere")
             or "both"
+        )
+        ncct_result = _resolve_ncct_classification(
+            run=run_state,
+            imaging=imaging_data,
         )
         structured_data = {
             "id": patient_data.get("id"),
@@ -6338,8 +6538,10 @@ def api_generate_report(patient_id):
             "penumbra_volume": patient_data.get("penumbra_volume"),
             "mismatch_ratio": patient_data.get("mismatch_ratio"),
             "hemisphere": hemisphere_value,
-            "three_class_label": "ischemia",
-            "three_class_label_cn": "脑缺血",
+            "three_class_status": ncct_result.get("status"),
+            "three_class_label": ncct_result.get("three_class_label"),
+            "three_class_label_cn": ncct_result.get("three_class_label_cn"),
+            "three_class_confidence": ncct_result.get("three_class_confidence"),
             "vessel_occlusion_result": vessel_result,
             "vessel_occlusion_status": vessel_result.get("status"),
             "vessel_occlusion_class_result": vessel_result.get(
@@ -6402,8 +6604,19 @@ def api_generate_report(patient_id):
                     structured_data.get("penumbra_volume"),
                 )
                 report_payload.setdefault("mismatch_ratio", structured_data.get("mismatch_ratio"))
-                report_payload.setdefault("three_class_label", "ischemia") # AI辅助生成：GLM-5, 2026-04-20
-                report_payload.setdefault("three_class_label_cn", "脑缺血")
+                report_payload.setdefault(
+                    "three_class_status", structured_data.get("three_class_status")
+                )
+                report_payload.setdefault(
+                    "three_class_label", structured_data.get("three_class_label")
+                ) # AI辅助生成：GLM-5, 2026-04-20
+                report_payload.setdefault(
+                    "three_class_label_cn", structured_data.get("three_class_label_cn")
+                )
+                report_payload.setdefault(
+                    "three_class_confidence",
+                    structured_data.get("three_class_confidence"),
+                )
                 report_payload["vessel_occlusion_result"] = vessel_result
                 report_payload["vessel_occlusion_status"] = vessel_result.get("status")
                 report_payload["vessel_occlusion_class_result"] = vessel_result.get(
@@ -6412,37 +6625,52 @@ def api_generate_report(patient_id):
                 report_payload["vessel_occlusion_confidence"] = vessel_result.get(
                     "confidence"
                 )
-                if user_question:
-                    try:
-                        report_payload = build_summary_artifacts(
-                            run_id=run_key or f"report:{patient_id}:{file_id}",
-                            file_id=file_id,
-                            report_payload=report_payload,
-                            icv=None,
-                            ekv=None,
-                            consensus=None,
-                            goal_question=user_question,
-                            patient_context=structured_data,
-                        )
-                    except Exception as summary_exc:
-                        print(
-                            f"[MedGemma] question answer summary failed "
-                            f"patient_id={patient_id} file_id={file_id}: {summary_exc}"
-                        )
+                try:
+                    report_payload = build_summary_artifacts(
+                        run_id=run_key or f"report:{patient_id}:{file_id}",
+                        file_id=file_id,
+                        report_payload=report_payload,
+                        icv=None,
+                        ekv=None,
+                        consensus=None,
+                        goal_question=user_question,
+                        patient_context=structured_data,
+                    )
+                except Exception as summary_exc:
+                    print(
+                        f"[MedGemma] structured summary failed "
+                        f"patient_id={patient_id} file_id={file_id}: {summary_exc}"
+                    )
+                    if user_question:
                         report_payload.setdefault(
                             "question_answer",
                             {
                                 "question": user_question,
                                 "direct_answer": (
-                                    f"当前病例提示脑缺血，血管堵塞三分类为"
+                                    f"当前结构化报告组装暂不可用，血管堵塞三分类为"
                                     f"{vessel_result_display_label(vessel_result)}。"
-                                    "需结合性别、NIHSS评分、发病至入院时间、病灶偏侧、"
-                                    "核心梗死体积、半暗带体积与 mismatch 比值，优先评估" # AI辅助生成：GLM-5, 2026-04-21
-                                    "再通治疗获益及出血风险。"
+                                    "请结合原始影像、NIHSS评分、发病至入院时间、"
+                                    "核心梗死体积、半暗带体积和不匹配比值人工复核，"
+                                    "不得依据当前回退文本形成确定性治疗结论。" # AI辅助生成：GLM-5, 2026-04-21
                                 ),
                             },
                         )
                 result["report_payload"] = report_payload
+            persistence_warnings = []
+            json_sync = _sync_report_payload_to_result_json(
+                result.get("json_path"), report_payload
+            )
+            if not json_sync.get("success"):
+                persistence_warnings.append(
+                    f"result_json_sync_failed: {json_sync.get('error')}"
+                )
+            db_sync = _persist_report_payload_best_effort(
+                patient_id, file_id, report_payload
+            )
+            if not db_sync.get("success"):
+                persistence_warnings.append(
+                    f"report_payload_persist_failed: {db_sync.get('error')}"
+                )
             elapsed = round(time.time() - request_start, 2)
             if result.get("json_path"):
                 print(f"[MedGemma] report json saved: {result.get('json_path')}")
@@ -6460,6 +6688,7 @@ def api_generate_report(patient_id):
                     "json_path": result.get("json_path"),
                     "is_mock": result.get("is_mock", False),
                     "warning": result.get("warning"),
+                    "persistence_warnings": persistence_warnings,
                     "source": source,
                 }
             )
@@ -6602,7 +6831,7 @@ def api_generate_report_from_data():
                             )
                         )
                         data["onset_to_admission_hours"] = round(
-                            (admission_dt - onset_dt).total_seconds() / 3600, 1
+                            (admission_dt - onset_dt).total_seconds() / 3600, 2
                         )
                     except Exception as e:
                         print(f"Onset-to-admission calc failed: {e}") # AI辅助生成：GLM-5, 2026-03-07
@@ -6618,15 +6847,57 @@ def api_generate_report_from_data():
         )
 
         if result["success"]:
+            report_payload = result.get("report_payload")
+            if isinstance(report_payload, dict):
+                try:
+                    report_payload = build_summary_artifacts(
+                        run_id=str(data.get("run_id") or f"report-data:{file_id}"),
+                        file_id=str(file_id),
+                        report_payload=report_payload,
+                        icv=data.get("icv") if isinstance(data.get("icv"), dict) else None,
+                        ekv=data.get("ekv") if isinstance(data.get("ekv"), dict) else None,
+                        consensus=(
+                            data.get("consensus")
+                            if isinstance(data.get("consensus"), dict)
+                            else None
+                        ),
+                        goal_question=str(
+                            data.get("question") or data.get("goal_question") or ""
+                        ),
+                        patient_context=data,
+                    )
+                except Exception as summary_exc:
+                    print(
+                        f"[MedGemma] structured summary failed "
+                        f"file_id={file_id}: {summary_exc}"
+                    )
+            result["report_payload"] = report_payload
+            persistence_warnings = []
+            json_sync = _sync_report_payload_to_result_json(
+                result.get("json_path"), report_payload
+            )
+            if not json_sync.get("success"):
+                persistence_warnings.append(
+                    f"result_json_sync_failed: {json_sync.get('error')}"
+                )
+            if patient_id:
+                db_sync = _persist_report_payload_best_effort(
+                    patient_id, file_id, report_payload
+                )
+                if not db_sync.get("success"):
+                    persistence_warnings.append(
+                        f"report_payload_persist_failed: {db_sync.get('error')}"
+                    )
             return jsonify(
                 {
                     "status": "success",
                     "message": "Report generated",
                     "format": output_format,
                     "report": result["report"],
-                    "report_payload": result.get("report_payload"),
+                    "report_payload": report_payload,
                     "is_mock": result.get("is_mock", False),
                     "warning": result.get("warning"),
+                    "persistence_warnings": persistence_warnings,
                 }
             )
         else:
@@ -11654,6 +11925,172 @@ def api_compat_skill_registry():
     return jsonify({"success": True, "count": len(skills), "skills": skills})
 
 
+@app.route("/api/report/context", methods=["GET"])
+def api_report_context():
+    patient_id_raw = request.args.get("patient_id")
+    file_id = str(request.args.get("file_id") or "").strip()
+    run_id = str(request.args.get("run_id") or "").strip()
+    patient_id = None
+    if patient_id_raw not in (None, ""):
+        try:
+            patient_id = int(patient_id_raw)
+        except Exception:
+            return jsonify({"success": False, "error": "Invalid patient_id"}), 400
+    if not any([patient_id is not None, file_id, run_id]):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "At least one of patient_id, file_id, or run_id is required",
+                }
+            ),
+            400,
+        )
+
+    resolved_run_id = run_id or _get_latest_run_id_by_context(
+        file_id=file_id, patient_id=patient_id
+    )
+    run = _get_agent_run(resolved_run_id) if resolved_run_id else None
+    report_payload = None
+    report_text = ""
+    source_meta = {
+        "source_chain": "none",
+        "run_id": resolved_run_id or None,
+        "file_id": file_id or None,
+        "patient_id": patient_id,
+        "last_updated": None,
+        "fallback": False,
+    }
+
+    if isinstance(run, dict):
+        run_result = run.get("result") if isinstance(run.get("result"), dict) else {}
+        report_result = (
+            run_result.get("report_result")
+            if isinstance(run_result.get("report_result"), dict)
+            else {}
+        )
+        candidate = report_result.get("report_payload")
+        if isinstance(candidate, dict):
+            report_payload = copy.deepcopy(candidate)
+            report_text = str(
+                candidate.get("final_confirmed_report")
+                or report_result.get("report")
+                or ""
+            )
+            source_meta.update(
+                {
+                    "source_chain": "agent_run",
+                    "run_id": str(run.get("run_id") or resolved_run_id),
+                    "file_id": str(
+                        run.get("file_id")
+                        or (run.get("planner_input") or {}).get("file_id")
+                        or file_id
+                    ),
+                    "patient_id": run.get("patient_id")
+                    or (run.get("planner_input") or {}).get("patient_id")
+                    or patient_id,
+                    "last_updated": run.get("updated_at") or run.get("completed_at"),
+                }
+            )
+            file_id = str(source_meta["file_id"] or file_id)
+            patient_id = source_meta["patient_id"]
+
+    imaging = None
+    if report_payload is None:
+        report_payload, payload_meta, imaging, resolved_file_id = (
+            _load_cockpit_case_report_payload(
+                file_id=file_id, patient_id=patient_id
+            )
+        )
+        if resolved_file_id:
+            file_id = resolved_file_id
+        source_meta.update(payload_meta or {})
+        source_meta["file_id"] = file_id or None
+        source_meta["fallback"] = True
+
+    if imaging is None and file_id:
+        imaging = get_imaging_by_case(patient_id, file_id)
+    patient = get_patient_by_id(patient_id) if patient_id not in (None, "") else {}
+
+    if not report_text and isinstance(report_payload, dict):
+        report_text = str(
+            report_payload.get("final_confirmed_report")
+            or report_payload.get("report")
+            or ""
+        )
+    if not report_text and file_id:
+        json_path, result_json = _load_result_json_for_file(file_id)
+        if isinstance(result_json, dict):
+            report_text = str(
+                result_json.get("markdown")
+                or result_json.get("report")
+                or ""
+            )
+            source_meta["result_json_path"] = json_path
+
+    if not isinstance(report_payload, dict) and not report_text:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Report context not found",
+                    "source_meta": source_meta,
+                }
+            ),
+            404,
+        )
+
+    analysis = (
+        imaging.get("analysis_result")
+        if isinstance(imaging, dict)
+        and isinstance(imaging.get("analysis_result"), dict)
+        else {}
+    )
+    patient_context = {}
+    if isinstance(patient, dict):
+        patient_context.update(patient)
+    if isinstance(analysis, dict):
+        patient_context.update(
+            {
+                key: value
+                for key, value in analysis.items()
+                if value is not None
+            }
+        )
+    if isinstance(imaging, dict):
+        patient_context.setdefault("available_modalities", imaging.get("available_modalities"))
+        patient_context.setdefault("hemisphere", imaging.get("hemisphere"))
+    if patient_context.get("onset_to_admission_hours") is None:
+        patient_context["onset_to_admission_hours"] = _compute_onset_to_admission_hours(
+            patient_context
+        )
+    patient_context.update(
+        _resolve_ncct_classification(run=run, imaging=imaging, structured=report_payload)
+    )
+    vessel_context_value = _resolve_vessel_result(
+        run=run, imaging=imaging, structured=report_payload
+    )
+    patient_context["vessel_occlusion_result"] = vessel_context_value
+
+    normalized_payload = ensure_structured_report_v2(
+        report_payload,
+        run_id=str(source_meta.get("run_id") or resolved_run_id or ""),
+        file_id=str(file_id or ""),
+        patient_context=patient_context,
+        legacy_report_text=report_text,
+    )
+    structured_report = normalized_payload.get("structured_report_v2") or {}
+    return jsonify(
+        {
+            "success": True,
+            "report_text": report_text,
+            "report_payload": normalized_payload,
+            "structured_report": structured_report,
+            "source_meta": source_meta,
+        }
+    )
+
+
 @app.route("/api/compat/clinical-decision-bundle", methods=["GET"])
 def api_compat_clinical_decision_bundle():
     patient_id_raw = request.args.get("patient_id")
@@ -12356,6 +12793,24 @@ def api_save_and_generate_report():
                 {"status": "error", "message": f"Imaging case {file_id} not found"}
             ), 404
         vessel_result = _resolve_vessel_result(imaging=imaging_data)
+        ncct_result = _resolve_ncct_classification(imaging=imaging_data)
+        if structured_data.get("onset_to_admission_hours") is None:
+            onset_time = structured_data.get("onset_exact_time")
+            admission_time = structured_data.get("admission_time")
+            if onset_time and admission_time:
+                try:
+                    onset_dt = datetime.fromisoformat(
+                        str(onset_time).replace("Z", "+00:00")
+                    )
+                    admission_dt = datetime.fromisoformat(
+                        str(admission_time).replace("Z", "+00:00")
+                    )
+                    structured_data["onset_to_admission_hours"] = round(
+                        (admission_dt - onset_dt).total_seconds() / 3600.0, 2
+                    )
+                except Exception:
+                    structured_data["onset_to_admission_hours"] = None
+        structured_data.update(ncct_result)
         structured_data["vessel_occlusion_result"] = vessel_result
         structured_data["vessel_occlusion_status"] = vessel_result.get("status")
         structured_data["vessel_occlusion_class_result"] = vessel_result.get(
@@ -12375,6 +12830,42 @@ def api_save_and_generate_report():
                     "message": ai_result.get("error", "Report generation failed"),
                 }
             ), 500
+        report_payload = ai_result.get("report_payload")
+        persistence_warnings = []
+        if isinstance(report_payload, dict):
+            try:
+                report_payload = build_summary_artifacts(
+                    run_id=str(
+                        data.get("run_id")
+                        or f"save-report:{patient_id}:{file_id}"
+                    ),
+                    file_id=str(file_id),
+                    report_payload=report_payload,
+                    icv=None,
+                    ekv=None,
+                    consensus=None,
+                    goal_question=str(data.get("question") or ""),
+                    patient_context=structured_data,
+                )
+            except Exception as summary_exc:
+                persistence_warnings.append(
+                    f"structured_report_assembly_failed: {summary_exc}"
+                )
+            ai_result["report_payload"] = report_payload
+        payload_sync = _sync_report_payload_to_result_json(
+            ai_result.get("json_path"), report_payload
+        )
+        if not payload_sync.get("success"):
+            persistence_warnings.append(
+                f"result_json_sync_failed: {payload_sync.get('error')}"
+            )
+        db_sync = _persist_report_payload_best_effort(
+            patient_id, file_id, report_payload
+        )
+        if not db_sync.get("success"):
+            persistence_warnings.append(
+                f"report_payload_persist_failed: {db_sync.get('error')}"
+            )
 
         # Ensure the newly generated report json also carries latest doctor notes.
         try:
@@ -12404,7 +12895,7 @@ def api_save_and_generate_report():
                 "ai_report": ai_result.get("report", ""),
                 "report_payload": ai_result.get("report_payload"),
                 "ai_generated": True,
-                "warnings": save_result.get("warnings", []),
+                "warnings": save_result.get("warnings", []) + persistence_warnings,
                 "saved_targets": save_result.get("saved_targets", {}),
                 "json_sync": save_result.get("json_sync", {}),
             }

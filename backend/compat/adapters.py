@@ -574,6 +574,7 @@ def build_report_evidence(report_payload: Optional[JsonDict], run: Optional[Json
     )
     return {
         "structured_findings": final_report,
+        "structured_report_v2": _as_dict(payload.get("structured_report_v2")),
         "report_text": _first(payload.get("final_confirmed_report"), payload.get("report"), final_report.get("summary"), default=""),
         "evidence_completeness": evidence_completeness,
         "severe_conflict_exists": bool(payload.get("severe_conflict_exists", False)),

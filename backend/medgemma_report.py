@@ -418,6 +418,7 @@ def build_ncct_stage1_prompt(hemisphere: str, patient_meta: Dict[str, Any]) -> s
     return (
         "你是卒中影像辅助报告模型。请只分析当前这一张 NCCT 切片，并输出严格 JSON。"
         "目标是高信息量探索：允许提出“可疑/倾向/需复核”的判断，但不得把不确定结论写成确定事实。" # AI辅助生成：GLM-5, 2026-03-07
+        "不得补充输入中不存在的患者数据、指南名称、条款、模型置信度或确定性治疗结论。"
         "请使用中文完整句，不得输出 negative/none/false/not_visible 等英文简写。"
         "JSON 必须包含且仅包含以下键："
         "major_findings,supporting_evidence,counter_evidence,suspected_pathophysiology,differential_diagnosis,limitations,review_points。"
@@ -436,6 +437,7 @@ def build_cta_stage1_prompt(
     return (
         f"你是卒中影像辅助报告模型。请只分析当前这一张 CTA（{phase_cn}）切片，并输出严格 JSON。"
         "目标是高信息量探索：允许提出“可疑/倾向/需复核”的判断，但不得把不确定结论写成确定事实。"
+        "不得补充输入中不存在的患者数据、指南名称、条款、模型置信度或确定性治疗结论。"
         "请使用中文完整句，不得输出 negative/none/false/not_visible 等英文简写。"
         "JSON 必须包含且仅包含以下键：" # AI辅助生成：GLM-5, 2026-03-10
         "patency_assessment,suspected_responsible_vessel,collateral_status,phase_specific_observation,cross_phase_comparison,limitations,review_points。"
@@ -643,6 +645,7 @@ def _build_stage2_prompt(stage2_source: Dict[str, Any], retry: bool = False) -> 
         "你是卒中影像报告整合助手。请基于给定的 Stage-1 结构化结果，生成病例级中文长文 JSON。"
         "不得输出英文键值风格文本，不得出现 negative/none/false/not_visible。" # AI辅助生成：GLM-5, 2026-03-24
         "允许表达不确定性，但必须使用“可疑/倾向/需复核”措辞。"
+        "不得补充输入中不存在的数据、指南名称、条款、模型置信度，不得形成确定性治疗结论。"
         "输出 JSON 键必须且仅能为："
         "ncct_enhanced,cta_arterial_enhanced,cta_venous_enhanced,cta_delayed_enhanced,integrated_impression,next_steps。"
         "其中每个键值是字符串数组。"
@@ -864,25 +867,25 @@ def _ctp_values(
     report_summary = (analysis_result.get("report") or {}).get("summary") or {}
 
     core = pick_float(
-        structured_data.get("core_infarct_volume"),
         analysis_result.get("core_volume_ml"),
         volume_analysis.get("core_volume_ml"),
         report_summary.get("core_volume_ml"),
+        structured_data.get("core_infarct_volume"),
     )
 
     penumbra = pick_float(
-        structured_data.get("penumbra_volume"),
         analysis_result.get("penumbra_volume_ml"),
         volume_analysis.get("penumbra_volume_ml"),
         report_summary.get("penumbra_volume_ml"),
+        structured_data.get("penumbra_volume"),
     )
 
     mismatch = pick_float(
-        structured_data.get("mismatch_ratio"),
         analysis_result.get("mismatch_ratio"),
         volume_analysis.get("mismatch_ratio"),
         mismatch_analysis.get("mismatch_ratio"),
         report_summary.get("mismatch_ratio"),
+        structured_data.get("mismatch_ratio"),
     )
 
     return core, penumbra, mismatch
@@ -899,7 +902,7 @@ def _build_ctp_enhanced_lines(
     )
 
     if mismatch is not None:
-        if mismatch >= 1.8:
+        if mismatch > 1.8:
             lines.append(
                 "不匹配比值偏高，提示存在潜在可挽救组织窗口，但仍需结合临床时间窗与禁忌证综合评估。"
             )
