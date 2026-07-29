@@ -18,6 +18,8 @@ function resetState() {
         revealedNodeIds: [],
         revealPendingIds: [],
         revealAt: Object.create(null),
+        dagReviewSubmitting: false,
+        dagReviewMessage: "",
     });
 }
 
@@ -47,6 +49,45 @@ test("normStatus keeps issue idempotent", () => {
     assert.equal(processing.normStatus("issue"), "issue");
     assert.equal(processing.normStatus(processing.normStatus("failed")), "issue");
     assert.equal(processing.normStatus("unavailable"), "issue");
+});
+
+test("clinical DAG builder covers all four supported imaging paths with stable ids", () => {
+    const cases = [
+        [["ncct"], "ncct_only"],
+        [["ncct", "mcta"], "ncct_single_phase_cta"],
+        [["ncct", "mcta", "vcta", "dcta"], "ncct_mcta"],
+        [["ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"], "ncct_mcta_ctp"],
+    ];
+    cases.forEach(([modalities, path]) => {
+        const first = processing.buildClinicalDag(modalities);
+        const reversed = processing.buildClinicalDag([...modalities].reverse());
+        assert.equal(first.path, path);
+        assert.equal(first.dag_id, reversed.dag_id);
+        assert.equal(first.valid, true);
+    });
+});
+
+test("clinical DAG uses the server descriptor and keeps collateral capability inactive", () => {
+    const serverDag = {
+        dag_id: "clinical:server-owned",
+        path: "ncct_mcta",
+        valid: true,
+        available_modalities: ["ncct", "mcta", "vcta", "dcta"],
+        nodes: [{ id: "collateral_score", status: "inactive", active: false }],
+        edges: [],
+        columns: [["collateral_score"]],
+    };
+    processing.state.latestJob = {
+        status: "awaiting_review",
+        modalities: ["ncct"],
+        clinical_dag: serverDag,
+    };
+
+    const resolved = processing.clinicalDagForJob();
+    assert.equal(resolved, serverDag);
+    assert.equal(resolved.nodes[0].status, "inactive");
+    assert.equal(processing.normStatus("awaiting_review"), "waiting");
+    assert.equal(processing.normStatus("review_rejected"), "issue");
 });
 
 test("corrupt completed vessel payload without prediction evidence becomes an issue", () => {

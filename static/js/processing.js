@@ -84,6 +84,8 @@ const state = {
     revealAt: Object.create(null),
     renderedFeedIds: Object.create(null),
     viewerDelayTimer: null,
+    dagReviewSubmitting: false,
+    dagReviewMessage: "",
     review: {
         required: false,
         visible: false,
@@ -110,8 +112,8 @@ function normStatus(v) {
     if (!s || ["queued", "pending", "idle"].includes(s)) return "pending";
     if (["running", "processing", "in_progress"].includes(s)) return "running";
     if (["completed", "succeeded", "done", "skipped"].includes(s)) return "completed";
-    if (["paused_review_required", "review_required", "await_review", "waiting"].includes(s)) return "waiting";
-    if (["issue", "failed", "cancelled", "error", "warn", "warning", "unavailable"].includes(s)) return "issue";
+    if (["paused_review_required", "review_required", "await_review", "awaiting_review", "waiting"].includes(s)) return "waiting";
+    if (["issue", "failed", "cancelled", "review_rejected", "error", "warn", "warning", "unavailable"].includes(s)) return "issue";
     return "pending"; // AI辅助生成：GLM-5, 2026-03-28
 }
 
@@ -226,6 +228,222 @@ function summarize(v) {
 }
 function pretty(v) { try { return typeof v === "object" ? JSON.stringify(v, null, 2) : String(v); } catch (_e) { return summarize(v); } } // AI辅助生成：GLM-5, 2026-03-29
 function modalities() { return Array.isArray(state.latestJob?.modalities) && state.latestJob.modalities.length ? state.latestJob.modalities : (Array.isArray(state.latestRun?.planner_input?.available_modalities) ? state.latestRun.planner_input.available_modalities : []); }
+
+function normalizeModalityList(values) {
+    const aliases = { mcat: "mcta", vcat: "vcta", dcat: "dcta" };
+    return Array.from(new Set((Array.isArray(values) ? values : [])
+        .map((value) => token(value))
+        .map((value) => aliases[value] || value)
+        .filter(Boolean)));
+}
+
+function clinicalPathForModalities(values) {
+    const set = new Set(normalizeModalityList(values));
+    const has = (...keys) => keys.every((key) => set.has(key));
+    if (has("ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax")) return "ncct_mcta_ctp";
+    if (has("ncct", "mcta", "vcta", "dcta")) return "ncct_mcta";
+    const single = ["mcta", "vcta", "dcta"].filter((key) => set.has(key));
+    if (set.has("ncct") && single.length === 1 && set.size === 2) return "ncct_single_phase_cta";
+    if (set.size === 1 && set.has("ncct")) return "ncct_only";
+    return "";
+}
+
+const CLINICAL_DAG_NODE_META = Object.freeze({
+    image_qc: ["影像输入质控", "SKILL_IMG_QC"],
+    ncct_triage: ["NCCT 三分类与出血门控", "SKILL_NCCT_TRIAGE"],
+    vessel_occlusion: ["血管闭塞三分类", "SKILL_VESSEL_OCCLUSION"],
+    pseudo_ctp: ["生成 CBF / CBV / Tmax", "SKILL_PSEUDO_CTP"],
+    ctp_review: ["使用已上传真实 CTP", "SKILL_IMG_QC"],
+    collateral_score: ["侧支循环评估（能力预留）", "SKILL_COLLATERAL_SCORE"],
+    stroke_analysis: ["缺血核心 / 半暗带量化", "SKILL_STROKE_ANALYSIS"],
+    internal_check: ["院内一致性核验", "SKILL_INTERNAL_CHECK"],
+    guideline_check: ["指南证据核验", "SKILL_GUIDELINE_CHECK"],
+    report: ["百川 M3 结构化报告", "SKILL_REPORT_GEN"],
+});
+
+const CLINICAL_DAG_PATHS = Object.freeze({
+    ncct_only: {
+        label: "NCCT-only",
+        note: "仅执行 NCCT 分诊、安全核验和报告；不执行血管或灌注分析。",
+        columns: [["image_qc"], ["ncct_triage"], ["internal_check", "guideline_check"], ["report"]],
+    },
+    ncct_single_phase_cta: {
+        label: "NCCT + 单期 CTA",
+        note: "执行 NCCT 分诊与血管闭塞分类；不生成伪 CTP 或执行灌注量化。",
+        columns: [["image_qc"], ["ncct_triage"], ["vessel_occlusion"], ["internal_check", "guideline_check"], ["report"]],
+    },
+    ncct_mcta: {
+        label: "NCCT + 三期 mCTA",
+        note: "审批后生成 CBF/CBV/Tmax；侧支循环节点仅为 inactive 能力展示。",
+        columns: [["image_qc"], ["ncct_triage"], ["vessel_occlusion", "pseudo_ctp"], ["collateral_score", "stroke_analysis"], ["internal_check", "guideline_check"], ["report"]],
+    },
+    ncct_mcta_ctp: {
+        label: "NCCT + 三期 mCTA + 真实 CTP",
+        note: "直接使用上传的 CBF/CBV/Tmax；侧支循环节点不会执行算法。",
+        columns: [["image_qc"], ["ncct_triage"], ["vessel_occlusion", "ctp_review"], ["collateral_score", "stroke_analysis"], ["internal_check", "guideline_check"], ["report"]],
+    },
+});
+
+function buildClinicalDag(values) {
+    const canonical = normalizeModalityList(values).sort();
+    const path = clinicalPathForModalities(canonical);
+    const config = CLINICAL_DAG_PATHS[path];
+    const dagId = `clinical:${path || "unsupported"}:${canonical.join("+") || "unknown"}`;
+    if (!config) return {
+        schema_version: "1.0", dag_id: dagId, path: null, label: "不支持的影像组合",
+        note: "请重新上传受支持的影像组合。", valid: false,
+        available_modalities: canonical, nodes: [], edges: [], columns: [],
+    };
+    const nodeIds = config.columns.flat();
+    return {
+        schema_version: "1.0",
+        dag_id: dagId,
+        path,
+        label: config.label,
+        note: config.note,
+        valid: true,
+        available_modalities: canonical,
+        nodes: nodeIds.map((id) => ({
+            id,
+            title: CLINICAL_DAG_NODE_META[id][0],
+            skill_id: CLINICAL_DAG_NODE_META[id][1],
+            status: id === "collateral_score" ? "inactive" : "planned",
+            active: id !== "collateral_score",
+        })),
+        edges: [],
+        columns: config.columns.map((column) => [...column]),
+    };
+}
+
+function clinicalDagForJob(job = state.latestJob) {
+    const serverDag = objectValue(job?.clinical_dag);
+    if (serverDag && serverDag.dag_id && Array.isArray(serverDag.nodes)) return serverDag;
+    return buildClinicalDag(Array.isArray(job?.modalities) ? job.modalities : modalities());
+}
+
+function htmlText(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
+function renderClinicalDagReview() {
+    const card = $("clinicalDagReviewCard");
+    if (!card) return;
+    const job = state.latestJob || {};
+    const dag = clinicalDagForJob(job);
+    const review = objectValue(job.dag_review) || {};
+    const decision = token(review.doctor_final_decision || "pending");
+    const pending = token(job.status) === "awaiting_review" && decision === "pending";
+    const statusElm = $("clinicalDagReviewStatus");
+
+    statusElm.className = `runtime-status-pill ${pending ? "waiting" : decision === "approved" ? "completed" : decision === "rejected" ? "issue" : "pending"}`;
+    statusElm.textContent = pending ? "Awaiting Review" : decision === "approved" ? "Approved" : decision === "rejected" ? "Rejected" : "Pending";
+    $("clinicalDagPathChip").textContent = t(dag.label, "路径待识别");
+    $("clinicalDagNodeCount").textContent = `${Array.isArray(dag.nodes) ? dag.nodes.length : 0} 个节点`;
+    $("clinicalDagReviewHint").textContent = t(
+        dag.note,
+        "审批前不会启动模型或 Agent。"
+    );
+    $("clinicalModalityChips").innerHTML = (Array.isArray(dag.available_modalities) ? dag.available_modalities : [])
+        .map((value) => `<span>${htmlText(String(value).toUpperCase())}</span>`).join("");
+
+    const nodeIndex = new Map((Array.isArray(dag.nodes) ? dag.nodes : []).map((node) => [node.id, node]));
+    const columns = Array.isArray(dag.columns) && dag.columns.length
+        ? dag.columns
+        : Array.from(nodeIndex.keys()).map((id) => [id]);
+    $("clinicalDagCanvas").innerHTML = columns.length
+        ? columns.map((column) => `<div class="clinical-dag-column">${column.map((nodeId) => {
+            const node = nodeIndex.get(nodeId) || { id: nodeId, title: nodeId, status: "planned" };
+            const inactive = token(node.status) === "inactive" || node.active === false;
+            return `<article class="clinical-dag-node ${inactive ? "inactive" : ""}" data-dag-node="${htmlText(node.id)}">
+                <strong>${htmlText(node.title || node.id)}</strong>
+                <small>${htmlText(node.skill_id || "planned capability")}</small>
+            </article>`;
+        }).join("")}</div>`).join("")
+        : '<div class="runtime-empty">当前模态无法生成有效临床 DAG。</div>';
+
+    const inactiveCount = (Array.isArray(dag.nodes) ? dag.nodes : []).filter(
+        (node) => token(node.status) === "inactive" || node.active === false
+    ).length;
+    $("clinicalDagAutomaticSummary").textContent = pending
+        ? "审批前执行锁定：NCCT、DINO、CTP/Palette、卒中分析与 Agent 调用次数均应为 0。"
+        : decision === "approved"
+            ? "审批已通过，系统执行链已解锁；下方 Runtime Feed 显示实际进度。"
+            : decision === "rejected"
+                ? "本次路径已拒绝，暂存执行载荷已清除；如需继续请重新上传。"
+                : "等待上传任务返回服务端 DAG。";
+    $("clinicalDagRiskSummary").textContent = inactiveCount
+        ? `包含 ${inactiveCount} 个 inactive 能力节点，仅展示元数据，不会调用算法。NCCT 出血门控仍独立生效。`
+        : "NCCT 疑似出血仍会触发第二层硬安全门控。";
+
+    const panel = $("clinicalDagApprovalPanel");
+    panel.hidden = !pending;
+    ["clinicalDagReviewer", "clinicalDagScopeCheck", "clinicalDagApproveBtn", "clinicalDagRejectBtn"].forEach((id) => {
+        const element = $(id);
+        if (element) element.disabled = state.dagReviewSubmitting;
+    });
+    $("clinicalDagApprovalMessage").textContent = state.dagReviewMessage || "等待医生审批。";
+
+    const executionCard = $("systemExecutionCard");
+    executionCard.hidden = decision === "pending";
+    if (!executionCard.hidden) {
+        const reviewer = t(review.reviewer, "未记录");
+        const reviewedAt = t(review.reviewed_at, "时间未记录");
+        $("systemReviewAudit").textContent = decision === "approved"
+            ? `审阅人 ${reviewer} 于 ${reviewedAt} 批准 DAG ${t(review.dag_id, dag.dag_id)}；执行仅授权一次。`
+            : `审阅人 ${reviewer} 于 ${reviewedAt} 拒绝该 DAG；未启动模型或 Agent。`;
+    }
+}
+
+async function submitClinicalDagReview(decision) {
+    if (state.dagReviewSubmitting || !state.jobId) return;
+    const reviewer = t($("clinicalDagReviewer")?.value, "");
+    const scopeConfirmed = !!$("clinicalDagScopeCheck")?.checked;
+    const dag = clinicalDagForJob();
+    if (!reviewer) {
+        state.dagReviewMessage = "请输入审阅人。";
+        renderClinicalDagReview();
+        return;
+    }
+    if (!scopeConfirmed) {
+        state.dagReviewMessage = "请先确认已核对模态与计划节点。";
+        renderClinicalDagReview();
+        return;
+    }
+    state.dagReviewSubmitting = true;
+    state.dagReviewMessage = decision === "approved" ? "正在提交审批并申请执行锁..." : "正在拒绝本次临床路径...";
+    renderClinicalDagReview();
+    try {
+        const response = await fetch(`/api/upload/jobs/${encodeURIComponent(state.jobId)}/dag-review`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                doctor_final_decision: decision,
+                reviewer,
+                dag_id: dag.dag_id,
+                available_modalities: dag.available_modalities,
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || `DAG 审批失败 (${response.status})`);
+        state.latestJob = data.job || state.latestJob;
+        state.dagReviewMessage = decision === "approved" ? "审批成功，执行链已启动。" : "本次路径已拒绝。";
+        if (decision === "rejected" && state.uploadTimer) {
+            clearInterval(state.uploadTimer);
+            state.uploadTimer = null;
+        }
+    } catch (error) {
+        state.dagReviewMessage = error.message;
+    } finally {
+        state.dagReviewSubmitting = false;
+        render();
+    }
+}
+
 function threeClassSummaryText() {
     const summary = state.latestJob?.result?.three_class_summary;
     if (!summary) return "-";
@@ -1185,6 +1403,7 @@ function reviewReadEditorValues() {
 function render() {
     const run = state.latestRun || {};
     const job = state.latestJob || {};
+    const clinicalDag = clinicalDagForJob(job);
     state.nodes = buildNodes();
 
     const currentNodeIds = new Set(state.nodes.map((n) => n.id));
@@ -1212,10 +1431,14 @@ function render() {
     setPill($("runtimeOverallStatus"), run.status || job.status || "pending");
 
     const plan = run?.plan_frames?.length ? run.plan_frames[run.plan_frames.length - 1] : null;
-    $("runtimeOrchestrationText").textContent = plan?.objective
+    $("runtimeOrchestrationText").textContent = token(job.status) === "awaiting_review"
+        ? "临床 DAG 正在等待医生审批。审批前模型与 Agent 执行保持锁定。"
+        : plan?.objective
         ? `${plan.objective}。系统会在每个节点展示“正在做 / 临床意义 / 当前结论”。`
         : "上传完成后，系统将依次执行影像处理与多智能体协作，并持续展示临床可读解释。";
-    $("runtimeOrchestrationPath").textContent = Array.isArray(plan?.next_tools)
+    $("runtimeOrchestrationPath").textContent = token(job.status) === "awaiting_review"
+        ? `${t(clinicalDag.label, "临床路径")} → Doctor Review → Execution Lock`
+        : Array.isArray(plan?.next_tools)
         ? plan.next_tools.map((x) => getMeta(x).chip).join(" → ")
         : "Case_Intake → Modality_Detect → Three_Class → CTP_Generate → Stroke_Analysis → Report → Agent_Network"; // AI辅助生成：GLM-5, 2026-04-03
 
@@ -1233,6 +1456,10 @@ function render() {
                     ? "流程完成，即将进入 Viewer。"
                     : normStatus(run.status) === "waiting"
                         ? "流程进入人工确认阶段。"
+                        : token(job.status) === "awaiting_review"
+                            ? "临床 DAG 已生成，等待医生审批；模型和 Agent 尚未启动。"
+                        : token(job.status) === "review_rejected"
+                            ? "本次临床 DAG 已拒绝；如需继续请重新上传。"
                         : normStatus(job.status) === "running"
                             ? "上传主链处理中，完成后进入 Agent 协作。"
                             : normStatus(job.status) === "completed"
@@ -1296,6 +1523,7 @@ function render() {
         $("runtimeRailPercent").textContent = `${Math.round((done / state.nodes.length) * 100)}%`;
     }
 
+    renderClinicalDagReview();
     renderFinalization(run, displayNodes); // AI辅助生成：GLM-5, 2026-04-09
     renderReviewPanel();
     $("runtimeErrorBanner").hidden = !state.error;
@@ -1515,7 +1743,12 @@ async function pollUpload() {
         if (!state.fileId && state.latestJob.file_id) state.fileId = String(state.latestJob.file_id);
         if (!state.runId && state.latestJob.agent_run_id) { state.runId = String(state.latestJob.agent_run_id); if (!state.runTimer) state.runTimer = setInterval(pollRun, 1400); pollRun(); }
         const st = normStatus(state.latestJob.status);
-        if (st === "issue") { state.error = t(state.latestJob.error, "上传流程失败"); clearInterval(state.uploadTimer); state.uploadTimer = null; }
+        if (token(state.latestJob.status) === "review_rejected") {
+            state.error = "";
+            clearInterval(state.uploadTimer);
+            state.uploadTimer = null;
+        }
+        else if (st === "issue") { state.error = t(state.latestJob.error, "上传流程失败"); clearInterval(state.uploadTimer); state.uploadTimer = null; }
         else if (st === "completed") { if (!state.uploadDone) { state.uploadDone = true; persistUpload(state.latestJob); showViewerBtns(true); } clearInterval(state.uploadTimer); state.uploadTimer = null; if (!state.runId) scheduleViewer(false); }
         render(); // AI辅助生成：GLM-5, 2026-04-21
     } catch (err) { state.error = `上传链路异常: ${err.message}`; clearInterval(state.uploadTimer); state.uploadTimer = null; render(); }
@@ -1580,6 +1813,8 @@ function bind() {
     $("runtimeGoW0Btn").addEventListener("click", () => { window.location.href = w0Url(); });
     $("runtimeCopyFileBtn").addEventListener("click", async () => { if (!state.fileId) return; try { await navigator.clipboard.writeText(state.fileId); $("runtimeCaseNote").textContent = `已复制 file_id：${state.fileId}`; } catch (err) { state.error = `复制 file_id 失败: ${err.message}`; render(); } });
     $("runtimeRailToggle").addEventListener("click", () => { const rail = $("runtimeAgentRail"); rail.classList.toggle("collapsed"); $("runtimeRailToggle").textContent = rail.classList.contains("collapsed") ? "Agent Network ▸" : "Agent Network ▾"; });
+    $("clinicalDagApproveBtn")?.addEventListener("click", () => submitClinicalDagReview("approved"));
+    $("clinicalDagRejectBtn")?.addEventListener("click", () => submitClinicalDagReview("rejected"));
     $("runtimeFeed").addEventListener("wheel", () => { state.lastManualScrollAt = Date.now(); }, { passive: true });
     $("runtimeFeed").addEventListener("touchstart", () => { state.lastManualScrollAt = Date.now(); }, { passive: true });
     $("runtimeFeed").addEventListener("click", (ev) => { const btn = ev.target.closest("[data-toggle-node]"); if (!btn) return; const id = btn.getAttribute("data-toggle-node"); if (!id) return; state.expanded[id] = !state.expanded[id]; render(); });
@@ -1642,6 +1877,10 @@ if (typeof module !== "undefined" && module.exports) {
         clearRevealTimer,
         buildNodes,
         persistUpload,
+        normalizeModalityList,
+        clinicalPathForModalities,
+        buildClinicalDag,
+        clinicalDagForJob,
     };
 }
 

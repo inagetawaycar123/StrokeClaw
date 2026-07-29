@@ -25,6 +25,7 @@ from flask import (
 )
 try:
     from .ai_inference import get_ai_model
+    from .clinical_dag import build_clinical_dag, normalize_modalities
     from .compat.adapters import build_clinical_decision_bundle
     from .compat.skill_registry import get_skill_registry
     from .extensions import NumpyJSONEncoder
@@ -42,6 +43,7 @@ try:
 except ImportError:
     # 兼容直接运行 backend/app.py 的场景
     from ai_inference import get_ai_model
+    from clinical_dag import build_clinical_dag, normalize_modalities
     from compat.adapters import build_clinical_decision_bundle
     from compat.skill_registry import get_skill_registry
     from extensions import NumpyJSONEncoder
@@ -1274,6 +1276,7 @@ UPLOAD_JOB_STEP_DEFS = [
 ]
 
 UPLOAD_JOBS = {} # AI辅助生成：GLM-5, 2026-04-21
+UPLOAD_JOB_PAYLOADS = {}
 UPLOAD_JOBS_LOCK = threading.Lock()
 
 
@@ -1326,7 +1329,7 @@ def _calc_job_progress(job):
     return max(0, min(100, progress))
 
 
-def _create_upload_job(job_id, patient_id, file_id, modalities):
+def _create_upload_job(job_id, patient_id, file_id, modalities, clinical_dag=None):
     steps = [] # AI辅助生成：GLM-5, 2026-03-02
     for spec in UPLOAD_JOB_STEP_DEFS:
         steps.append(
@@ -1340,6 +1343,7 @@ def _create_upload_job(job_id, patient_id, file_id, modalities):
             }
         )
 
+    dag = copy.deepcopy(clinical_dag or build_clinical_dag(modalities))
     job = {
         "job_id": job_id,
         "status": "queued",
@@ -1352,6 +1356,16 @@ def _create_upload_job(job_id, patient_id, file_id, modalities):
         "result": None,
         "error": None,
         "warnings": [],
+        "clinical_dag": dag,
+        "dag_review": {
+            "review_status": "pending",
+            "doctor_final_decision": "pending",
+            "reviewer": None,
+            "reviewed_at": None,
+            "dag_id": dag.get("dag_id"),
+            "available_modalities": list(dag.get("available_modalities") or []),
+        },
+        "execution_authorized": False,
         "created_at": _job_now(),
         "updated_at": _job_now(),
     }
@@ -1421,6 +1435,43 @@ def _update_step(job_id, step_key, status, message=""):
     return _update_upload_job(job_id, _mut)
 
 
+def _make_ctp_progress_callback(upload_job_id):
+    """Translate per-model/per-slice inference callbacks into upload-job progress."""
+
+    job_id = str(upload_job_id or "").strip()
+
+    def report_ctp_progress(
+        slice_number, total_slices, model_key="", phase="model_running"
+    ):
+        if not job_id:
+            return
+        model_keys = list(REQUIRED_CTP_MODELS)
+        safe_total = max(1, int(total_slices or 1))
+        safe_slice = max(1, min(safe_total, int(slice_number or 1)))
+        units_per_slice = max(1, len(model_keys))
+        total_units = safe_total * units_per_slice
+        if phase == "slice_completed":
+            completed_units = safe_slice * units_per_slice
+            progress_text = f"切片 {safe_slice}/{safe_total} 已完成"
+        else:
+            try:
+                model_offset = model_keys.index(model_key)
+            except ValueError:
+                model_offset = 0
+            completed_units = (safe_slice - 1) * units_per_slice + model_offset
+            model_label = str(model_key or "CTP").upper()
+            progress_text = f"{model_label} · 切片 {safe_slice}/{safe_total}"
+        percent = min(99, max(0, int((completed_units / total_units) * 100)))
+        _update_step(
+            job_id,
+            "ctp_generate",
+            "running",
+            f"正在生成 CTP 灌注图：{progress_text} · {percent}%",
+        )
+
+    return report_ctp_progress
+
+
 def _add_job_warning(job_id, warning):
     def _mut(job):
         if warning and warning not in job["warnings"]:
@@ -1434,18 +1485,48 @@ def _get_upload_job(job_id):
         return _safe_job_copy(UPLOAD_JOBS.get(job_id))
 
 
+def _stage_upload_for_dag_review(job_id, payload, clinical_dag):
+    """Stage a validated upload without starting any model or Agent execution."""
+
+    with UPLOAD_JOBS_LOCK:
+        job = UPLOAD_JOBS.get(job_id)
+        if not job:
+            return None
+        if job.get("status") != "queued" or job_id in UPLOAD_JOB_PAYLOADS:
+            return None
+        UPLOAD_JOB_PAYLOADS[job_id] = payload
+        job["clinical_dag"] = copy.deepcopy(clinical_dag)
+        job["dag_review"] = {
+            "review_status": "pending",
+            "doctor_final_decision": "pending",
+            "reviewer": None,
+            "reviewed_at": None,
+            "dag_id": clinical_dag.get("dag_id"),
+            "available_modalities": list(
+                clinical_dag.get("available_modalities") or []
+            ),
+        }
+        job["execution_authorized"] = False
+        job["agent_run_id"] = payload.get("agent_run_id")
+        job["status"] = "awaiting_review"
+        job["current_step"] = "dag_review"
+        job["updated_at"] = _job_now()
+        job["progress"] = _calc_job_progress(job)
+        return _safe_job_copy(job)
+
+
+def _start_upload_processing_thread(job_id, payload):
+    worker = threading.Thread(
+        target=_run_upload_processing_job,
+        args=(job_id, payload),
+        daemon=True,
+    )
+    worker.start()
+    return worker
+
+
 def _normalize_uploaded_modalities(modalities):
-    alias = {
-        "mcat": "mcta",
-        "vcat": "vcta",
-        "dcat": "dcta",
-    }
-    normalized = []
-    for item in modalities or []:
-        key = alias.get(str(item).strip().lower(), str(item).strip().lower())
-        if key and key not in normalized:
-            normalized.append(key)
-    return normalized # AI辅助生成：GLM-5, 2026-03-07
+    return normalize_modalities(modalities) # AI辅助生成：GLM-5, 2026-03-07
 
 
 def _build_path_decision(modalities):
@@ -1455,48 +1536,20 @@ def _build_path_decision(modalities):
         if value:
             raw_modalities.append(value)
 
+    dag = build_clinical_dag(raw_modalities)
     canonical_modalities = _normalize_uploaded_modalities(raw_modalities)
-    modality_set = set(canonical_modalities)
-    valid_keys = {"ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"} # AI辅助生成：GLM-5, 2026-03-08
-    unknown_modalities = sorted([m for m in modality_set if m not in valid_keys])
 
     decision = {
         "raw_modalities": raw_modalities,
         "canonical_modalities": canonical_modalities,
-        "imaging_path": None,
-        "should_generate_ctp": False,
-        "should_run_stroke_analysis": False,
-        "unknown_modalities": unknown_modalities,
-        "valid": False,
-        "error": None,
+        "imaging_path": dag.get("path"),
+        "should_generate_ctp": dag.get("path") == "ncct_mcta",
+        "should_run_stroke_analysis": dag.get("path")
+        in {"ncct_mcta", "ncct_mcta_ctp"},
+        "unknown_modalities": list(dag.get("unknown_modalities") or []),
+        "valid": bool(dag.get("valid")),
+        "error": dag.get("error"),
     }
-
-    # Fixed priority: ncct_mcta_ctp -> ncct_mcta -> ncct_single_phase_cta -> ncct_only
-    if {"ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"}.issubset(modality_set):
-        decision["imaging_path"] = "ncct_mcta_ctp"
-        decision["should_run_stroke_analysis"] = True
-        decision["valid"] = True
-        return decision
-
-    if {"ncct", "mcta", "vcta", "dcta"}.issubset(modality_set):
-        decision["imaging_path"] = "ncct_mcta" # AI辅助生成：GLM-5, 2026-03-09
-        decision["should_generate_ctp"] = True
-        decision["should_run_stroke_analysis"] = True
-        decision["valid"] = True
-        return decision
-
-    single_phase_hits = modality_set.intersection({"mcta", "vcta", "dcta"})
-    if "ncct" in modality_set and len(single_phase_hits) == 1 and len(modality_set) == 2:
-        decision["imaging_path"] = "ncct_single_phase_cta" # AI辅助生成：GLM-5, 2026-03-10
-        decision["valid"] = True
-        return decision
-
-    if modality_set == {"ncct"}:
-        decision["imaging_path"] = "ncct_only"
-        decision["valid"] = True
-        return decision
-
-    decision["error"] = "Invalid or unsupported modality combination" # AI辅助生成：GLM-5, 2026-03-11
     return decision
 
 
@@ -1649,6 +1702,7 @@ def _invoke_internal_upload(payload):
     form = {
         "patient_id": str(payload["patient_id"]),
         "file_id": payload["file_id"],
+        "upload_job_id": str(payload.get("job_id") or ""),
         "hemisphere": payload.get("hemisphere", "both"),
         "model_type": payload.get("model_type", "mrdpm"),
         "upload_mode": payload.get("upload_mode", "ncct"),
@@ -9713,7 +9767,13 @@ def process_ai_inference(
         traceback.print_exc() # AI辅助生成：GLM-5, 2026-04-11
         return {"success": False, "error": str(e), "ai_url": "", "ai_npy_url": ""}
 def process_rgb_synthesis(
-    mcta_path, vcta_path, dcta_path, ncct_path, output_dir, model_type="mrdpm"
+    mcta_path,
+    vcta_path,
+    dcta_path,
+    ncct_path,
+    output_dir,
+    model_type="mrdpm",
+    progress_callback=None,
 ):
     """处理 RGB 合成，支持多模型 AI 推理。"""
     try:
@@ -9895,6 +9955,16 @@ def process_rgb_synthesis(
                     print(
                         f"开始 {model_key.upper()} 模型推理切片 {slice_idx}（使用 {current_model_type}）"
                     )
+                    if callable(progress_callback):
+                        try:
+                            progress_callback(
+                                slice_number=slice_idx + 1,
+                                total_slices=num_slices,
+                                model_key=model_key,
+                                phase="model_running",
+                            )
+                        except Exception as progress_exc:
+                            print(f"[WARN] CTP progress callback failed: {progress_exc}")
                     ai_result = process_ai_inference(
                         rgb_result,
                         mask_result,
@@ -9931,6 +10001,16 @@ def process_rgb_synthesis(
             # 为当前切片标记是否有任一 AI 结果
             slice_result["has_ai"] = slice_has_any_ai
             rgb_files.append(slice_result)
+            if callable(progress_callback):
+                try:
+                    progress_callback(
+                        slice_number=slice_idx + 1,
+                        total_slices=num_slices,
+                        model_key="",
+                        phase="slice_completed",
+                    )
+                except Exception as progress_exc:
+                    print(f"[WARN] CTP progress callback failed: {progress_exc}")
 
         # 统计信息
         print(f"\n=== AI 模型处理统计 ===")
@@ -10383,8 +10463,25 @@ def api_upload_start():
             detected_modalities.append(modality_map[field_name]) # AI辅助生成：GLM-5, 2026-03-27
 
         normalized_modalities = _normalize_uploaded_modalities(detected_modalities)
+        clinical_dag = build_clinical_dag(normalized_modalities)
+        if not clinical_dag.get("valid"):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return jsonify(
+                {
+                    "success": False,
+                    "error": clinical_dag.get("error")
+                    or "不支持的影像模态组合",
+                    "clinical_dag": clinical_dag,
+                }
+            ), 400
 
-        _create_upload_job(job_id, patient_id, file_id, normalized_modalities)
+        _create_upload_job(
+            job_id,
+            patient_id,
+            file_id,
+            normalized_modalities,
+            clinical_dag=clinical_dag,
+        )
         _update_step(
             job_id, "archive_ready", "completed", f"患者档案已建立（ID={patient_id}）"
         )
@@ -10425,17 +10522,20 @@ def api_upload_start():
 
         payload["agent_run_id"] = agent_run_id
 
-        worker = threading.Thread(
-            target=_run_upload_processing_job, args=(job_id, payload), daemon=True
-        )
-        worker.start()
+        staged_job = _stage_upload_for_dag_review(job_id, payload, clinical_dag)
+        if not staged_job:
+            return jsonify(
+                {"success": False, "error": "上传任务无法进入临床 DAG 审批状态"}
+            ), 409
 
         return jsonify(
             {
                 "success": True,
                 "job_id": job_id,
                 "file_id": file_id,
-                "status": "queued",
+                "status": "awaiting_review",
+                "dag_review_required": True,
+                "clinical_dag": clinical_dag,
                 "progress_url": f"/api/upload/progress/{job_id}",
                 "agent_run_id": agent_run_id,
             }
@@ -10450,6 +10550,137 @@ def api_upload_progress(job_id):
     if not job:
         return jsonify({"success": False, "error": "任务不存在或已过期"}), 404
     return jsonify({"success": True, "job": job})
+
+
+def _cancel_preexecution_agent_run(run_id, reason):
+    if not run_id:
+        return False
+
+    def _mut(run):
+        if run.get("status") != "queued":
+            return
+        run["status"] = "cancelled"
+        run["stage"] = "done"
+        run["current_tool"] = None
+        run["termination_reason"] = "clinical_dag_rejected"
+        run["error"] = str(reason or "Clinical DAG rejected before execution")
+        run["human_checkpoint"] = {
+            "type": "clinical_dag_review",
+            "status": "rejected",
+            "reason": str(reason or "Clinical DAG rejected before execution"),
+        }
+
+    updated = _update_agent_run(run_id, _mut)
+    return bool(updated and updated.get("status") == "cancelled")
+
+
+@app.route("/api/upload/jobs/<job_id>/dag-review", methods=["POST"])
+def api_review_upload_dag(job_id):
+    """Approve or reject the server-owned clinical DAG before execution."""
+
+    data = request.get_json(silent=True) or {}
+    decision = str(data.get("doctor_final_decision") or "").strip().lower()
+    reviewer = str(data.get("reviewer") or "").strip()
+    dag_id = str(data.get("dag_id") or "").strip()
+    submitted_modalities = data.get("available_modalities")
+
+    if decision not in {"approved", "rejected"}:
+        return jsonify(
+            {
+                "success": False,
+                "error": "doctor_final_decision must be approved or rejected",
+            }
+        ), 400
+    if not reviewer:
+        return jsonify({"success": False, "error": "reviewer is required"}), 400
+    if not dag_id:
+        return jsonify({"success": False, "error": "dag_id is required"}), 400
+    if not isinstance(submitted_modalities, list):
+        return jsonify(
+            {"success": False, "error": "available_modalities must be an array"}
+        ), 400
+
+    submitted_canonical = sorted(_normalize_uploaded_modalities(submitted_modalities))
+    payload_to_start = None
+    cancelled_run_id = None
+    with UPLOAD_JOBS_LOCK:
+        job = UPLOAD_JOBS.get(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "upload job not found"}), 404
+
+        server_dag = job.get("clinical_dag") or {}
+        server_dag_id = str(server_dag.get("dag_id") or "")
+        server_modalities = sorted(
+            _normalize_uploaded_modalities(
+                server_dag.get("available_modalities") or job.get("modalities") or []
+            )
+        )
+        if dag_id != server_dag_id:
+            return jsonify(
+                {"success": False, "error": "clinical DAG changed; reload before review"}
+            ), 409
+        if submitted_canonical != server_modalities:
+            return jsonify(
+                {"success": False, "error": "uploaded modalities changed; reload before review"}
+            ), 409
+
+        review = job.get("dag_review") or {}
+        if (
+            job.get("execution_authorized")
+            or review.get("review_status") == "completed"
+            or job.get("status") != "awaiting_review"
+        ):
+            return jsonify(
+                {"success": False, "error": "clinical DAG review is already final"}
+            ), 409
+
+        if decision == "approved":
+            payload_to_start = UPLOAD_JOB_PAYLOADS.get(job_id)
+            if payload_to_start is None:
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "staged upload payload is unavailable; upload again",
+                    }
+                ), 409
+            UPLOAD_JOB_PAYLOADS.pop(job_id, None)
+            job["execution_authorized"] = True
+            job["status"] = "queued"
+            job["current_step"] = None
+        else:
+            UPLOAD_JOB_PAYLOADS.pop(job_id, None)
+            cancelled_run_id = job.get("agent_run_id")
+            job["execution_authorized"] = False
+            job["status"] = "review_rejected"
+            job["current_step"] = "dag_review"
+
+        reviewed_at = _job_now()
+        job["dag_review"] = {
+            "review_status": "completed",
+            "doctor_final_decision": decision,
+            "reviewer": reviewer,
+            "reviewed_at": reviewed_at,
+            "dag_id": server_dag_id,
+            "available_modalities": server_modalities,
+        }
+        job["updated_at"] = reviewed_at
+        response_job = _safe_job_copy(job)
+
+    if cancelled_run_id:
+        _cancel_preexecution_agent_run(
+            cancelled_run_id, "Clinical DAG rejected by reviewer"
+        )
+
+    if payload_to_start is not None:
+        _start_upload_processing_thread(job_id, payload_to_start)
+
+    return jsonify(
+        {
+            "success": True,
+            "job": response_job,
+            "execution_started": payload_to_start is not None,
+        }
+    )
 
 
 @app.route("/api/strokeclaw/tasks", methods=["GET"])
@@ -12733,6 +12964,8 @@ def upload_files():
         defer_stroke_analysis = (
             request.form.get("defer_stroke_analysis", "false") == "true"
         )
+        upload_job_id = str(request.form.get("upload_job_id") or "").strip()
+        report_ctp_progress = _make_ctp_progress_callback(upload_job_id)
 
         # 检查是否仅上传了完整 CTA 功能图像
         skip_ai = True
@@ -12974,7 +13207,13 @@ def upload_files():
             # 处理 RGB 合成并执行多模型 AI 推理
             print("NCCT 三分类完成，开始处理 RGB 合成和多模型 AI 推理...")
             result = process_rgb_synthesis(
-                mcta_path, vcta_path, dcta_path, ncct_path, output_dir, model_type
+                mcta_path,
+                vcta_path,
+                dcta_path,
+                ncct_path,
+                output_dir,
+                model_type,
+                progress_callback=report_ctp_progress,
             )
 
             if result["success"]:

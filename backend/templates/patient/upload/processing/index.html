@@ -47,6 +47,50 @@
                 <div class="runtime-case-note" id="runtimeCaseNote">等待流程启动...</div>
             </section>
 
+            <section class="clinical-dag-review-card" id="clinicalDagReviewCard">
+                <div class="clinical-dag-review-head">
+                    <div>
+                        <p class="clinical-dag-eyebrow">PRE-EXECUTION CLINICAL DAG</p>
+                        <h2>临床路径审批</h2>
+                        <p id="clinicalDagReviewHint">正在读取服务端生成的临床 DAG。审批前不会启动模型或 Agent。</p>
+                    </div>
+                    <span class="runtime-status-pill waiting" id="clinicalDagReviewStatus">Awaiting Review</span>
+                </div>
+                <div class="clinical-dag-summary">
+                    <span id="clinicalDagPathChip">路径待识别</span>
+                    <span id="clinicalDagNodeCount">0 个节点</span>
+                </div>
+                <div class="clinical-dag-modalities" id="clinicalModalityChips"></div>
+                <div class="clinical-dag-canvas" id="clinicalDagCanvas">
+                    <div class="runtime-empty">等待服务端 DAG...</div>
+                </div>
+                <div class="clinical-dag-notes">
+                    <p id="clinicalDagAutomaticSummary">审批通过后才会解锁影像模型和 Agent/Skill 执行。</p>
+                    <p id="clinicalDagRiskSummary">NCCT 疑似出血仍会触发第二层硬安全门控。</p>
+                </div>
+                <div class="clinical-dag-approval" id="clinicalDagApprovalPanel">
+                    <label for="clinicalDagReviewer">审阅人</label>
+                    <input id="clinicalDagReviewer" type="text" maxlength="80" autocomplete="off" placeholder="请输入审阅记录名称">
+                    <label class="clinical-dag-scope-check">
+                        <input id="clinicalDagScopeCheck" type="checkbox">
+                        <span>我已核对上传模态、计划节点及 inactive 能力说明。</span>
+                    </label>
+                    <div class="clinical-dag-actions">
+                        <button class="tool-btn primary" id="clinicalDagApproveBtn" type="button">批准并启动</button>
+                        <button class="tool-btn clinical-dag-reject-btn" id="clinicalDagRejectBtn" type="button">拒绝本次路径</button>
+                    </div>
+                    <p id="clinicalDagApprovalMessage">等待医生审批。</p>
+                </div>
+            </section>
+
+            <section class="system-execution-card" id="systemExecutionCard" hidden>
+                <div>
+                    <p class="clinical-dag-eyebrow">EXECUTION AUDIT</p>
+                    <h2>系统执行与审阅留痕</h2>
+                </div>
+                <div id="systemReviewAudit">审批完成后显示执行授权记录。</div>
+            </section>
+
             <section class="runtime-orchestration-card">
                 <h2>AGENT ORCHESTRATION</h2>
                 <p id="runtimeOrchestrationText">
@@ -91,5 +135,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/processing.js?v=20260428_sequential_reveal"></script>
+<script src="/static/js/processing.js?v=20260729_clinical_dag_review"></script>
 {% endblock %}

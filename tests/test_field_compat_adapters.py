@@ -9,7 +9,12 @@ def test_skill_registry_contains_p0_skills():
     assert "SKILL_IMG_QC" in skill_ids
     assert "SKILL_NCCT_TRIAGE" in skill_ids
     assert "SKILL_REPORT_GEN" in skill_ids
+    collateral = next(
+        item for item in registry if item["skill_id"] == "SKILL_COLLATERAL_SCORE"
+    )
+    assert collateral["status"] == "inactive"
     assert skill_id_for_tool("generate_ctp_maps") == "SKILL_PSEUDO_CTP"
+    assert skill_id_for_tool("collateral_score") == "SKILL_COLLATERAL_SCORE"
     assert skill_id_for_tool("generate_medgemma_report") == "SKILL_REPORT_GEN"
 
 

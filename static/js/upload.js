@@ -235,8 +235,8 @@ function processFiles() {
             if (runInfoEl) {
                 runInfoEl.style.display = 'block';
                 runInfoEl.textContent = data.agent_run_id
-                    ? `上传成功，正在进入 Runtime Feed（run_id=${data.agent_run_id}）...`
-                    : '上传成功，正在进入 Runtime Feed...';
+                    ? `上传成功，正在进入临床 DAG 审批页（run_id=${data.agent_run_id}，尚未执行）...`
+                    : '上传成功，正在进入临床 DAG 审批页；审批前不会启动模型...';
             }
             if (data.agent_run_id) {
                 localStorage.setItem(`latest_agent_run_${data.file_id}`, data.agent_run_id);

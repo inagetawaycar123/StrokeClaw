@@ -1393,6 +1393,179 @@ body { font-family:Arial, sans-serif; font-size:12px; background:#000; color:#ff
 .cell-status { position:absolute; top:6px; right:6px; font-size:9px; padding:2px 6px; background:rgba(0,0,0,0.8); z-index:10; }
 .status-ready { color:#51cf66; }
 .status-processing { color:#ffd43b; }
+
+.clinical-dag-review-card,
+.system-execution-card {
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    border-radius: 16px;
+    background: rgba(8, 18, 39, 0.88);
+    padding: 20px;
+    margin-bottom: 18px;
+}
+
+.clinical-dag-review-head,
+.clinical-dag-summary,
+.clinical-dag-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.clinical-dag-review-head h2,
+.system-execution-card h2 {
+    margin: 2px 0 8px;
+}
+
+.clinical-dag-review-head p,
+.clinical-dag-notes p,
+.clinical-dag-approval p {
+    margin: 4px 0;
+    color: #a8bad8;
+}
+
+.clinical-dag-eyebrow {
+    color: #38bdf8 !important;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+}
+
+.clinical-dag-summary {
+    justify-content: flex-start;
+    margin: 14px 0 10px;
+}
+
+.clinical-dag-summary span,
+.clinical-dag-modalities span {
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    border-radius: 999px;
+    padding: 5px 10px;
+    color: #c7e9ff;
+    background: rgba(14, 116, 144, 0.13);
+    font-size: 0.82rem;
+}
+
+.clinical-dag-modalities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-bottom: 14px;
+}
+
+.clinical-dag-canvas {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 12px 2px;
+}
+
+.clinical-dag-column {
+    display: grid;
+    gap: 8px;
+    align-content: center;
+    min-width: 170px;
+}
+
+.clinical-dag-column + .clinical-dag-column::before {
+    content: "→";
+    position: absolute;
+    margin-left: -20px;
+    color: #38bdf8;
+}
+
+.clinical-dag-node {
+    min-height: 74px;
+    border: 1px solid rgba(96, 165, 250, 0.34);
+    border-radius: 12px;
+    padding: 10px;
+    background: rgba(15, 32, 64, 0.86);
+}
+
+.clinical-dag-node strong,
+.clinical-dag-node small {
+    display: block;
+}
+
+.clinical-dag-node small {
+    color: #8fa8c9;
+    margin-top: 5px;
+}
+
+.clinical-dag-node.inactive {
+    border-style: dashed;
+    border-color: rgba(251, 191, 36, 0.55);
+    opacity: 0.82;
+}
+
+.clinical-dag-node.inactive strong::after {
+    content: " · INACTIVE";
+    color: #fbbf24;
+    font-size: 0.68rem;
+}
+
+.clinical-dag-notes {
+    border-left: 3px solid rgba(56, 189, 248, 0.55);
+    padding-left: 12px;
+    margin: 8px 0 16px;
+}
+
+.clinical-dag-approval {
+    display: grid;
+    gap: 10px;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    padding-top: 16px;
+}
+
+.clinical-dag-approval > input {
+    border: 1px solid rgba(96, 165, 250, 0.35);
+    border-radius: 9px;
+    color: #e6f2ff;
+    background: rgba(2, 8, 23, 0.72);
+    padding: 10px 12px;
+}
+
+.clinical-dag-scope-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: #c2d2ea;
+}
+
+.clinical-dag-actions {
+    justify-content: flex-start;
+}
+
+.clinical-dag-reject-btn {
+    border-color: rgba(248, 113, 113, 0.45) !important;
+    color: #fecaca !important;
+}
+
+.system-execution-card {
+    border-color: rgba(52, 211, 153, 0.35);
+}
+
+@media (max-width: 780px) {
+    .clinical-dag-review-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .clinical-dag-canvas {
+        flex-direction: column;
+    }
+
+    .clinical-dag-column {
+        min-width: 0;
+    }
+
+    .clinical-dag-column + .clinical-dag-column::before {
+        content: "↓";
+        position: static;
+        margin: -6px auto;
+    }
+}
 .status-error { color:#ff6b6b; }
 .grid-image { max-width:100%; max-height:100%; object-fit:contain; transform:scale(1.25) rotate(-90deg); }
 .image-grid.layout-compact .grid-image { max-width:96%; max-height:96%; transform:scale(1.4) rotate(-90deg); }
