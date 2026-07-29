@@ -14,6 +14,7 @@ const {
     getStructuredReportSummary,
     reportStatusText,
     reportValue,
+    withPerfusionFindingFallback,
 } = require("../../static/js/report.js");
 
 test.after(() => {
@@ -47,4 +48,19 @@ test("zero remains visible and statuses are localized", () => {
     assert.equal(reportValue(null, "mL"), "未获得");
     assert.equal(reportStatusText("urgent"), "紧急");
     assert.equal(reportStatusText("high"), "高风险");
+});
+
+test("legacy completed perfusion finding recovers its quantitative values", () => {
+    const findings = withPerfusionFindingFallback(
+        [{ finding_id: "perfusion_analysis", status: "completed", value: null }],
+        [
+            { metric_id: "core_infarct_volume", value: 6.14 },
+            { metric_id: "penumbra_volume", value: 17.21 },
+            { metric_id: "mismatch_ratio", value: 2.8 },
+        ],
+    );
+    assert.equal(
+        findings[0].value,
+        "Core 6.14 mL · Penumbra 17.21 mL · Mismatch 2.80",
+    );
 });

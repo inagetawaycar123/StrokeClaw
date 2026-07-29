@@ -25,7 +25,6 @@ KEY_CLAIM_IDS: List[str] = [
     "core_infarct_volume",
     "penumbra_volume",
     "mismatch_ratio",
-    "three_class_label",
     "significant_mismatch",
     "treatment_window_notice",
 ]

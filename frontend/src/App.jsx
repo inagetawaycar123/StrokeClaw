@@ -1046,7 +1046,7 @@ export default function App() {
                   onChange={(e) => updateUploadField("modelType", e.target.value)}
                 >
                   <option value="mrdpm">mrdpm</option>
-                  <option value="medgemma">medgemma</option>
+                  <option value="palette">palette</option>
                 </select>
               </label>
               <label className="span-2">

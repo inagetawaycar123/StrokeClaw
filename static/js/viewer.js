@@ -1943,7 +1943,7 @@ async function generateAIReport(options = {}) {
     setReportStatus('generating');
 
     try {
-        console.log(`[MedGemma][Viewer] start generate source=${source} patient_id=${currentPatientId} file_id=${currentFileId}`);
+        console.log(`[Report][Viewer] start generate source=${source} patient_id=${currentPatientId} file_id=${currentFileId}`);
 
         const aiReportSection = document.getElementById('aiReportSection');
         const aiReportContent = document.getElementById('aiReportContent');
@@ -1976,9 +1976,9 @@ async function generateAIReport(options = {}) {
             data = { status: 'error', message: `Invalid JSON response: ${parseErr.message}` };
         }
 
-        console.log('[MedGemma][Viewer] API response:', data);
+        console.log('[Report][Viewer] API response:', data);
         if (data.json_path) {
-            console.log(`[MedGemma][Viewer] report json path: ${data.json_path}`);
+            console.log(`[Report][Viewer] report json path: ${data.json_path}`);
         }
 
         if (response.ok && data.status === 'success') {
@@ -2013,7 +2013,7 @@ async function generateAIReport(options = {}) {
         }
 
         const errorMessage = data.message || `HTTP ${response.status}`;
-        console.warn(`[MedGemma][Viewer] generate failed: ${errorMessage}`);
+        console.warn(`[Report][Viewer] generate failed: ${errorMessage}`);
         localStorage.setItem(keys.error, errorMessage);
         setReportGenerating(currentFileId, false);
         setReportStatus('error', `自动生成失败�?{errorMessage}`, errorMessage);
@@ -2029,7 +2029,7 @@ async function generateAIReport(options = {}) {
         return { success: false, message: errorMessage, data };
     } catch (err) {
         const errorMessage = err.message || 'Unknown error';
-        console.error(`[MedGemma][Viewer] generate exception: ${errorMessage}`);
+        console.error(`[Report][Viewer] generate exception: ${errorMessage}`);
         localStorage.setItem(keys.error, errorMessage);
         setReportGenerating(currentFileId, false);
         setReportStatus('error', `自动生成失败�?{errorMessage}`, errorMessage);
@@ -2110,7 +2110,7 @@ async function triggerGenerateReportFromTopBar() {
         return;
     }
 
-    console.log(`[MedGemma][Viewer] triggerGenerateReportFromTopBar patient_id=${currentPatientId} file_id=${currentFileId}`);
+    console.log(`[Report][Viewer] triggerGenerateReportFromTopBar patient_id=${currentPatientId} file_id=${currentFileId}`);
     const cache = getReportCacheState(currentFileId);
 
     if (cache.status === 'ready') {

@@ -1,4 +1,5 @@
 from backend.structured_report import build_structured_report_v2
+from backend.summary_assembler import build_summary_artifacts
 
 
 def _example_context(**overrides):
@@ -137,6 +138,58 @@ def test_available_perfusion_modalities_are_separate_traceable_findings():
     assert findings["cbf_availability"]["evidence_ids"]
 
 
+def test_perfusion_finding_uses_quantitative_values_when_modalities_are_uploaded_only():
+    report = _build(
+        context=_example_context(
+            available_modalities=["ncct", "mcta", "vcta", "dcta"]
+        )
+    )
+    findings = {
+        item["finding_id"]: item for item in report["imaging_findings"]
+    }
+
+    assert findings["perfusion_analysis"]["status"] == "completed"
+    assert (
+        findings["perfusion_analysis"]["value"]
+        == "Core 6.14 mL · Penumbra 17.21 mL · Mismatch 2.80"
+    )
+
+
+def test_hemorrhage_gate_marks_perfusion_skipped_without_false_missing_items():
+    gate = {
+        "blocked": True,
+        "reason_code": "NCCT_SUSPECTED_HEMORRHAGE",
+        "reason": "NCCT 三分类提示疑似脑出血，已阻断后续 AIS/灌注分析",
+        "requires_clinician_review": True,
+    }
+    report = _build(
+        context=_example_context(
+            three_class_label="hemo",
+            three_class_label_cn="脑出血",
+            core_infarct_volume=None,
+            penumbra_volume=None,
+            mismatch_ratio=None,
+            vessel_occlusion_result={"status": "unavailable"},
+            safety_gate=gate,
+        )
+    )
+    findings = {
+        item["finding_id"]: item for item in report["imaging_findings"]
+    }
+    missing_ids = {item["issue_id"] for item in report["missing_information"]}
+    warning_ids = {item["issue_id"] for item in report["warnings"]}
+
+    assert findings["perfusion_analysis"]["status"] == "skipped"
+    assert "安全门控" in findings["perfusion_analysis"]["value"]
+    assert "missing_core_infarct_volume" not in missing_ids
+    assert "missing_penumbra_volume" not in missing_ids
+    assert "missing_mismatch_ratio" not in missing_ids
+    assert "missing_vessel_occlusion_class" not in missing_ids
+    assert "ncct_safety_gate_blocked" in warning_ids
+    assert report["report_meta"]["risk_level"] == "high"
+    assert report["report_meta"]["urgency"] == "urgent"
+
+
 def test_low_confidence_and_module_conflict_are_independent_warnings():
     report = _build(
         context=_example_context(three_class_confidence=0.41),
@@ -226,3 +279,21 @@ def test_pure_legacy_text_is_marked_without_reverse_extraction():
     assert report["report_meta"]["legacy_mode"] is True
     assert metrics["core_infarct_volume"]["value"] is None
     assert report["narrative_summary"]["legacy_text"].startswith("患者核心")
+
+
+def test_ncct_algorithm_output_does_not_require_an_ekv_claim():
+    result = build_summary_artifacts(
+        run_id="run-ncct",
+        file_id="file-ncct",
+        report_payload={},
+        icv=None,
+        ekv={"claims": []},
+        consensus=None,
+        goal_question="",
+        patient_context=_example_context(),
+    )
+    uncertainty_text = " ".join(
+        str(item.get("message") or item)
+        for item in result["structured_report_v2"]["uncertainties"]
+    )
+    assert "NCCT 三分类结果: 外部知识验证未生成该结论" not in uncertainty_text

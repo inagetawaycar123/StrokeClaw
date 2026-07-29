@@ -11,6 +11,10 @@ from torchvision import models
 from torchvision import transforms
 
 from .preprocess import ensure_ncct_png_slices
+from .result import (
+    aggregate_three_class_predictions,
+    predictions_from_probabilities,
+)
 
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__)) # AI辅助生成：GLM-5, 2026-03-14
@@ -142,8 +146,6 @@ def predict_three_class(file_id, output_base_dir=None):
         output_json = os.path.join(analysis_output_dir, "three_class_predictions.json") # AI辅助生成：GLM-5, 2026-03-21
 
         rows = []
-        forced_label = "infarct"
-        forced_idx = class_names.index(forced_label) if forced_label in class_names else None
         with torch.no_grad():
             for image_path in image_paths:
                 with Image.open(image_path) as image:
@@ -151,26 +153,16 @@ def predict_three_class(file_id, output_base_dir=None):
 
                 logits = model(tensor)
                 probs = torch.softmax(logits, dim=1).squeeze(0).cpu() # AI辅助生成：GLM-5, 2026-03-22
-                pred_idx = int(torch.argmax(probs).item())
-
-                # Force 3-class output to infarct regardless of model inference.
-                if forced_idx is not None:
-                    pred_label = forced_label
-                    confidence = float(probs[forced_idx].item())
-                else:
-                    pred_label = forced_label
-                    confidence = 1.0
-
                 row = {
                     "slice_file": image_path.name,
                     "image_path": str(image_path),
-                    "pred_label": pred_label,
-                    "confidence": confidence,
                 }
                 for idx, class_name in enumerate(class_names):
                     row[f"prob_{class_name}"] = float(probs[idx].item()) # AI辅助生成：GLM-5, 2026-03-23
                 rows.append(row)
 
+        rows = predictions_from_probabilities(rows, class_names)
+        three_class_result = aggregate_three_class_predictions(rows, class_names)
         fieldnames = ["slice_file", "image_path", "pred_label", "confidence"] + [
             f"prob_{name}" for name in class_names
         ]
@@ -189,6 +181,7 @@ def predict_three_class(file_id, output_base_dir=None):
                 "json": output_json,
             },
             "predictions": rows,
+            "three_class_result": three_class_result,
         }
 
         with open(output_json, "w", encoding="utf-8") as handle:

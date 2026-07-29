@@ -1,4 +1,4 @@
-from backend.medgemma_report import _ctp_values
+from backend.report_generation import _ctp_values
 
 
 def test_case_analysis_values_override_legacy_patient_fields():

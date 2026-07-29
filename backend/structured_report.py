@@ -99,6 +99,21 @@ def _format_number(value: Optional[float], digits: int = 2) -> str:
     return f"{value:.{digits}f}"
 
 
+def _format_perfusion_summary(
+    core: Optional[float],
+    penumbra: Optional[float],
+    mismatch: Optional[float],
+) -> Optional[str]:
+    parts: List[str] = []
+    if core is not None:
+        parts.append(f"Core {_format_number(core)} mL")
+    if penumbra is not None:
+        parts.append(f"Penumbra {_format_number(penumbra)} mL")
+    if mismatch is not None:
+        parts.append(f"Mismatch {_format_number(mismatch)}")
+    return " · ".join(parts) or None
+
+
 def _review_sections(review_state: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     return {
         str(item.get("section_id") or ""): item
@@ -341,6 +356,17 @@ def _extract_context(
     ctp = _as_dict(context_struct.get("ctp"))
     sections = _as_dict(report_payload.get("sections"))
     report_ctp = _as_dict(sections.get("ctp"))
+    context_three_class = _as_dict(context.get("three_class_result"))
+    payload_three_class = _as_dict(report_payload.get("three_class_result"))
+    safety_gate = _as_dict(
+        _first_present(
+            context.get("safety_gate"),
+            context_three_class.get("safety_gate"),
+            report_payload.get("safety_gate"),
+            payload_three_class.get("safety_gate"),
+            _as_dict(sections.get("ncct")).get("safety_gate"),
+        )
+    )
 
     return {
         "age": _first_present(
@@ -410,18 +436,25 @@ def _extract_context(
         ),
         "ncct_label": _first_present(
             context.get("three_class_label"),
+            context_three_class.get("three_class_label"),
             report_payload.get("three_class_label"),
+            payload_three_class.get("three_class_label"),
         ),
         "ncct_label_cn": _first_present(
             context.get("three_class_label_cn"),
+            context_three_class.get("three_class_label_cn"),
             report_payload.get("three_class_label_cn"),
+            payload_three_class.get("three_class_label_cn"),
         ),
         "ncct_confidence": _safe_confidence(
             _first_present(
                 context.get("three_class_confidence"),
+                context_three_class.get("three_class_confidence"),
                 report_payload.get("three_class_confidence"),
+                payload_three_class.get("three_class_confidence"),
             )
         ),
+        "safety_gate": safety_gate,
         "acquired_at": _first_present(
             context.get("acquired_at"),
             context.get("updated_at"),
@@ -775,24 +808,35 @@ def build_structured_report_v2(
         for x in data["modalities"]
         if str(x).strip()
     ] if isinstance(data["modalities"], list) else []
-    perfusion_status = (
-        "completed"
-        if any(x in modalities for x in ("cbf", "cbv", "tmax", "ctp"))
-        or any(x is not None for x in (data["core"], data["penumbra"], data["mismatch"]))
-        else "not_run"
+    safety_gate = _as_dict(data.get("safety_gate"))
+    safety_blocked = bool(safety_gate.get("blocked"))
+    perfusion_metrics_value = _format_perfusion_summary(
+        data["core"], data["penumbra"], data["mismatch"]
     )
+    perfusion_modalities_value = ", ".join(
+        x.upper() for x in modalities if x in {"cbf", "cbv", "tmax", "ctp"}
+    ) or None
+    if safety_blocked:
+        perfusion_status = "skipped"
+        perfusion_value = "因疑似出血安全门控未执行"
+    elif perfusion_metrics_value:
+        perfusion_status = "completed"
+        perfusion_value = perfusion_metrics_value
+    elif perfusion_modalities_value:
+        perfusion_status = "completed"
+        perfusion_value = perfusion_modalities_value
+    else:
+        perfusion_status = "not_run"
+        perfusion_value = None
     perfusion_finding = {
         "finding_id": "perfusion_analysis",
         "display_name": "灌注分析",
-        "value": ", ".join(
-            x.upper() for x in modalities if x in {"cbf", "cbv", "tmax", "ctp"}
-        )
-        or None,
+        "value": perfusion_value,
         "status": perfusion_status,
         "source_type": "algorithm_output",
         "source_module": "CTPAnalysisAgent",
         "confidence": None,
-        "evidence_ids": [
+        "evidence_ids": [] if safety_blocked else [
             evidence_by_field[x]
             for x in (
                 "core_infarct_volume",
@@ -801,9 +845,15 @@ def build_structured_report_v2(
             )
             if x in evidence_by_field
         ],
-        "limitations": []
-        if perfusion_status == "completed"
-        else ["未运行或未获得灌注分析结果。"],
+        "limitations": (
+            [str(safety_gate.get("reason") or "因 NCCT 安全门控跳过。")]
+            if safety_blocked
+            else (
+                []
+                if perfusion_status == "completed"
+                else ["未运行或未获得灌注分析结果。"]
+            )
+        ),
         "requires_clinician_review": True,
     }
     perfusion_finding.update(
@@ -826,7 +876,7 @@ def build_structured_report_v2(
             evidence_type="imaging_finding",
             display_name="CTA / 多期 CTA 观察",
             value="、".join(cta_titles) or "已获得 CTA 模态",
-            source_module="MedGemma" if cta_sections else "detect_modalities",
+            source_module="Report_Generation" if cta_sections else "detect_modalities",
             source_record=(
                 "report_payload.sections.cta"
                 if cta_sections
@@ -841,7 +891,7 @@ def build_structured_report_v2(
             "value": "、".join(cta_titles) or "已获得影像，等待结构化观察",
             "status": "completed" if cta_sections else "unknown",
             "source_type": "imaging_finding",
-            "source_module": "MedGemma" if cta_sections else "detect_modalities",
+            "source_module": "Report_Generation" if cta_sections else "detect_modalities",
             "confidence": None,
             "evidence_ids": [cta_ev_id],
             "limitations": []
@@ -1034,7 +1084,7 @@ def build_structured_report_v2(
                 )
             )
     for metric in metrics:
-        if metric["status"] == "missing":
+        if metric["status"] == "missing" and not safety_blocked:
             missing.append(
                 _issue(
                     issue_id=f"missing_{metric['metric_id']}",
@@ -1058,7 +1108,7 @@ def build_structured_report_v2(
                 severity="medium",
             )
         )
-    if not vessel_ev_id:
+    if not vessel_ev_id and not safety_blocked:
         missing.append(
             _issue(
                 issue_id="missing_vessel_occlusion_class",
@@ -1126,6 +1176,21 @@ def build_structured_report_v2(
                     severity="medium",
                 )
             )
+    if safety_blocked:
+        warnings.append(
+            _issue(
+                issue_id="ncct_safety_gate_blocked",
+                field="ncct_classification",
+                status="review_required",
+                message=str(
+                    safety_gate.get("reason")
+                    or "NCCT 三分类提示疑似脑出血，已阻断后续分析。"
+                ),
+                impact="不能继续使用缺血性卒中灌注链形成治疗判断。",
+                recommended_action="请医生复核原始 NCCT 并完成强制签核。",
+                severity="high",
+            )
+        )
 
     mismatch_rule = next(
         rule for rule in rules if rule["rule_id"] == "CTP_MISMATCH_RATIO_1_8_V1"
@@ -1309,7 +1374,7 @@ def build_structured_report_v2(
     if not summary_lines:
         summary_lines.append("当前结构化数据不足，无法形成完整的确定性摘要。")
 
-    medgemma_lines = [
+    report_lines = [
         str(item).strip()
         for item in _as_list(payload.get("summary_findings"))
         if str(item).strip()
@@ -1321,7 +1386,7 @@ def build_structured_report_v2(
         else ""
     )
     ai_supplement = baichuan_answer or (
-        " ".join(medgemma_lines) if medgemma_lines else None
+        " ".join(report_lines) if report_lines else None
     )
     claim_alias_map = {
         "significant_mismatch": "claim_significant_mismatch",
@@ -1341,7 +1406,7 @@ def build_structured_report_v2(
             evidence_type="agent_reasoning",
             display_name="AI 综合影像说明",
             value=ai_supplement,
-            source_module="Baichuan" if baichuan_answer else "MedGemma",
+            source_module="Baichuan" if baichuan_answer else "Report_Generation",
             source_record=(
                 "report_payload.question_answer"
                 if baichuan_answer

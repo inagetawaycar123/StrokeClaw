@@ -18,8 +18,7 @@ static/dist/  # Vite 构建产物（由 frontend/npm run build 生成）
 # log日志
 web_system.log
 
-# MedGemma 模型文件（大型模型权重，不提交）
-MedGemma_Model/*.safetensors
+# 大型模型权重
 *.safetensors
 
 node_modules/
@@ -31,11 +30,8 @@ node_modules/
 # IDE 配置文件
 **/workspace.xml
 
-# 结果报告
-MedGemma_Model/results/
-
-# example文件（已经在群里发过）
-MedGemma_Model/example/
+# 运行时报告（包括迁移后的历史报告）
+runtime/reports/
 
 #vscode配置文件
 .vscode/

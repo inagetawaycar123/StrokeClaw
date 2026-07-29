@@ -379,9 +379,24 @@ def _strip_html_to_text(raw_html: str) -> str:
     return "\n".join(lines)
 
 
-def _medgemma_results_dir() -> str:
+def _report_results_dir() -> str:
+    configured = str(os.environ.get("REPORT_RESULTS_DIR") or "").strip()
+    if configured:
+        return os.path.abspath(os.path.expanduser(configured))
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    return os.path.join(project_root, "MedGemma_Model", "results")
+    return os.path.join(project_root, "runtime", "reports")
+
+
+def _report_result_patterns(file_id: str):
+    """Return current and migrated legacy report patterns for a case."""
+    if not file_id:
+        return []
+    results_dir = _report_results_dir()
+    legacy_dir = os.path.join(results_dir, "legacy_medgemma")
+    return [
+        os.path.join(results_dir, f"baichuan_report_{file_id}_*.json"),
+        os.path.join(legacy_dir, f"medgemma_report_{file_id}_*.json"),
+    ]
 
 
 def _sync_notes_to_result_json(
@@ -392,12 +407,13 @@ def _sync_notes_to_result_json(
         "updated_files": [],
         "failed_files": [],
     }
-    results_dir = _medgemma_results_dir()
-    if not os.path.isdir(results_dir):
-        return sync_result
-
-    pattern = os.path.join(results_dir, f"medgemma_report_{file_id}_*.json")
-    matched_files = sorted(glob.glob(pattern))
+    matched_files = sorted(
+        {
+            path
+            for pattern in _report_result_patterns(file_id)
+            for path in glob.glob(pattern)
+        }
+    )
     sync_result["matched_files"] = matched_files
     if not matched_files:
         return sync_result # AI辅助生成：GLM-5, 2026-03-15
@@ -652,9 +668,7 @@ def _get_baichuan_api_base() -> str:
 
 
 print(f"百川 API URL: {BAICHUAN_API_URL}") # AI辅助生成：GLM-5, 2026-03-27
-print(
-        f"百川 API Key: {'***' + BAICHUAN_API_KEY[-4:] if BAICHUAN_API_KEY else '未配置'}"
-)
+print(f"百川 API Key: {'已配置' if BAICHUAN_API_KEY else '未配置'}")
 print(f"百川模型: {BAICHUAN_MODEL}")
 print(f"百川对话模型: {BAICHUAN_CHAT_MODEL}")
 print(f"知识库 ID 数量: {len(BAICHUAN_KB_IDS)}")
@@ -1029,13 +1043,11 @@ def generate_report_with_baichuan(
         }
 
         print(f"调用百川 M3 API... format={output_format}")
-        print(f"Payload: {json.dumps(payload, ensure_ascii=False)[:500]}...") # AI辅助生成：GLM-5, 2026-04-12
         response = requests.post(
             BAICHUAN_API_URL, headers=headers, json=payload, timeout=60
         )
 
         print(f"响应状态码: {response.status_code}")
-        print(f"响应内容: {response.text[:1000]}...")
 
         if response.status_code == 200:
             result = response.json()
@@ -1069,7 +1081,7 @@ def generate_report_with_baichuan(
                 "is_mock": False,
             }
         else:
-            error_msg = f"API 调用失败: {response.status_code} - {response.text}"
+            error_msg = f"API 调用失败: HTTP {response.status_code}"
             print(error_msg)
             return {"success": False, "error": error_msg, "format": output_format}
 
@@ -1149,6 +1161,26 @@ def generate_mock_report(structured_data: dict, output_format: str = "markdown")
 
     return mock_report # AI辅助生成：GLM-5, 2026-04-17
 
+
+def generate_report_with_baichuan(
+    structured_data: dict, output_format: str = "markdown"
+) -> dict:
+    """Compatibility wrapper for callers of the former in-module helper."""
+    file_id = str(
+        structured_data.get("file_id")
+        or structured_data.get("case_id")
+        or structured_data.get("id")
+        or structured_data.get("ID")
+        or "report"
+    )
+    return generate_report(
+        structured_data=structured_data,
+        imaging_data={},
+        file_id=file_id,
+        output_format=output_format,
+    )
+
+
 import os
 import numpy as np
 from PIL import Image
@@ -1162,14 +1194,22 @@ import matplotlib as mpl
 # 在 app.py 的导入部分添加业务相关模块
 try:
     from .stroke_analysis import analyze_stroke_case
-    from .medgemma_report import generate_report_with_medgemma
+    from .report_generation import generate_report
     from .three_class.predict_three_class import predict_three_class
     from .three_class.generate_gradcam import generate_gradcam
+    from .three_class.result import (
+        aggregate_three_class_predictions,
+        unavailable_three_class_result,
+    )
 except ImportError:
     from stroke_analysis import analyze_stroke_case
-    from medgemma_report import generate_report_with_medgemma
+    from report_generation import generate_report
     from three_class.predict_three_class import predict_three_class
     from three_class.generate_gradcam import generate_gradcam
+    from three_class.result import (
+        aggregate_three_class_predictions,
+        unavailable_three_class_result,
+    )
 
 # 尝试导入 nibabel（用于 NIfTI 等医学影像格式）
 try:
@@ -1535,10 +1575,19 @@ def _build_three_class_view(file_id, rgb_files):
         )
         if not inference or not inference.get("success"):
             payload["error"] = (inference or {}).get("error", "three_class failed")
+            payload["three_class_result"] = unavailable_three_class_result(
+                reason=payload["error"]
+            )
+            payload["summary"].update(payload["three_class_result"])
             payload["summary"]["display"] = "三分类失败"
             return payload
 
         predictions = inference.get("predictions") or []
+        three_class_result = inference.get("three_class_result")
+        if not isinstance(three_class_result, dict):
+            three_class_result = aggregate_three_class_predictions(
+                predictions, inference.get("class_names")
+            )
         by_index = {}
         for item in predictions:
             idx = _slice_index_from_name(item.get("slice_file")) # AI辅助生成：GLM-5, 2026-03-15
@@ -1573,6 +1622,7 @@ def _build_three_class_view(file_id, rgb_files):
 
         payload["success"] = True # AI辅助生成：GLM-5, 2026-03-18
         payload["predictions"] = predictions
+        payload["three_class_result"] = three_class_result
         payload["summary"] = {
             "display": " | ".join(display_parts),
             "counts": counts,
@@ -1580,10 +1630,15 @@ def _build_three_class_view(file_id, rgb_files):
                 inference.get("total_slices") or len(predictions) or len(rgb_files or [])
             ),
             "output": inference.get("output") or {},
+            **three_class_result,
         }
         return payload
     except Exception as exc:
         payload["error"] = str(exc)
+        payload["three_class_result"] = unavailable_three_class_result(
+            reason=str(exc)
+        )
+        payload["summary"].update(payload["three_class_result"])
         payload["summary"]["display"] = "三分类异常"
         return payload # AI辅助生成：GLM-5, 2026-03-19
 
@@ -1686,6 +1741,21 @@ def _attach_vessel_result_to_agent_run(run_id, vessel_result):
     return bool(_update_agent_run(run_id, _mut))
 
 
+def _attach_three_class_to_agent_run(run_id, three_class_result):
+    if not run_id:
+        return False
+    normalized = _resolve_ncct_classification(structured=three_class_result)
+
+    def _mut(run):
+        planner_input = run.setdefault("planner_input", {})
+        planner_input["three_class_result"] = copy.deepcopy(normalized)
+        planner_input["safety_gate"] = copy.deepcopy(
+            normalized.get("safety_gate") or {}
+        )
+
+    return bool(_update_agent_run(run_id, _mut))
+
+
 def _persist_vessel_result_to_imaging(patient_id, file_id, vessel_result):
     """Merge the vessel result into the existing analysis_result JSONB."""
     if not SUPABASE_AVAILABLE or not patient_id or not file_id:
@@ -1712,6 +1782,39 @@ def _persist_vessel_result_to_imaging(patient_id, file_id, vessel_result):
         return True
     except Exception as exc:
         print(f"[WARN] patient_imaging vessel result update failed: {exc}")
+        return False
+
+
+def _persist_three_class_result_to_imaging(
+    patient_id, file_id, three_class_result
+):
+    """Merge the NCCT result into analysis_result without replacing other models."""
+    if not SUPABASE_AVAILABLE or not patient_id or not file_id:
+        return False
+    normalized = _resolve_ncct_classification(structured=three_class_result)
+    try:
+        imaging = get_imaging_by_case(patient_id, file_id) or {}
+        analysis_result = imaging.get("analysis_result")
+        if not isinstance(analysis_result, dict):
+            analysis_result = {}
+        merged = dict(analysis_result)
+        merged["three_class_result"] = normalized
+
+        def _update_once():
+            return (
+                supabase.table("patient_imaging")
+                .update({"analysis_result": merged})
+                .eq("patient_id", patient_id)
+                .eq("case_id", file_id)
+                .execute()
+            )
+
+        _run_with_supabase_retry(
+            "patient_imaging.update_three_class_result", _update_once
+        )
+        return True
+    except Exception as exc:
+        print(f"[WARN] patient_imaging NCCT result update failed: {type(exc).__name__}")
         return False
 
 
@@ -1761,6 +1864,10 @@ def _resolve_ncct_classification(run=None, imaging=None, structured=None):
     label = None
     label_cn = None
     confidence = None
+    status = None
+    class_counts = None
+    total_slices = None
+    safety_gate = None
     for source in sources:
         if not isinstance(source, dict):
             continue
@@ -1797,6 +1904,26 @@ def _resolve_ncct_classification(run=None, imaging=None, structured=None):
                         confidence = parsed_confidence
                 except (TypeError, ValueError):
                     pass
+            if status is None and candidate.get("status"):
+                status = str(candidate.get("status") or "").strip().lower()
+            if class_counts is None and isinstance(
+                candidate.get("class_counts"), dict
+            ):
+                class_counts = {
+                    key: int(candidate.get("class_counts", {}).get(key) or 0)
+                    for key in ("normal", "hemo", "infarct")
+                }
+            if total_slices is None:
+                try:
+                    parsed_total = int(candidate.get("total_slices"))
+                    if parsed_total >= 0:
+                        total_slices = parsed_total
+                except (TypeError, ValueError):
+                    pass
+            if safety_gate is None and isinstance(
+                candidate.get("safety_gate"), dict
+            ):
+                safety_gate = copy.deepcopy(candidate.get("safety_gate"))
         if label or label_cn:
             break
 
@@ -1806,11 +1933,36 @@ def _resolve_ncct_classification(run=None, imaging=None, structured=None):
         normalized_label_cn = _THREE_CLASS_LABEL_CN.get(
             normalized_label, normalized_label
         )
+    completed = bool(normalized_label or normalized_label_cn)
+    if not isinstance(safety_gate, dict):
+        blocked = normalized_label == "hemo" or not completed
+        safety_gate = {
+            "blocked": blocked,
+            "reason_code": (
+                "NCCT_SUSPECTED_HEMORRHAGE"
+                if normalized_label == "hemo"
+                else ("NCCT_CLASSIFICATION_UNAVAILABLE" if not completed else None)
+            ),
+            "reason": (
+                "NCCT 三分类提示疑似脑出血，已阻断后续 AIS/灌注分析"
+                if normalized_label == "hemo"
+                else (
+                    "NCCT 三分类没有产生有效结果"
+                    if not completed
+                    else None
+                )
+            ),
+            "requires_clinician_review": blocked,
+        }
     return {
-        "status": "completed" if (normalized_label or normalized_label_cn) else "unavailable",
+        "status": "completed" if completed else (status or "unavailable"),
         "three_class_label": normalized_label,
         "three_class_label_cn": normalized_label_cn,
         "three_class_confidence": confidence,
+        "class_counts": class_counts
+        or {key: 0 for key in ("normal", "hemo", "infarct")},
+        "total_slices": total_slices or 0,
+        "safety_gate": safety_gate,
     }
 
 
@@ -1869,6 +2021,22 @@ def _run_upload_processing_job(job_id, payload):
             return
 
         three_class_summary = (upload_result or {}).get("three_class_summary") or {}
+        three_class_result = _resolve_ncct_classification(
+            structured=(upload_result or {}).get("three_class_result")
+            or three_class_summary
+        )
+        safety_gate = three_class_result.get("safety_gate") or {}
+        safety_blocked = bool(safety_gate.get("blocked"))
+        upload_result["three_class_result"] = three_class_result
+        upload_result["safety_gate"] = safety_gate
+        upload_result["analysis_blocked"] = safety_blocked
+        if safety_blocked:
+            should_ctp_generate = False
+            should_stroke = False
+        if payload.get("agent_run_id"):
+            _attach_three_class_to_agent_run(
+                payload.get("agent_run_id"), three_class_result
+            )
         rgb_files = (upload_result or {}).get("rgb_files") or []
         gradcam_status = (
             (three_class_summary.get("gradcam") or {}).get("success") # AI辅助生成：GLM-5, 2026-03-29
@@ -1903,7 +2071,14 @@ def _run_upload_processing_job(job_id, payload):
             and "异常" not in three_class_display
         )
 
-        if gradcam_status or summary_has_counts or summary_has_output or rgb_has_three_class or display_is_ok:
+        classifier_completed = three_class_result.get("status") == "completed"
+        if classifier_completed and (
+            gradcam_status
+            or summary_has_counts
+            or summary_has_output
+            or rgb_has_three_class
+            or display_is_ok
+        ):
             done_msg = three_class_display or "三分类与 Grad-CAM 完成"
             _update_step(job_id, "three_class", "completed", done_msg)
         else:
@@ -1931,9 +2106,13 @@ def _run_upload_processing_job(job_id, payload):
             _update_step(job_id, "ctp_generate", "completed", "CTP 灌注图生成完成")
         else:
             reason = (
-                "已上传真实 CTP 数据，无需生成"
-                if has_real_ctp
-                else "当前模态不支持 CTP 生成" # AI辅助生成：GLM-5, 2026-04-03
+                safety_gate.get("reason")
+                if safety_blocked
+                else (
+                    "已上传真实 CTP 数据，无需生成"
+                    if has_real_ctp
+                    else "当前模态不支持 CTP 生成"
+                ) # AI辅助生成：GLM-5, 2026-04-03
             )
             _update_step(job_id, "ctp_generate", "skipped", reason)
 
@@ -1943,42 +2122,59 @@ def _run_upload_processing_job(job_id, payload):
             error_code="NOT_RUN",
             error_message="Vessel classification has not run",
         )
-        _update_step(job_id, "vessel_occlusion", "running", "正在执行血管闭塞三分类")
-        try:
-            vessel_ok, vessel_result, vessel_err = _run_vessel_occlusion_on_file(
-                payload["file_id"]
-            )
-            vessel_result = normalize_vessel_occlusion_result(vessel_result)
-            if vessel_ok and vessel_result:
-                label = vessel_result_display_label(vessel_result)
-                conf = vessel_result.get("confidence")
-                counts = vessel_result.get("class_counts", {})
-                confidence_text = f"{conf:.2%}" if isinstance(conf, (int, float)) else "--"
-                msg = (
-                    f"{label} (置信度 {confidence_text}) | "
-                    f"LVO={counts.get('Class_1_LVO', 0)} "
-                    f"MeVO={counts.get('Class_2_MEVO', 0)} "
-                    f"Normal={counts.get('Class_0', 0)}"
-                )
-                _update_step(job_id, "vessel_occlusion", "completed", msg)
-            else:
-                err_text = vessel_err or "血管闭塞三分类失败"
-                if vessel_result.get("error_code") == "CTA_INPUT_MISSING":
-                    _update_step(job_id, "vessel_occlusion", "skipped", err_text)
-                else:
-                    _update_step(job_id, "vessel_occlusion", "failed", err_text)
-                    warnings.append(err_text)
-                    _add_job_warning(job_id, err_text)
-        except Exception as vessel_exc:
-            err_text = f"血管闭塞三分类异常: {vessel_exc}"
+        if safety_blocked:
             vessel_result = empty_vessel_occlusion_result(
-                "failed",
-                error_code="MODEL_INFERENCE_EXCEPTION",
-                error_message=err_text,
+                "unavailable",
+                error_code="NCCT_SAFETY_GATE_BLOCKED",
+                error_message=str(
+                    safety_gate.get("reason") or "Blocked by NCCT safety gate"
+                ),
             )
-            _update_step(job_id, "vessel_occlusion", "failed", err_text)
-            warnings.append(err_text)
-            _add_job_warning(job_id, err_text)
+            _update_step(
+                job_id,
+                "vessel_occlusion",
+                "skipped",
+                str(safety_gate.get("reason") or "已由 NCCT 安全门控阻断"),
+            )
+        else:
+            _update_step(job_id, "vessel_occlusion", "running", "正在执行血管闭塞三分类")
+            try:
+                vessel_ok, vessel_result, vessel_err = _run_vessel_occlusion_on_file(
+                    payload["file_id"]
+                )
+                vessel_result = normalize_vessel_occlusion_result(vessel_result)
+                if vessel_ok and vessel_result:
+                    label = vessel_result_display_label(vessel_result)
+                    conf = vessel_result.get("confidence")
+                    counts = vessel_result.get("class_counts", {})
+                    confidence_text = (
+                        f"{conf:.2%}" if isinstance(conf, (int, float)) else "--"
+                    )
+                    msg = (
+                        f"{label} (置信度 {confidence_text}) | "
+                        f"LVO={counts.get('Class_1_LVO', 0)} "
+                        f"MeVO={counts.get('Class_2_MEVO', 0)} "
+                        f"Normal={counts.get('Class_0', 0)}"
+                    )
+                    _update_step(job_id, "vessel_occlusion", "completed", msg)
+                else:
+                    err_text = vessel_err or "血管闭塞三分类失败"
+                    if vessel_result.get("error_code") == "CTA_INPUT_MISSING":
+                        _update_step(job_id, "vessel_occlusion", "skipped", err_text)
+                    else:
+                        _update_step(job_id, "vessel_occlusion", "failed", err_text)
+                        warnings.append(err_text)
+                        _add_job_warning(job_id, err_text)
+            except Exception as vessel_exc:
+                err_text = f"血管闭塞三分类异常: {vessel_exc}"
+                vessel_result = empty_vessel_occlusion_result(
+                    "failed",
+                    error_code="MODEL_INFERENCE_EXCEPTION",
+                    error_message=err_text,
+                )
+                _update_step(job_id, "vessel_occlusion", "failed", err_text)
+                warnings.append(err_text)
+                _add_job_warning(job_id, err_text)
 
         upload_result["vessel_occlusion_result"] = vessel_result
         upload_result["vessel_occlusion_status"] = vessel_result.get("status")
@@ -2017,6 +2213,11 @@ def _run_upload_processing_job(job_id, payload):
                             payload.get("file_id"),
                             vessel_result,
                         )
+                        _persist_three_class_result_to_imaging(
+                            payload.get("patient_id"),
+                            payload.get("file_id"),
+                            three_class_result,
+                        )
                         _set_job_status(job_id, "failed", err)
                         return
             except Exception as e:
@@ -2032,18 +2233,29 @@ def _run_upload_processing_job(job_id, payload):
                         payload.get("file_id"),
                         vessel_result,
                     )
+                    _persist_three_class_result_to_imaging(
+                        payload.get("patient_id"),
+                        payload.get("file_id"),
+                        three_class_result,
+                    )
                     _set_job_status(job_id, "failed", err)
                     return # AI辅助生成：GLM-5, 2026-04-06
         else:
             _update_step(
-                job_id, "stroke_analysis", "skipped", "当前模态组合不触发脑卒中自动分析"
+                job_id,
+                "stroke_analysis",
+                "skipped",
+                str(safety_gate.get("reason") or "当前模态组合不触发脑卒中自动分析"),
             )
 
         _persist_vessel_result_to_imaging(
             payload.get("patient_id"), payload.get("file_id"), vessel_result
         )
+        _persist_three_class_result_to_imaging(
+            payload.get("patient_id"), payload.get("file_id"), three_class_result
+        )
 
-        if _result_has_ctp_images(upload_result):
+        if _result_has_ctp_images(upload_result) and not safety_blocked:
             _update_step(job_id, "pseudocolor", "running", "正在生成医学标准伪彩图")
             try:
                 ok, msg = _generate_pseudocolor_for_result(
@@ -2062,7 +2274,13 @@ def _run_upload_processing_job(job_id, payload):
                 _add_job_warning(job_id, msg)
         else:
             _update_step(
-                job_id, "pseudocolor", "skipped", "无可用 CTP 图像，跳过伪彩图生成" # AI辅助生成：GLM-5, 2026-04-08
+                job_id,
+                "pseudocolor",
+                "skipped",
+                str(
+                    safety_gate.get("reason")
+                    or "无可用 CTP 图像，跳过伪彩图生成"
+                ), # AI辅助生成：GLM-5, 2026-04-08
             )
 
         if payload.get("agent_run_id"):
@@ -4134,6 +4352,19 @@ def _tool_generate_ctp_maps(run):
             None,
             _tool_error_contract("TOOL_INPUT_INVALID", "Missing patient_id or file_id"),
         )
+    gate = (_resolve_ncct_classification(run=run).get("safety_gate") or {})
+    if gate.get("blocked"):
+        return (
+            True,
+            {
+                "status": "skipped",
+                "reason_code": gate.get("reason_code"),
+                "reason": gate.get("reason"),
+                "ctp_generated": False,
+                "generated_modalities": [],
+            },
+            None,
+        )
 
     files = _collect_case_upload_files(file_id)
     required = ["ncct_file", "mcta_file", "vcta_file", "dcta_file"] # AI辅助生成：GLM-5, 2026-04-05
@@ -4403,7 +4634,27 @@ def _tool_vessel_occlusion(run):
         return (
             False,
             None,
-            _tool_error_contract("TOOL_INPUT_INVALID", "Missing file_id for vessel occlusion"),
+            _tool_error_contract(
+                "TOOL_INPUT_INVALID", "Missing file_id for vessel occlusion"
+            ),
+        )
+    gate = (_resolve_ncct_classification(run=run).get("safety_gate") or {})
+    if gate.get("blocked"):
+        return (
+            True,
+            {
+                "status": "skipped",
+                "reason_code": gate.get("reason_code"),
+                "reason": gate.get("reason"),
+                "vessel_occlusion_result": empty_vessel_occlusion_result(
+                    "unavailable",
+                    error_code="NCCT_SAFETY_GATE_BLOCKED",
+                    error_message=str(
+                        gate.get("reason") or "Blocked by NCCT safety gate"
+                    ),
+                ),
+            },
+            None,
         )
 
     ok, result, err_msg = _run_vessel_occlusion_on_file(file_id)
@@ -4432,6 +4683,18 @@ def _tool_run_stroke_analysis(run):
             False,
             None,
             _tool_error_contract("TOOL_INPUT_INVALID", "Missing file_id"),
+        )
+    gate = (_resolve_ncct_classification(run=run).get("safety_gate") or {})
+    if gate.get("blocked"):
+        return (
+            True,
+            {
+                "status": "skipped",
+                "reason_code": gate.get("reason_code"),
+                "reason": gate.get("reason"),
+                "analysis_status": "skipped",
+            },
+            None,
         )
 
     analysis = analyze_stroke_case(file_id, hemisphere)
@@ -4853,7 +5116,7 @@ def _tool_consensus_lite(run):
         return False, None, _tool_error_contract("TOOL_EXECUTION_FAILED", str(exc))
 
 
-def _tool_generate_medgemma_report(run):
+def _tool_generate_report(run):
     planner_input = run.get("planner_input") or {}
     patient_id = planner_input.get("patient_id")
     file_id = planner_input.get("file_id") # AI辅助生成：GLM-5, 2026-03-07
@@ -4877,6 +5140,10 @@ def _tool_generate_medgemma_report(run):
     # patient_imaging data second.  Keep that database result as a fallback
     # instead of replacing it with an empty run-only contract.
     vessel_result = _resolve_vessel_result(
+        run=run,
+        structured=(data.get("report_payload") or data),
+    )
+    three_class_result = _resolve_ncct_classification(
         run=run,
         structured=(data.get("report_payload") or data),
     )
@@ -4920,6 +5187,23 @@ def _tool_generate_medgemma_report(run):
             "vessel_occlusion_class_result"
         )
         report_payload["vessel_occlusion_confidence"] = vessel_result.get("confidence")
+        report_payload["three_class_result"] = three_class_result
+        report_payload.update(
+            {
+                key: three_class_result.get(key)
+                for key in (
+                    "status",
+                    "three_class_label",
+                    "three_class_label_cn",
+                    "three_class_confidence",
+                    "class_counts",
+                    "total_slices",
+                    "safety_gate",
+                )
+                if key != "status"
+            }
+        )
+        report_payload["three_class_status"] = three_class_result.get("status")
     if icv_payload is None and icv_failed_result is not None:
         icv_payload = {
             "status": "unavailable",
@@ -5028,6 +5312,7 @@ def _tool_generate_medgemma_report(run):
             "vessel_occlusion_class_result"
         )
         patient_ctx["vessel_occlusion_confidence"] = vessel_result.get("confidence")
+        patient_ctx.update(three_class_result)
         # 补充患者姓名（从数据库获取）
         if patient_id:
             try:
@@ -5085,6 +5370,11 @@ def _tool_generate_medgemma_report(run):
     )
 
 
+# Legacy compatibility alias: persisted Agent runs and older clients still use
+# the historical tool identifier ``generate_medgemma_report``.
+_tool_generate_medgemma_report = _tool_generate_report
+
+
 def _execute_agent_tool(run_id, tool_name):
     run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-03-17
     if not run:
@@ -5140,7 +5430,7 @@ def _execute_agent_tool(run_id, tool_name):
             ok, output, err = _tool_consensus_lite(run)
             agent_name = "Consensus Lite Agent"
         elif tool_name == "generate_medgemma_report":
-            ok, output, err = _tool_generate_medgemma_report(run)
+            ok, output, err = _tool_generate_report(run)
             agent_name = "Clinical Summary Agent"
         else:
             ok = False # AI辅助生成：GLM-5, 2026-03-21
@@ -5442,6 +5732,8 @@ def _run_agent_pipeline(run_id, start_tool=None):
 
     run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-04-03
     context = _build_context_from_completed_tools(run)
+    three_class_result = _resolve_ncct_classification(run=run)
+    safety_gate = three_class_result.get("safety_gate") or {}
     final_result = {
         "summary": "Week6 summary + evidence chain completed",
         "path_decision": (planner_output.get("path_decision") or {}),
@@ -5454,44 +5746,82 @@ def _run_agent_pipeline(run_id, start_tool=None):
         "ekv": context.get("ekv_result"),
         "consensus": context.get("consensus_result"),
         "report_result": context.get("report_result"),
+        "three_class_result": three_class_result,
+        "safety_gate": safety_gate,
         "uncertainties": [],
         "next_actions": [],
     }
 
     def _complete(state):
-        state["status"] = "succeeded"
-        state["stage"] = "done"
+        if safety_gate.get("blocked"):
+            state["status"] = "paused_review_required"
+            state["stage"] = "summary"
+            state["error"] = {
+                "error_code": "HUMAN_REVIEW_REQUIRED",
+                "error_message": safety_gate.get("reason")
+                or "NCCT safety gate requires clinician review",
+                "retryable": False,
+                "suggested_action": "Manual clinical review required",
+            }
+            state["human_checkpoint"] = {
+                "required": True,
+                "reason": safety_gate.get("reason"),
+                "reason_code": safety_gate.get("reason_code"),
+                "risk_level": "high",
+                "pending_items": ["ncct_classification", "imaging_summary"],
+            }
+            state["termination_reason"] = "human_review_required"
+        else:
+            state["status"] = "succeeded"
+            state["stage"] = "done"
+            state["error"] = None
+            state["human_checkpoint"] = None
+            state["termination_reason"] = "normal_completion"
         state["current_tool"] = None
-        state["error"] = None
         state["result"] = final_result # AI辅助生成：GLM-5, 2026-04-04
-        state["termination_reason"] = "normal_completion"
         state["finalization"] = {
-            "status": "pending_archive",
+            "status": "review_required"
+            if safety_gate.get("blocked")
+            else "pending_archive",
             "writeback_status": "not_started",
             "signed": False,
             "version": "w0-draft",
         }
 
     _update_agent_run(run_id, _complete)
+    run_status = (
+        "paused_review_required" if safety_gate.get("blocked") else "succeeded"
+    )
     _agent_log(
         run_id=run_id,
-        stage="done",
+        stage="summary" if safety_gate.get("blocked") else "done",
         tool="run",
         attempt=1,
-        status="run_done",
-        error_code=None,
+        status="run_paused" if safety_gate.get("blocked") else "run_done",
+        error_code="HUMAN_REVIEW_REQUIRED"
+        if safety_gate.get("blocked")
+        else None,
         latency_ms=0,
-        message="pipeline_completed",
+        message=str(
+            safety_gate.get("reason")
+            if safety_gate.get("blocked")
+            else "pipeline_completed"
+        ),
     )
     _append_agent_event(
         run_id=run_id,
         agent_name="Clinical Summary Agent",
         tool_name="summary",
-        status="completed",
+        status=run_status,
         input_ref={"run_id": run_id},
-        output_ref={"status": "succeeded"},
+        output_ref={
+            "status": run_status,
+            "action_required": safety_gate.get("reason"),
+        },
         latency_ms=0,
-        error_code=None,
+        error_code="HUMAN_REVIEW_REQUIRED"
+        if safety_gate.get("blocked")
+        else None,
         retryable=False,
         attempt=1,
     )
@@ -6434,13 +6764,13 @@ def api_update_analysis():
         return jsonify({"status": "error", "message": result}), 500
 
 
-# ==================== MedGemma AI Report API ====================
+# ==================== Baichuan M3 AI Report API ====================
 
 
 @app.route("/api/generate_report/<int:patient_id>", methods=["GET", "POST"])
 def api_generate_report(patient_id):
     """
-    Generate imaging report via MedGemma using structured data.
+    Generate an imaging report through Baichuan M3 using structured data.
     """
     request_start = time.time()
     try:
@@ -6470,7 +6800,8 @@ def api_generate_report(patient_id):
             return jsonify({"status": "error", "message": "Missing file_id"}), 400
 
         print(
-            f"[MedGemma] /api/generate_report patient_id={patient_id} file_id={file_id} format={output_format} source={source}"
+            f"[BaichuanReport] /api/generate_report "
+            f"format={output_format} source={source}"
         )
 
         patient_data = get_patient_by_id(patient_id)
@@ -6493,7 +6824,10 @@ def api_generate_report(patient_id):
                 if not run_state:
                     run_state = (_w0_mock_refresh_run(run_key)[0] or None)
             except Exception as run_lookup_exc:
-                print(f"[MedGemma] run lookup failed run_id={run_key}: {run_lookup_exc}")
+                print(
+                    f"[BaichuanReport] run lookup failed "
+                    f"type={type(run_lookup_exc).__name__}"
+                )
                 run_state = None
         vessel_result = _resolve_vessel_result(run=run_state, imaging=imaging_data)
 
@@ -6551,17 +6885,6 @@ def api_generate_report(patient_id):
             "analysis_status": patient_data.get("analysis_status", "pending"),
         }
 
-        # Debug summary
-        print("=" * 60)
-        print("[AI Report] structured_data:")
-        print(json.dumps(structured_data, ensure_ascii=False, indent=2, default=str))
-        print("=" * 60) # AI辅助生成：GLM-5, 2026-04-15
-        print("[AI Report] key fields:")
-        print(f"  - NIHSS: {structured_data.get('admission_nihss')}")
-        print(f"  - Age: {structured_data.get('patient_age')}")
-        print(f"  - Onset->Admission (h): {onset_to_admission_hours}")
-        print("=" * 60)
-
         if structured_data.get("admission_nihss") is None:
             print("WARN: admission_nihss is empty") # AI辅助生成：GLM-5, 2026-04-16
         if structured_data.get("patient_age") in ["", None]:
@@ -6569,7 +6892,7 @@ def api_generate_report(patient_id):
         if onset_to_admission_hours is None:
             print("WARN: onset_to_admission_hours is empty")
 
-        result = generate_report_with_medgemma(
+        result = generate_report(
             structured_data, imaging_data, file_id, output_format
         )
 
@@ -6638,8 +6961,8 @@ def api_generate_report(patient_id):
                     )
                 except Exception as summary_exc:
                     print(
-                        f"[MedGemma] structured summary failed "
-                        f"patient_id={patient_id} file_id={file_id}: {summary_exc}"
+                        f"[BaichuanReport] structured summary failed "
+                        f"type={type(summary_exc).__name__}"
                     )
                     if user_question:
                         report_payload.setdefault(
@@ -6673,9 +6996,9 @@ def api_generate_report(patient_id):
                 )
             elapsed = round(time.time() - request_start, 2)
             if result.get("json_path"):
-                print(f"[MedGemma] report json saved: {result.get('json_path')}")
+                print("[BaichuanReport] report json saved")
             print(
-                f"[MedGemma] /api/generate_report success patient_id={patient_id} file_id={file_id} elapsed={elapsed}s"
+                f"[BaichuanReport] /api/generate_report success elapsed={elapsed}s"
             )
             return jsonify(
                 {
@@ -6695,7 +7018,8 @@ def api_generate_report(patient_id):
         else:
             elapsed = round(time.time() - request_start, 2) # AI辅助生成：GLM-5, 2026-04-22
             print(
-                f"[MedGemma] /api/generate_report failed patient_id={patient_id} file_id={file_id} elapsed={elapsed}s error={result.get('error')}"
+                f"[BaichuanReport] /api/generate_report failed "
+                f"elapsed={elapsed}s error_type=report_generation"
             )
             return jsonify(
                 {
@@ -6708,7 +7032,8 @@ def api_generate_report(patient_id):
     except Exception as e:
         elapsed = round(time.time() - request_start, 2)
         print(
-            f"[MedGemma] /api/generate_report exception patient_id={patient_id} elapsed={elapsed}s error={e}"
+            f"[BaichuanReport] /api/generate_report exception "
+            f"elapsed={elapsed}s type={type(e).__name__}"
         )
         import traceback
 
@@ -6842,7 +7167,7 @@ def api_generate_report_from_data():
                 {"status": "error", "message": f"Imaging case {file_id} not found"}
             ), 404
 
-        result = generate_report_with_medgemma(
+        result = generate_report(
             data, imaging_data, file_id, output_format
         )
 
@@ -6868,8 +7193,8 @@ def api_generate_report_from_data():
                     )
                 except Exception as summary_exc:
                     print(
-                        f"[MedGemma] structured summary failed "
-                        f"file_id={file_id}: {summary_exc}"
+                        f"[BaichuanReport] structured summary failed "
+                        f"type={type(summary_exc).__name__}"
                     )
             result["report_payload"] = report_payload
             persistence_warnings = []
@@ -7190,11 +7515,11 @@ def _get_latest_imaging_by_patient(patient_id: int):
 def _latest_result_json_for_file(file_id: str):
     if not file_id:
         return None
-    results_dir = _medgemma_results_dir()
-    if not os.path.isdir(results_dir):
-        return None # AI辅助生成：GLM-5, 2026-03-27
-    pattern = os.path.join(results_dir, f"medgemma_report_{file_id}_*.json")
-    candidates = glob.glob(pattern)
+    candidates = [
+        path
+        for pattern in _report_result_patterns(file_id)
+        for path in glob.glob(pattern)
+    ]
     if not candidates:
         return None
     candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
@@ -12420,6 +12745,9 @@ def upload_files():
 
         # 获取模型类型参数，默认使用 mrdpm
         selected_model = request.form.get("model_type", "mrdpm")
+        if selected_model == "medgemma":
+            # Backward-compatible alias retained for older upload clients.
+            selected_model = "palette"
         model_type = selected_model
         print(f"用户选择的模型: {selected_model}, 实际使用的模型: {model_type}")
 
@@ -12541,9 +12869,15 @@ def upload_files():
             three_class_view = _build_three_class_view(file_id, rgb_files)
             if not three_class_view.get("success"):
                 print(f"[WARN] three_class inference failed: {three_class_view.get('error')}")
+            three_class_result = _resolve_ncct_classification(
+                structured=three_class_view.get("three_class_result")
+                or three_class_view.get("summary")
+            )
+            safety_gate = three_class_result.get("safety_gate") or {}
+            analysis_blocked = bool(safety_gate.get("blocked"))
 
             # 自动触发脑卒中分析（如果满足条件）
-            if patient_id and not defer_stroke_analysis:
+            if patient_id and not defer_stroke_analysis and not analysis_blocked:
                 print("尝试自动触发脑卒中分析...")
                 try:
                     try:
@@ -12561,7 +12895,14 @@ def upload_files():
                     print(f"自动触发脑卒中分析异常: {e}")
             elif patient_id and defer_stroke_analysis:
                 print("已启用 defer_stroke_analysis，上传接口跳过自动脑卒中分析。")
+            elif analysis_blocked:
+                print(
+                    f"[SAFETY_GATE] blocked reason_code={safety_gate.get('reason_code')}"
+                )
 
+            _persist_three_class_result_to_imaging(
+                patient_id, file_id, three_class_result
+            )
             return jsonify(
                 {
                     "success": True,
@@ -12578,16 +12919,57 @@ def upload_files():
                     "model_configs": MODEL_CONFIGS,
                     "skip_ai": skip_ai,
                     "three_class_summary": three_class_view.get("summary"),
+                    "three_class_result": three_class_result,
+                    "safety_gate": safety_gate,
+                    "analysis_blocked": analysis_blocked,
                 }
             )
         else:
             # 先完成 NCCT 三分类，再进入 CTP 相关推理
             print("开始执行 NCCT 三分类与 Grad-CAM（先于 CTP 推理）...")
             three_class_view = _build_three_class_view(file_id, [])
-            if not three_class_view.get("success"):
-                err = three_class_view.get("error") or "NCCT 三分类失败，已阻止 CTP 推理"
-                print(f"[ERROR] {err}")
-                return jsonify({"success": False, "error": err})
+            three_class_result = _resolve_ncct_classification(
+                structured=three_class_view.get("three_class_result")
+                or three_class_view.get("summary")
+            )
+            safety_gate = three_class_result.get("safety_gate") or {}
+            analysis_blocked = bool(safety_gate.get("blocked"))
+            if not three_class_view.get("success") or analysis_blocked:
+                reason = (
+                    safety_gate.get("reason")
+                    or three_class_view.get("error")
+                    or "NCCT 三分类未获得有效结果，已阻断后续分析"
+                )
+                print(
+                    f"[SAFETY_GATE] blocked reason_code={safety_gate.get('reason_code')}"
+                )
+                _persist_three_class_result_to_imaging(
+                    patient_id, file_id, three_class_result
+                )
+                return jsonify(
+                    {
+                        "success": True,
+                        "file_id": file_id,
+                        "mcta_filename": mcta_file.filename if mcta_file else "",
+                        "vcta_filename": vcta_file.filename if vcta_file else "",
+                        "dcta_filename": dcta_file.filename if dcta_file else "",
+                        "ncct_filename": ncct_file.filename,
+                        "metadata": {},
+                        "rgb_files": [],
+                        "total_slices": int(
+                            three_class_result.get("total_slices") or 0
+                        ),
+                        "has_ai": False,
+                        "available_models": [],
+                        "model_configs": MODEL_CONFIGS,
+                        "skip_ai": True,
+                        "three_class_summary": three_class_view.get("summary"),
+                        "three_class_result": three_class_result,
+                        "safety_gate": safety_gate,
+                        "analysis_blocked": True,
+                        "warning": reason,
+                    }
+                )
 
             # 处理 RGB 合成并执行多模型 AI 推理
             print("NCCT 三分类完成，开始处理 RGB 合成和多模型 AI 推理...")
@@ -12623,6 +13005,10 @@ def upload_files():
                 elif patient_id and defer_stroke_analysis:
                     print("已启用 defer_stroke_analysis，上传接口跳过自动脑卒中分析。")
 
+                _persist_three_class_result_to_imaging(
+                    patient_id, file_id, three_class_result
+                )
+
                 def ensure_json_serializable(obj):
                     if isinstance(obj, dict):
                         return {k: ensure_json_serializable(v) for k, v in obj.items()}
@@ -12657,6 +13043,11 @@ def upload_files():
                         "three_class_summary": ensure_json_serializable(
                             three_class_view.get("summary")
                         ),
+                        "three_class_result": ensure_json_serializable(
+                            three_class_result
+                        ),
+                        "safety_gate": ensure_json_serializable(safety_gate),
+                        "analysis_blocked": False,
                     }
                 )
             else:
@@ -12818,9 +13209,9 @@ def api_save_and_generate_report():
         )
         structured_data["vessel_occlusion_confidence"] = vessel_result.get("confidence")
 
-        # 3. Generate MedGemma report
-        print(f"Auto-generate AI report after save, patient_id: {patient_id}")
-        ai_result = generate_report_with_medgemma(
+        # 3. Generate the AI report through Baichuan M3.
+        print("[BaichuanReport] auto-generate report after save")
+        ai_result = generate_report(
             structured_data, imaging_data, file_id, output_format="markdown"
         )
         if not ai_result.get("success"):

@@ -185,7 +185,7 @@ StrokeClaw/
 │   ├── extensions.py           # Flask 扩展
 │   ├── icv.py                  # 内部一致性校验
 │   ├── kg_builder.py           # 知识图谱构建
-│   ├── medgemma_report.py      # MedGemma 报告生成
+│   ├── report_generation.py    # 百川 M3 报告生成
 │   ├── run_icv_on_run.py       # ICV 运行脚本
 │   ├── stroke_analysis.py      # 卒中分析模块
 │   ├── summary_assembler.py    # 摘要组装
@@ -222,13 +222,6 @@ StrokeClaw/
 │   ├── config/                 # 配置文件
 │   └── utils/                  # 工具函数
 │
-├── MedGemma_Model/              # MedGemma 多模态模型
-│   ├── config.json            # 模型配置
-│   ├── tokenizer.*             # 分词器文件
-│   ├── model.safetensors*      # 模型权重
-│   ├── preprocessing_*.py      # 预处理脚本
-│   └── README.md              # MedGemma 说明
-│
 ├── EKV_docs/                    # 外部知识校验文档
 │   ├── kb_manifest.json       # 知识库清单
 │   ├── *.pdf                  # 指南文档
@@ -241,6 +234,7 @@ StrokeClaw/
 │
 ├── runtime/                     # 运行时数据
 │   ├── kg/                    # 知识图谱数据
+│   ├── reports/               # 百川报告与迁移后的历史报告
 │   └── local_fallback.db      # 本地回退数据库
 │
 ├── sql/                         # 数据库 SQL 脚本
@@ -312,7 +306,7 @@ StrokeClaw/
 | `extensions.py` | Flask 扩展配置 |
 | `icv.py` | 内部一致性校验（Internal Consistency Validation） |
 | `kg_builder.py` | 知识图谱构建器 |
-| `medgemma_report.py` | 基于 MedGemma 的报告生成 |
+| `report_generation.py` | 基于百川 M3 API 的去标识化报告生成 |
 | `run_icv_on_run.py` | 对 Agent Run 结果进行 ICV 校验 |
 | `stroke_analysis.py` | 卒中自动分析模块 |
 | `summary_assembler.py` | 卒中分析摘要组装 |
@@ -416,24 +410,6 @@ StrokeClaw/
 | `config/tmax.json` | Tmax 权重配置 |
 | `utils/` | 工具函数 |
 | `utils/nii_processor.py` | NIfTI 医学图像处理 |
-
-### MedGemma_Model/ — MedGemma 多模态模型
-
-| 文件 | 描述 |
-|---|---|
-| `config.json` | 模型配置文件 |
-| `tokenizer.*` | 分词器文件（多种格式） |
-| `model.safetensors*` | 模型权重文件（分片） |
-| `model.safetensors.index.json` | 权重索引 |
-| `preprocessor_config.json` | 预处理器配置 |
-| `processor_config.json` | 处理器配置 |
-| `generation_config.json` | 生成配置 |
-| `image_preprocessing.py` | 图像预处理脚本 |
-| `run_local_load.py` | 本地加载脚本 |
-| `run_nii_prompt_batch.py` | NIfTI 批处理脚本 |
-| `requirements.txt` | 依赖列表 |
-| `verify_cuda.py` | CUDA 验证脚本 |
-| `README.md` | MedGemma 说明文档 |
 
 ### EKV_docs/ — 外部知识校验文档
 
@@ -589,8 +565,6 @@ cd ..
 
 | 模块 | 文件 | 放置路径 | 链接 | 提取码 |
 |---|---|---|---|---|
-| MedGemma | `model-00001-of-00002.safetensors` | `MedGemma_Model/` | https://pan.baidu.com/s/1G6Ru1CaU3OiqDt5W7OrOUQ | `31k4` |
-| MedGemma | `model-00002-of-00002.safetensors` | `MedGemma_Model/` | https://pan.baidu.com/s/1xtl-r96R0f_dvJSFLwUDmw | `vqj8` |
 | Palette | CBF/CBV/Tmax 权重 | `palette/weights/cbf`、`palette/weights/cbv`、`palette/weights/tmax` | https://pan.baidu.com/s/1QzYK6Fx-wKtBSB-iVkhXBg | `ynua` |
 | MRDPM | CBF/CBV/Tmax 权重 | `mrdpm/weights/cbf`、`mrdpm/weights/cbv`、`mrdpm/weights/tmax` | https://pan.baidu.com/s/1hLgUh_lVA6RDWm4SaMZedg | `ixqm` |
 | NCCT 三分类 | `best_model.pt` | `backend/three_class/best_model.pt` | https://pan.baidu.com/s/1pyZbx1pIH3G6DlZkbm1gAg | `bvnv` |

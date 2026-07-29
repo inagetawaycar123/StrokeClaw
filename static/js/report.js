@@ -354,13 +354,41 @@ function getStructuredReportSummary(report) {
     };
 }
 
+function withPerfusionFindingFallback(findings, metrics) {
+    const safeFindings = Array.isArray(findings) ? findings : [];
+    const safeMetrics = Array.isArray(metrics) ? metrics : [];
+    const metricById = Object.fromEntries(
+        safeMetrics.map((item) => [item.metric_id, item])
+    );
+    const perfusionFallback = [
+        metricById.core_infarct_volume?.value != null
+            ? `Core ${reportValue(metricById.core_infarct_volume.value, 'mL')}`
+            : '',
+        metricById.penumbra_volume?.value != null
+            ? `Penumbra ${reportValue(metricById.penumbra_volume.value, 'mL')}`
+            : '',
+        metricById.mismatch_ratio?.value != null
+            ? `Mismatch ${reportValue(metricById.mismatch_ratio.value, '')}`
+            : '',
+    ].filter(Boolean).join(' · ');
+    return safeFindings.map((item) => (
+        item?.finding_id === 'perfusion_analysis'
+        && item?.status === 'completed'
+        && !item?.value
+        && perfusionFallback
+            ? { ...item, value: perfusionFallback }
+            : item
+    ));
+}
+
 const StructuredReportV2View = ({ report, legacyText, runId, fileId, patientId }) => {
     const h = React.createElement;
     const summary = getStructuredReportSummary(report);
     const meta = report.report_meta || {};
     const fields = Array.isArray(report.patient_summary?.fields) ? report.patient_summary.fields : [];
     const metrics = Array.isArray(report.quantitative_metrics) ? report.quantitative_metrics : [];
-    const imaging = Array.isArray(report.imaging_findings) ? report.imaging_findings : [];
+    const rawImaging = Array.isArray(report.imaging_findings) ? report.imaging_findings : [];
+    const imaging = withPerfusionFindingFallback(rawImaging, metrics);
     const rules = Array.isArray(report.rule_evaluations) ? report.rule_evaluations : [];
     const claims = Array.isArray(report.evidence_chain) ? report.evidence_chain : [];
     const evidence = Array.isArray(report.evidence_catalog) ? report.evidence_catalog : [];
@@ -493,7 +521,12 @@ const StructuredReportV2View = ({ report, legacyText, runId, fileId, patientId }
             h('div', { className: 'finding-grid' }, imaging.map((item) =>
                 h('article', { className: 'finding-card', key: item.finding_id },
                     h('div', { className: 'finding-heading' }, h('strong', null, item.display_name), statusBadge(item.status)),
-                    h('div', { className: 'finding-value' }, item.value || '未获得模型结果'),
+                    h('div', { className: 'finding-value' },
+                        item.value
+                        || (item.status === 'skipped' ? (item.limitations?.[0] || '已由安全门控跳过')
+                            : item.status === 'not_run' ? '未运行'
+                                : '未获得模型结果')
+                    ),
                     h('p', null, `来源：${item.source_module || '未知'} · 置信度：${item.confidence == null ? '未提供' : `${(Number(item.confidence) * 100).toFixed(1)}%`}`),
                     item.limitations?.length ? h('p', { className: 'finding-limit' }, item.limitations.join('；')) : null
                 )
@@ -966,6 +999,7 @@ if (typeof module !== 'undefined' && module.exports) {
         reportStatusClass,
         reportValue,
         getStructuredReportSummary,
+        withPerfusionFindingFallback,
     };
 }
 
