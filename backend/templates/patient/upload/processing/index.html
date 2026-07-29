@@ -1,11 +1,28 @@
-﻿{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>StrokeClaw | 医学影像任务编排审阅</title>
+    <!-- 相对路径同时兼容 Flask /processing 路由与直接打开模板进行答辩预览。 -->
+    <link rel="stylesheet" href="../../../../../static/css/contrast_control.css">
+    <link rel="stylesheet" href="../../../../../static/css/main.css?v=20260723_clinical_dag_review">
+</head>
+<body>
+<header class="top-bar">
+    <div class="logo">StrokeClaw</div>
+    <div class="patient-info" id="patientInfo" style="display:none;">
+        <span>患者 ID：<span id="patientId">-</span></span>
+        <span>序列：<span id="topSliceInfo">1/100</span></span>
+    </div>
+    <div class="disclaimer">⚠ AI 分析结果仅供临床参考，请由专业医师完成最终审阅</div>
+    <div class="tools">
+        <button class="tool-btn" id="runtimeBackUploadBtn" type="button">返回上传页</button>
+        <button class="tool-btn primary" id="runtimeTopViewerBtn" type="button" style="display:none;">进入 Viewer</button>
+    </div>
+</header>
 
-{% block tools %}
-<button class="tool-btn" id="runtimeBackUploadBtn">返回上传页</button>
-<button class="tool-btn" id="runtimeTopViewerBtn" style="display:none;">进入 Viewer</button>
-{% endblock %}
-
-{% block content %}
 <div class="container processing-runtime-page">
     <div class="page">
         <div class="runtime-shell runtime-shell-centered">
@@ -17,93 +34,125 @@
                 <div class="runtime-session-item">time <strong id="runtimeStartAt">-</strong></div>
             </div>
 
-            <section class="runtime-case-card">
-                <div class="runtime-case-head">
-                    <div>
-                        <h1>StrokeClaw Runtime Feed</h1>
-                        <p class="runtime-case-subtitle">
-                            上传主链与多智能体协作在同一时间轴推进，系统会持续展示当前动作、临床意义和阶段结论。
-                        </p>
-                    </div>
-                    <span class="runtime-status-pill pending" id="runtimeOverallStatus">Pending</span>
+            <section class="clinical-dag-hero">
+                <div>
+                    <p class="clinical-dag-eyebrow">CLINICAL TASK DAG · DOCTOR REVIEW</p>
+                    <h1>医学影像任务编排审阅</h1>
+                    <p class="clinical-dag-subtitle">
+                        系统已根据本次影像模态生成临床任务路径。请先确认医学任务范围；审阅通过后，才显示对应 Agent 与 Skill。
+                    </p>
                 </div>
-
-                <div class="runtime-case-grid">
-                    <div class="runtime-kv"><span>file_id</span><strong id="runtimeFileId">-</strong></div>
-                    <div class="runtime-kv"><span>modalities</span><strong id="runtimeModalities">-</strong></div>
-                    <div class="runtime-kv"><span>ncct_triage</span><strong id="runtimeThreeClass">-</strong></div>
-                    <div class="runtime-kv"><span>goal_question</span><strong id="runtimeGoalQuestion">-</strong></div>
-                    <div class="runtime-kv"><span>current_stage</span><strong id="runtimeCurrentStage">-</strong></div>
-                    <div class="runtime-kv"><span>current_tool</span><strong id="runtimeCurrentTool">-</strong></div>
-                    <div class="runtime-kv"><span>termination</span><strong id="runtimeTerminationReason">-</strong></div>
+                <div class="clinical-dag-hero-status">
+                    <span class="clinical-dag-review-pill pending" id="clinicalDagReviewStatus">待医生审阅</span>
+                    <small id="clinicalDagReviewHint">系统执行层当前已锁定</small>
                 </div>
-
-                <div class="runtime-case-actions">
-                    <button class="tool-btn" id="runtimeCopyFileBtn">复制 file_id</button>
-                    <button class="tool-btn" id="runtimeOpenCockpitBtn">进入 Cockpit</button>
-                    <button class="tool-btn primary" id="runtimeOpenViewerBtn" style="display:none;">进入 Viewer</button>
-                    <button class="tool-btn" id="runtimeGoW0Btn">打开 W0 联调页</button>
-                </div>
-                <div class="runtime-case-note" id="runtimeCaseNote">等待流程启动...</div>
             </section>
 
-            <section class="clinical-dag-review-card" id="clinicalDagReviewCard">
-                <div class="clinical-dag-review-head">
+            <section class="clinical-dag-card" id="clinicalDagReviewCard">
+                <div class="clinical-dag-section-head">
                     <div>
-                        <p class="clinical-dag-eyebrow">PRE-EXECUTION CLINICAL DAG</p>
-                        <h2>临床路径审批</h2>
-                        <p id="clinicalDagReviewHint">正在读取服务端生成的临床 DAG。审批前不会启动模型或 Agent。</p>
+                        <span class="clinical-layer-label">01 · 临床任务层</span>
+                        <h2>本次任务路径</h2>
+                        <p>仅展示医学任务、自动化边界、复核点与风险，不展示底层工程调用。</p>
                     </div>
-                    <span class="runtime-status-pill waiting" id="clinicalDagReviewStatus">Awaiting Review</span>
-                </div>
-                <div class="clinical-dag-summary">
-                    <span id="clinicalDagPathChip">路径待识别</span>
-                    <span id="clinicalDagNodeCount">0 个节点</span>
-                </div>
-                <div class="clinical-dag-modalities" id="clinicalModalityChips"></div>
-                <div class="clinical-dag-canvas" id="clinicalDagCanvas">
-                    <div class="runtime-empty">等待服务端 DAG...</div>
-                </div>
-                <div class="clinical-dag-notes">
-                    <p id="clinicalDagAutomaticSummary">审批通过后才会解锁影像模型和 Agent/Skill 执行。</p>
-                    <p id="clinicalDagRiskSummary">NCCT 疑似出血仍会触发第二层硬安全门控。</p>
-                </div>
-                <div class="clinical-dag-approval" id="clinicalDagApprovalPanel">
-                    <label for="clinicalDagReviewer">审阅人</label>
-                    <input id="clinicalDagReviewer" type="text" maxlength="80" autocomplete="off" placeholder="请输入审阅记录名称">
-                    <label class="clinical-dag-scope-check">
-                        <input id="clinicalDagScopeCheck" type="checkbox">
-                        <span>我已核对上传模态、计划节点及 inactive 能力说明。</span>
-                    </label>
-                    <div class="clinical-dag-actions">
-                        <button class="tool-btn primary" id="clinicalDagApproveBtn" type="button">批准并启动</button>
-                        <button class="tool-btn clinical-dag-reject-btn" id="clinicalDagRejectBtn" type="button">拒绝本次路径</button>
+                    <div class="clinical-dag-summary" aria-label="DAG摘要">
+                        <span id="clinicalDagPathChip">正在识别影像路径</span>
+                        <span id="clinicalDagNodeCount">0 个临床节点</span>
                     </div>
-                    <p id="clinicalDagApprovalMessage">等待医生审批。</p>
+                </div>
+
+                <div class="clinical-modality-strip">
+                    <span class="clinical-modality-label">已识别影像</span>
+                    <div class="clinical-modality-chips" id="clinicalModalityChips">
+                        <span class="clinical-modality-chip pending">等待模态识别</span>
+                    </div>
+                </div>
+
+                <div class="clinical-dag-legend" aria-label="图例">
+                    <span><i class="clinical-legend-dot automatic"></i>系统自动任务</span>
+                    <span><i class="clinical-legend-dot risk"></i>高风险节点</span>
+                </div>
+
+                <div class="clinical-dag-viewport">
+                    <div class="clinical-dag-canvas" id="clinicalDagCanvas" aria-live="polite">
+                        <svg class="clinical-dag-edges" id="clinicalDagEdges" aria-hidden="true"></svg>
+                        <div class="clinical-dag-loading">正在根据影像模态编排临床任务...</div>
+                    </div>
+                </div>
+
+                <div class="clinical-dag-review-grid">
+                    <article class="clinical-review-brief">
+                        <span class="clinical-review-brief-index">A</span>
+                        <div>
+                            <h3>自动完成范围</h3>
+                            <p id="clinicalDagAutomaticSummary">等待任务编排。</p>
+                        </div>
+                    </article>
+                    <article class="clinical-review-brief risk">
+                        <span class="clinical-review-brief-index">!</span>
+                        <div>
+                            <h3>安全边界</h3>
+                            <p id="clinicalDagRiskSummary">低质量、缺模态或高风险冲突将要求复核，不自动形成最终诊断。</p>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="clinical-review-action" id="clinicalDagApprovalPanel">
+                    <div class="clinical-review-form">
+                        <label>
+                            <span>审阅医生</span>
+                            <input id="clinicalDagReviewer" type="text" maxlength="40" autocomplete="name" placeholder="请输入姓名或工号">
+                        </label>
+                        <label class="clinical-review-check">
+                            <input id="clinicalDagScopeCheck" type="checkbox">
+                            <span>我已核对影像模态、任务范围与风险边界。</span>
+                        </label>
+                    </div>
+                    <div class="clinical-review-action-side">
+                        <button class="clinical-review-approve" id="clinicalDagApproveBtn" type="button" disabled>
+                            审阅通过并解锁系统执行层
+                        </button>
+                        <p id="clinicalDagApprovalMessage">通过前不会显示 Agent、Skill 或底层调用详情。</p>
+                    </div>
                 </div>
             </section>
 
             <section class="system-execution-card" id="systemExecutionCard" hidden>
-                <div>
-                    <p class="clinical-dag-eyebrow">EXECUTION AUDIT</p>
-                    <h2>系统执行与审阅留痕</h2>
+                <div class="clinical-dag-section-head">
+                    <div>
+                        <span class="clinical-layer-label approved">02 · 系统执行层</span>
+                        <h2>Agent 与 Skill 执行过程</h2>
+                        <p>沿用原 Runtime 时间线展示；仅在医生确认临床任务 DAG 后解锁。</p>
+                    </div>
+                    <div class="system-review-audit" id="systemReviewAudit"></div>
                 </div>
-                <div id="systemReviewAudit">审批完成后显示执行授权记录。</div>
+                <section class="runtime-orchestration-card system-runtime-orchestration">
+                    <h2>AGENT ORCHESTRATION</h2>
+                    <p id="runtimeOrchestrationText">系统将按审阅通过的临床 DAG 调用对应 Agent 与 Skill。</p>
+                    <p class="runtime-orchestration-path" id="runtimeOrchestrationPath">等待医生审阅...</p>
+                </section>
+                <section class="runtime-feed runtime-feed-centered system-runtime-feed" id="runtimeFeed">
+                    <div class="runtime-empty">等待系统执行层解锁...</div>
+                </section>
+                <div class="system-execution-actions">
+                    <button class="tool-btn" id="runtimeOpenCockpitBtn" type="button">进入 Cockpit</button>
+                </div>
             </section>
 
-            <section class="runtime-orchestration-card">
-                <h2>AGENT ORCHESTRATION</h2>
-                <p id="runtimeOrchestrationText">
-                    系统在上传主链完成后自动进入多智能体协作，并按“计划-执行-结果”持续输出可解释过程。
-                </p>
-                <p class="runtime-orchestration-path" id="runtimeOrchestrationPath">
-                    Case_Intake -> Modality_Detect -> CTP_Generate -> Vessel_Occlusion -> Stroke_Analysis -> Report -> Agent_Network
-                </p>
-            </section>
-
-            <section class="runtime-feed runtime-feed-centered" id="runtimeFeed">
-                <div class="runtime-empty">等待流程节点...</div>
-            </section>
+            <div class="runtime-legacy-bindings" hidden aria-hidden="true">
+                <span id="runtimeOverallStatus"></span>
+                <span id="runtimeFileId"></span>
+                <span id="runtimeModalities"></span>
+                <span id="runtimeThreeClass"></span>
+                <span id="runtimeGoalQuestion"></span>
+                <span id="runtimeCurrentStage"></span>
+                <span id="runtimeCurrentTool"></span>
+                <span id="runtimeTerminationReason"></span>
+                <button id="runtimeCopyFileBtn" type="button"></button>
+                <button id="runtimeOpenViewerBtn" type="button"></button>
+                <button id="runtimeGoW0Btn" type="button"></button>
+                <div id="runtimeCaseNote"></div>
+            </div>
 
             <section class="runtime-review-card" id="runtimeReviewCard" hidden>
                 <h2>REPORT REVIEW WORKFLOW</h2>
@@ -120,7 +169,7 @@
     </div>
 </div>
 
-<div class="runtime-agent-rail runtime-agent-rail-floating" id="runtimeAgentRail">
+<div class="runtime-agent-rail runtime-agent-rail-floating" id="runtimeAgentRail" hidden aria-hidden="true">
     <button class="runtime-rail-toggle" id="runtimeRailToggle" type="button">Agent Network ▾</button>
     <div class="runtime-rail-body" id="runtimeRailBody">
         <div class="runtime-rail-progress">
@@ -132,8 +181,19 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_scripts %}
-<script src="/static/js/processing.js?v=20260729_clinical_dag_review"></script>
-{% endblock %}
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="spinner"></div>
+        <div class="loading-text">处理中...</div>
+        <div class="loading-detail" id="loadingDetail">正在初始化任务编排</div>
+    </div>
+</div>
+<div class="message" id="messageBox"></div>
+<div id="contrast-panel-container" class="contrast-floating-panel hidden"></div>
+
+<script src="../../../../../static/js/contrast_control.js"></script>
+<script src="../../../../../static/js/common.js"></script>
+<script src="../../../../../static/js/processing.js?v=20260724_clean_dag_labels"></script>
+</body>
+</html>

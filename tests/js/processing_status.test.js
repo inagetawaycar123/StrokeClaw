@@ -18,8 +18,14 @@ function resetState() {
         revealedNodeIds: [],
         revealPendingIds: [],
         revealAt: Object.create(null),
-        dagReviewSubmitting: false,
-        dagReviewMessage: "",
+        dagReview: {
+            approved: false,
+            reviewer: "",
+            approvedAt: "",
+            fingerprint: "",
+            hydratedKey: "",
+            error: "",
+        },
     });
 }
 
@@ -53,17 +59,22 @@ test("normStatus keeps issue idempotent", () => {
 
 test("clinical DAG builder covers all four supported imaging paths with stable ids", () => {
     const cases = [
-        [["ncct"], "ncct_only"],
-        [["ncct", "mcta"], "ncct_single_phase_cta"],
-        [["ncct", "mcta", "vcta", "dcta"], "ncct_mcta"],
-        [["ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"], "ncct_mcta_ctp"],
+        [["ncct"], "ncct_only", 5],
+        [["ncct", "mcta"], "ncct_single_phase_cta", 6],
+        [["ncct", "mcta", "vcta", "dcta"], "ncct_mcta", 9],
+        [["ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"], "ncct_mcta_ctp", 9],
     ];
-    cases.forEach(([modalities, path]) => {
+    cases.forEach(([modalities, path, nodeCount]) => {
         const first = processing.buildClinicalDag(modalities);
         const reversed = processing.buildClinicalDag([...modalities].reverse());
         assert.equal(first.path, path);
-        assert.equal(first.dag_id, reversed.dag_id);
+        assert.equal(first.dagId, reversed.dagId);
         assert.equal(first.valid, true);
+        assert.equal(first.nodes.length, nodeCount);
+        assert.equal(
+            processing.clinicalDagStructureKey(first),
+            processing.clinicalDagStructureKey(reversed),
+        );
     });
 });
 
@@ -88,6 +99,55 @@ test("clinical DAG uses the server descriptor and keeps collateral capability in
     assert.equal(resolved.nodes[0].status, "inactive");
     assert.equal(processing.normStatus("awaiting_review"), "waiting");
     assert.equal(processing.normStatus("review_rejected"), "issue");
+});
+
+test("three-phase mCTA preserves the dev_zhao nine-node visual DAG", () => {
+    const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
+    const nodes = new Map(dag.nodes.map((node) => [node.id, node]));
+
+    assert.deepEqual(
+        dag.nodes.map((node) => node.title),
+        [
+            "影像质控",
+            "出血 / 缺血排查",
+            "血管闭塞识别",
+            "类 CTP 生成",
+            "侧支循环评估",
+            "卒中定量分析",
+            "内部一致性校验",
+            "外部指南一致性校验",
+            "结构化报告生成",
+        ],
+    );
+    assert.equal(nodes.get("collateral_score").riskLevel, "medium");
+    assert.ok(
+        dag.edges.some(
+            (edge) => edge.from === "pseudo_ctp" && edge.to === "stroke_analysis",
+        ),
+    );
+});
+
+test("uploaded CTP replaces pseudo-CTP while retaining the exact review layout", () => {
+    const dag = processing.buildClinicalDag([
+        "ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax",
+    ]);
+    const ids = dag.nodes.map((node) => node.id);
+
+    assert.equal(dag.path, "ncct_mcta_ctp");
+    assert.ok(ids.includes("ctp_review"));
+    assert.ok(!ids.includes("pseudo_ctp"));
+});
+
+test("collateral execution metadata remains planned and cannot masquerade as runtime output", () => {
+    const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
+    const rows = processing.systemExecutionRows(dag);
+    const collateral = rows
+        .flatMap((row) => row.invocations)
+        .find((item) => item.toolName === "collateral_score");
+
+    assert.ok(collateral);
+    assert.equal(collateral.capabilityStatus, "planned");
+    assert.equal(collateral.status, "pending");
 });
 
 test("corrupt completed vessel payload without prediction evidence becomes an issue", () => {
