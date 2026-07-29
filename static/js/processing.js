@@ -57,11 +57,25 @@ const RUN_RESULT_FETCH_MAX_WAIT_MS = 30000;
 const DEFAULT_NODE_VISIBLE_MS = 1000;
 const NODE_PRESENTATION_MS = Object.freeze({
     three_class: 3000,
-    ctp_generate: 60000,
+    ctp_generate: 4000,
     vessel_occlusion: 3000,
 });
 const PRESENTATION_PACED_NODE_KEYS = new Set(Object.keys(NODE_PRESENTATION_MS));
 const NON_BLOCKING_ISSUE_KEYS = new Set(["vessel_occlusion", "icv", "ekv", "consensus_lite"]);
+const LATE_PIPELINE_KEYS = new Set([
+    "stroke_analysis",
+    "run_stroke_analysis",
+    "pseudocolor",
+    "generate_pseudocolor",
+    "ai_report",
+    "generate_medgemma_report",
+    "icv",
+    "ekv",
+    "consensus_lite",
+    "human_confirm",
+    "human_review",
+    "emr_sync_writeback",
+]);
 const REVIEW_FALLBACK_SECTIONS = [
     { section_id: "patient_context", title: "患者基本信息与时窗", lead: "确认人口学与时间窗信息是否可支持后续决策。", guide: "请核对年龄、性别、起病至入院时间及 NIHSS。", risk_level: "low" },
     { section_id: "imaging_summary", title: "影像摘要（NCCT/CTA）", lead: "确认影像核心发现是否准确可读。", guide: "请确认 NCCT 与 CTA 的关键发现是否完整。", risk_level: "medium" },
@@ -646,7 +660,11 @@ function displayStatusForNode(node, now = Date.now()) {
     if (rawStatus === "issue") return "issue";
     if (!state.revealedNodeIds.includes(node.id)) return "pending";
     if (!PRESENTATION_PACED_NODE_KEYS.has(node.key)) return rawStatus;
-    if (node.key === "ctp_generate" && rawStatus !== "completed") return "running";
+    if (node.key === "ctp_generate" && rawStatus !== "completed") {
+        // After reload, upload job may still look "running" while agent already finished.
+        if (pipelineHasProgressPast("ctp_generate")) return "completed";
+        return "running";
+    }
     return revealedForMs(node, now) >= revealDurationMs(node) ? "completed" : "running";
 }
 
@@ -700,11 +718,60 @@ function revealNode(id, now = Date.now()) {
     return true;
 }
 
+function pipelineHasProgressPast(key) {
+    const keysAfter = LATE_PIPELINE_KEYS;
+    if (keysAfter.has(key)) return false;
+    const runSteps = state.latestRun?.steps || [];
+    for (const step of runSteps) {
+        const stepKey = t(step?.key, "");
+        if (!stepKey || !keysAfter.has(stepKey)) continue;
+        const st = normStatus(step.status);
+        if (st && st !== "pending") return true;
+    }
+    const hints = state.hints || {};
+    for (const stepKey of keysAfter) {
+        const st = normStatus(hints[stepKey]?.status);
+        if (st && st !== "pending") return true;
+    }
+    const runStatus = normStatus(state.latestRun?.status);
+    if (TERMINAL.has(runStatus)) return true;
+    if (state.review?.state?.all_confirmed) return true;
+    return false;
+}
+
+function shouldCatchUpReveal() {
+    const runStatus = normStatus(state.latestRun?.status);
+    if (TERMINAL.has(runStatus)) return true;
+    if (state.review?.visible && state.review?.state?.sections?.length) return true;
+    if (state.review?.state?.all_confirmed) return true;
+    return pipelineHasProgressPast("ctp_generate");
+}
+
+function catchUpRevealAll(order, now = Date.now()) {
+    // Reveal every known node immediately; backdate paced nodes so they don't look "Running".
+    state.revealedNodeIds = [...order];
+    state.revealPendingIds = [];
+    order.forEach((id) => {
+        const node = nodeById(id);
+        const raw = normStatus(node?.rawStatus || node?.status);
+        if (raw === "running" || raw === "pending") {
+            if (!state.revealAt[id]) state.revealAt[id] = now;
+            return;
+        }
+        state.revealAt[id] = now - revealDurationMs(node) - 50;
+    });
+    clearRevealTimer();
+}
+
 function canAdvanceRevealFrom(node) {
     if (!node) return false; // AI辅助生成：GLM-5, 2026-03-05
     const status = normStatus(node.status);
     if (status === "issue") return !isBlockingIssue(node);
-    if (node.key === "ctp_generate") return status === "completed";
+    if (node.key === "ctp_generate") {
+        if (status === "completed") return true;
+        // Avoid getting stuck on CTP after reload when later pipeline already finished.
+        return pipelineHasProgressPast("ctp_generate");
+    }
     if (PRESENTATION_PACED_NODE_KEYS.has(node.key)) return true;
     return REVEAL_ADVANCE_STATUSES.has(status);
 }
@@ -746,6 +813,11 @@ function syncRevealQueue() {
     state.revealPendingIds = order.filter((id) => !state.revealedNodeIds.includes(id));
 
     const now = Date.now(); // AI辅助生成：GLM-5, 2026-03-08
+    if (shouldCatchUpReveal()) {
+        catchUpRevealAll(order, now);
+        return;
+    }
+
     const firstIssueIndex = state.nodes.findIndex((node) => isBlockingIssue(node));
     if (firstIssueIndex >= 0) {
         const issueId = order[firstIssueIndex];
@@ -1049,6 +1121,84 @@ function reviewIsLocked(sectionId) {
     return idx > currentIdx;
 }
 
+function reviewEditorFieldIds() {
+    return ["runtimeReviewRewriteIntent", "runtimeReviewDraft", "runtimeReviewNote"];
+}
+
+function reviewEditorHasFocus() {
+    const activeId = document.activeElement?.id || "";
+    return reviewEditorFieldIds().includes(activeId);
+}
+
+function reviewCaptureEditorSnapshot() {
+    const active = document.activeElement;
+    const activeId = active?.id || "";
+    const snapshot = {
+        draftText: $("runtimeReviewDraft")?.value,
+        doctorNote: $("runtimeReviewNote")?.value,
+        rewriteIntent: $("runtimeReviewRewriteIntent")?.value,
+        focusedId: reviewEditorFieldIds().includes(activeId) ? activeId : "",
+        selectionStart: Number.isInteger(active?.selectionStart) ? active.selectionStart : null,
+        selectionEnd: Number.isInteger(active?.selectionEnd) ? active.selectionEnd : null,
+    };
+    return snapshot;
+}
+
+function reviewRestoreEditorSnapshot(snapshot) {
+    if (!snapshot) return;
+    const draft = $("runtimeReviewDraft");
+    const note = $("runtimeReviewNote");
+    const intent = $("runtimeReviewRewriteIntent");
+    if (draft && snapshot.draftText !== undefined) draft.value = snapshot.draftText;
+    if (note && snapshot.doctorNote !== undefined) note.value = snapshot.doctorNote;
+    if (intent && snapshot.rewriteIntent !== undefined) intent.value = snapshot.rewriteIntent;
+    if (!snapshot.focusedId) return;
+    const el = $(snapshot.focusedId);
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    if (
+        Number.isInteger(snapshot.selectionStart)
+        && Number.isInteger(snapshot.selectionEnd)
+        && typeof el.setSelectionRange === "function"
+    ) {
+        try {
+            el.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+        } catch (_err) {
+            /* ignore unsupported input types */
+        }
+    }
+}
+
+function reviewUpdatePanelChrome(reviewState, sections) {
+    const percent = reviewProgressPercent(reviewState);
+    const currentSection = reviewGetCurrentSection() || sections[0];
+    const currentRisk = reviewReadableRisk(currentSection?.risk_level);
+    const riskClass = token(currentSection?.risk_level || "low");
+    const head = document.querySelector(".runtime-review-progress-head span");
+    const bar = document.querySelector(".runtime-review-progress-bar span");
+    const meta = document.querySelector(".runtime-review-progress-meta");
+    const tags = document.querySelector(".runtime-review-progress-tags");
+    if (head) {
+        head.textContent = `${reviewState.confirmed_count || 0}/${reviewState.total_sections || sections.length} 已确认`;
+    }
+    if (bar) bar.style.width = `${percent}%`;
+    if (meta) meta.textContent = `完成度 ${percent}% · 未全部确认前禁止跳转 Viewer`;
+    if (tags) {
+        tags.innerHTML = `
+            <span class="runtime-review-tag ${riskClass}">当前风险：${currentRisk}</span>
+            <span class="runtime-review-tag ${state.review.offlineMode ? "offline" : "online"}">${state.review.offlineMode ? "离线兜底中" : "在线同步中"}</span>
+        `;
+    }
+    const finalizeBtn = document.querySelector('[data-review-action="enter_viewer"]');
+    if (finalizeBtn) {
+        finalizeBtn.disabled = !reviewState.all_confirmed || !!state.review.saving;
+    }
+    const doneBanner = document.querySelector(".runtime-review-done-banner");
+    if (doneBanner) {
+        doneBanner.hidden = !reviewState.all_confirmed;
+    }
+}
+
 function renderReviewPanel() {
     const card = $("runtimeReviewCard");
     const body = $("runtimeReviewBody");
@@ -1069,6 +1219,12 @@ function renderReviewPanel() {
     const reviewState = state.review.state;
     if (!reviewState || !Array.isArray(reviewState.sections) || !reviewState.sections.length) {
         body.innerHTML = `<div class="runtime-review-note">${t(state.review.error, "暂未获取到可审阅章节。")}</div>`;
+        return;
+    }
+
+    // Polling re-renders the whole page; do not destroy focused editors mid-typing.
+    if ($("runtimeReviewDraft") && reviewEditorHasFocus()) {
+        reviewUpdatePanelChrome(reviewState, reviewState.sections);
         return;
     }
 
@@ -1113,6 +1269,7 @@ function renderReviewPanel() {
     const noteText = noteLines.join(" ");
     const currentRisk = reviewReadableRisk(currentSection.risk_level);
     const riskClass = token(currentSection.risk_level || "low");
+    const editorSnapshot = reviewCaptureEditorSnapshot();
 
     body.innerHTML = `
         <div class="runtime-review-progress">
@@ -1161,17 +1318,20 @@ function renderReviewPanel() {
                         <textarea id="runtimeReviewNote" placeholder="可填写补充说明与修订原因">${t(currentSection.doctor_note, "")}</textarea>
                     </div>
                     ${suggestion}
-                    <div class="runtime-review-note">${noteText || "提示：高风险章节需显式确认后才可进入下一段。"} </div>
+                    <div class="runtime-review-note">${noteText || (canFinalize ? "全部章节已确认。" : "提示：高风险章节需显式确认后才可进入下一段。")} </div>
+                    <div class="runtime-review-done-banner"${canFinalize ? "" : " hidden"}>已全部确认</div>
                 </div>
                 <div class="runtime-review-actions runtime-review-actions-sticky">
-                    <button type="button" class="runtime-review-btn" data-review-action="rewrite_section"${state.review.saving ? " disabled" : ""}>AI改写此段</button>
+                    ${canFinalize
+                        ? `<button type="button" class="runtime-review-btn primary" data-review-action="enter_viewer"${state.review.saving ? " disabled" : ""}>进入 Viewer</button>`
+                        : `<button type="button" class="runtime-review-btn" data-review-action="rewrite_section"${state.review.saving ? " disabled" : ""}>AI改写此段</button>
                     <button type="button" class="runtime-review-btn" data-review-action="save_section"${state.review.saving ? " disabled" : ""}>保存编辑</button>
-                    <button type="button" class="runtime-review-btn primary" data-review-action="confirm_section"${state.review.saving ? " disabled" : ""}>确认本段并继续</button>
-                    <button type="button" class="runtime-review-btn warn" data-review-action="finalize_review"${(!canFinalize || state.review.saving) ? " disabled" : ""}>全部确认后进入 Viewer</button>
+                    <button type="button" class="runtime-review-btn primary" data-review-action="confirm_section"${state.review.saving ? " disabled" : ""}>确认本段并继续</button>`}
                 </div>
             </section>
         </div>
     `;
+    reviewRestoreEditorSnapshot(editorSnapshot);
 }
 
 function reviewReadEditorValues() {
@@ -1371,7 +1531,7 @@ function openViewerWithGate() {
 async function reviewHandleAction(action) {
     if (!state.review.state || state.review.saving) return;
     const { sectionId, draftText, doctorNote, rewriteIntent } = reviewReadEditorValues();
-    if (!sectionId && action !== "finalize_review") return;
+    if (!sectionId && action !== "finalize_review" && action !== "enter_viewer") return;
     const section = reviewGetCurrentSection();
     state.review.saving = true; // AI辅助生成：GLM-5, 2026-04-13
     state.review.error = "";
@@ -1461,7 +1621,7 @@ async function reviewHandleAction(action) {
                 }
                 state.review.offlineMode = false; // AI辅助生成：GLM-5, 2026-04-17
                 reviewClearLocalOps();
-                state.review.info = data?.all_confirmed ? "全部章节确认完成，人工复核节点已完成，准备进入 Viewer。" : "章节确认成功，已解锁下一段。";
+                state.review.info = data?.all_confirmed ? "已全部确认，请点击「进入 Viewer」。" : "章节确认成功，已解锁下一段。";
             } catch (err) {
                 const next = reviewLocalConfirm(sectionId, draftText, doctorNote);
                 reviewSetState(next);
@@ -1474,39 +1634,29 @@ async function reviewHandleAction(action) {
                 state.review.offlineMode = true;
                 state.review.error = `确认已转本地兜底：${err.message}`;
             }
-            if (reviewCanEnterViewer()) {
-                render();
-                scheduleViewer(true); // AI辅助生成：GLM-5, 2026-04-18
-                return;
-            }
             render();
             return;
         }
 
-        if (action === "finalize_review") {
-            try {
-                const data = await reviewApiPost("finalize_review", {});
-                reviewSetState(data.review_state, { keepCurrent: true });
-                if (data?.run_status) {
-                    state.latestRun = { ...(state.latestRun || {}), status: data.run_status };
-                }
-                if (typeof data?.final_report === "string" && data.final_report.trim()) {
-                    persistReport(state.fileId, {
-                        report: data.final_report,
-                        report_payload: runReport(state.latestRun)?.report_payload || null,
-                    });
-                }
-                state.review.offlineMode = false;
-                reviewClearLocalOps(); // AI辅助生成：GLM-5, 2026-04-19
-                state.review.info = "最终确认版报告已生成，人工复核节点已完成。";
-                render();
-                scheduleViewer(true);
-                return;
-            } catch (err) {
-                state.review.error = `最终归档失败：${err.message}`;
+        if (action === "enter_viewer") {
+            if (!reviewCanEnterViewer()) {
+                state.review.error = "请先完成全部章节确认。";
                 render();
                 return;
             }
+            openViewerWithGate();
+            return;
+        }
+
+        if (action === "finalize_review") {
+            // Kept for compatibility with older queued ops; prefer enter_viewer.
+            if (!reviewCanEnterViewer()) {
+                state.review.error = "请先完成全部章节确认。";
+                render();
+                return;
+            }
+            openViewerWithGate();
+            return;
         }
     } finally {
         state.review.saving = false;
@@ -1568,7 +1718,7 @@ async function pollRun() {
                         const ok = await ensureReviewState(false);
                         if (ok) {
                             if (s === "succeeded" && state.runTimer) { clearInterval(state.runTimer); state.runTimer = null; }
-                            if (s === "succeeded" && reviewCanEnterViewer()) scheduleViewer(true);
+                            // Stay on processing page after review; doctor clicks 「进入 Viewer」.
                         }
                     } else if (Date.now() >= state.reportResultRetryUntil) {
                         clearInterval(state.runTimer); state.runTimer = null; state.awaitingReport = false; state.error = "报告尚未就绪，已暂停自动跳转。请稍后手动进入 Viewer。";

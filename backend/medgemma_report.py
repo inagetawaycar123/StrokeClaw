@@ -183,6 +183,36 @@ def _resolve_dtype(dtype: str, resolved_device: str) -> torch.dtype:
     return torch.float32 # AI辅助生成：GLM-5, 2026-04-11
 
 
+def _is_git_lfs_pointer(path: str) -> bool:
+    try:
+        if not os.path.isfile(path):
+            return False
+        if os.path.getsize(path) > 1024:
+            return False
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            first = handle.readline().strip()
+        return first.startswith("version https://git-lfs.github.com/spec/v1")
+    except Exception:
+        return False
+
+
+def _assert_tokenizer_files_ready(model_dir: str) -> None:
+    """tokenizer.json / tokenizer.model are often Git LFS pointers after clone."""
+    missing: List[str] = []
+    for name in ("tokenizer.json", "tokenizer.model"):
+        path = os.path.join(model_dir, name)
+        if not os.path.isfile(path):
+            missing.append(f"{name} (missing)")
+        elif _is_git_lfs_pointer(path):
+            missing.append(f"{name} (Git LFS pointer only, ~{os.path.getsize(path)}B)")
+    if missing:
+        raise FileNotFoundError(
+            "MedGemma tokenizer 未就绪: "
+            + "; ".join(missing)
+            + "。请用 git lfs pull 拉取，或从 Hugging Face 下载真实 tokenizer 文件到 MedGemma_Model/"
+        )
+
+
 def load_medgemma(
     model_dir: Optional[str] = None,
     device: str = "auto",
@@ -200,6 +230,7 @@ def load_medgemma(
             _log("Using cached MedGemma model")
             return _MODEL, _PROCESSOR, _MODEL_META
 
+        _assert_tokenizer_files_ready(resolved_model_dir)
         _log(f"Loading MedGemma model from {resolved_model_dir}")
         t0 = time.time()
         _MODEL = AutoModelForImageTextToText.from_pretrained(
@@ -1035,6 +1066,134 @@ def _quality_check_markdown(
     }
 
 
+def _build_offline_fallback_report(
+    structured_data: Dict[str, Any],
+    imaging_data: Dict[str, Any],
+    file_id: str,
+    output_format: str,
+    *,
+    reason: str,
+) -> Dict[str, Any]:
+    """Build a structured report without MedGemma so the pipeline can continue."""
+    modalities = normalize_modalities(
+        (imaging_data or {}).get("available_modalities", [])
+    )
+    if not modalities:
+        modalities = infer_modalities_from_files(file_id)
+    valid_combo, combo = resolve_modality_combo(modalities)
+    if not valid_combo:
+        combo = "NCCT_ONLY"
+        modalities = modalities or ["ncct"]
+
+    hemisphere = parse_hemisphere(
+        (imaging_data or {}).get("hemisphere") or structured_data.get("hemisphere")
+    )
+    structured_data = dict(structured_data or {})
+    structured_data["hemisphere"] = hemisphere
+
+    ncct_section = _normalize_ncct_section({})
+    cta_sections: List[Tuple[str, Dict[str, str]]] = []
+    for modality, title in (
+        ("mcta", "CTA（动脉期）"),
+        ("vcta", "CTA（静脉期）"),
+        ("dcta", "CTA（延迟期）"),
+    ):
+        if modality in set(modalities):
+            cta_sections.append((title, _normalize_cta_section({})))
+
+    stage2_sections = _stage2_fallback(ncct_section, cta_sections)
+    core_volume, penumbra_volume, mismatch_ratio = _ctp_values(
+        structured_data, imaging_data or {}
+    )
+    show_ctp = combo in {"NCCT_MCTA", "NCCT_MCTA_CTP"}
+    ctp_lines = (
+        _build_ctp_enhanced_lines(core_volume, penumbra_volume, mismatch_ratio)
+        if show_ctp
+        else None
+    )
+    markdown = _compose_markdown(
+        ncct_section, cta_sections, stage2_sections, ctp_lines
+    )
+    warning = (
+        f"MedGemma 不可用，已使用离线结构化报告继续流程。原因: {reason}"
+    )
+    markdown = f"> {warning}\n\n{markdown}"
+    vessel_result = vessel_result_from_sources(structured_data)
+    report_payload = {
+        "modalities": modalities,
+        "combo": combo,
+        "sections": {
+            "ncct": ncct_section,
+            "cta": [
+                {"title": title, "data": section} for title, section in cta_sections
+            ],
+            "ctp": {
+                "enabled": bool(show_ctp),
+                "core_infarct_volume": core_volume,
+                "penumbra_volume": penumbra_volume,
+                "mismatch_ratio": mismatch_ratio,
+            },
+        },
+        "summary_findings": _build_summary_findings(
+            ncct_section, cta_sections, stage2_sections, ctp_lines
+        ),
+        "ctp_enhanced": ctp_lines if show_ctp else None,
+        "risk_notice": list(_RISK_NOTICE),
+        "vessel_occlusion_result": vessel_result,
+        "vessel_occlusion_status": vessel_result.get("status"),
+        "vessel_occlusion_class_result": vessel_result.get(
+            "vessel_occlusion_class_result"
+        ),
+        "vessel_occlusion_confidence": vessel_result.get("confidence"),
+        "ncct_enhanced": stage2_sections.get("ncct_enhanced", []),
+        "cta_enhanced": {
+            "arterial": stage2_sections.get("cta_arterial_enhanced", []),
+            "venous": stage2_sections.get("cta_venous_enhanced", []),
+            "delayed": stage2_sections.get("cta_delayed_enhanced", []),
+        },
+        "quality_checks": {"offline_fallback": True, "reason": reason},
+        "is_mock": True,
+        "warning": warning,
+    }
+
+    os.makedirs(_results_dir(), exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    json_path = os.path.join(
+        _results_dir(), f"medgemma_report_offline_{file_id}_{timestamp}.json"
+    )
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "meta": {"file_id": file_id, "offline_fallback": True, "reason": reason},
+                "report_payload": report_payload,
+                "markdown": markdown,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    _log(warning)
+    report_content = (
+        json.dumps(
+            {"ncct": ncct_section, "cta": {t: s for t, s in cta_sections}},
+            ensure_ascii=False,
+            indent=2,
+        )
+        if output_format == "json"
+        else markdown
+    )
+    return {
+        "success": True,
+        "format": output_format,
+        "report": report_content,
+        "json_path": json_path,
+        "report_payload": report_payload,
+        "is_mock": True,
+        "warning": warning,
+    }
+
+
 def generate_report_with_medgemma(
     structured_data: Dict[str, Any],
     imaging_data: Dict[str, Any],
@@ -1346,4 +1505,20 @@ def generate_report_with_medgemma(
         }
     except Exception as exc:
         _log(f"Report generation failed: {exc}")
-        return {"success": False, "error": str(exc), "format": output_format}
+        if str(os.environ.get("MEDGEMMA_NO_FALLBACK", "")).strip() in {"1", "true", "True"}:
+            return {"success": False, "error": str(exc), "format": output_format}
+        try:
+            return _build_offline_fallback_report(
+                structured_data or {},
+                imaging_data or {},
+                file_id or "",
+                output_format,
+                reason=str(exc),
+            )
+        except Exception as fallback_exc:
+            _log(f"Offline fallback also failed: {fallback_exc}")
+            return {
+                "success": False,
+                "error": f"{exc}; fallback failed: {fallback_exc}",
+                "format": output_format,
+            }

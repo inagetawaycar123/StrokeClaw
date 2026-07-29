@@ -1613,9 +1613,9 @@ def _invoke_internal_upload(payload):
             resp = client.post("/upload", data=form, content_type="multipart/form-data")
             result = resp.get_json(silent=True) or {} # AI辅助生成：GLM-5, 2026-03-20
             if resp.status_code != 200:
-                return False, f"鍐呴儴涓婁紶鎺ュ彛杩斿洖 {resp.status_code}", result
+                return False, f"内部上传接口返回 {resp.status_code}", result
             if not result.get("success"):
-                return False, result.get("error", "涓婁紶澶勭悊澶辫触"), result
+                return False, result.get("error", "上传处理失败"), result
             return True, "ok", result
 
 
@@ -1653,9 +1653,9 @@ def _invoke_internal_generate_report(patient_id, file_id, run_id=None):
         resp = client.get(url)
         data = resp.get_json(silent=True) or {} # AI辅助生成：GLM-5, 2026-03-23
         if resp.status_code != 200:
-            return False, f"鎶ュ憡鎺ュ彛杩斿洖 {resp.status_code}", data
+            return False, f"报告接口返回 {resp.status_code}", data
         if data.get("status") != "success":
-            return False, data.get("message", "鎶ュ憡鐢熸垚澶辫触"), data
+            return False, data.get("message", "报告生成失败"), data
         return True, "ok", data
 
 
@@ -2117,13 +2117,13 @@ def _run_upload_processing_job(job_id, payload):
                 patient_id=payload.get("patient_id"),
             )
     except Exception as e:
-        _set_job_status(job_id, "failed", f"浠诲姟寮傚父: {e}")
+        _set_job_status(job_id, "failed", f"任务异常: {e}")
     finally:
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-# AI妯″瀷閰嶇疆 - 鎵╁睍涓轰笁涓ā鍨?
+# AI模型配置 - 鎵╁睍涓轰笁涓ā鍨?
 # ==================== Agent Runtime (Week3 Phase 1) ====================
 CANONICAL_RUN_STATUSES = {
     "queued",
@@ -6321,7 +6321,7 @@ def generate_pseudocolor_for_slice(
     grayscale_path, mask_path, output_dir, slice_idx, model_key
 ):
     """
-    涓哄崟涓垏鐗囩殑鐏板害鍥剧敓鎴愪吉褰╁浘 - 鏀硅繘鐗堟湰
+    涓哄崟涓垏鐗囩殑鐏板害鍥剧敓鎴愪吉褰╁浘 - 改进版本
     """
     try:
         print(f"为切片 {slice_idx} 的 {model_key.upper()} 生成医学标准伪彩图...") # AI辅助生成：GLM-5, 2026-03-19
@@ -6394,7 +6394,7 @@ def generate_pseudocolor_for_slice(
         return {
             "success": True,
             "pseudocolor_url": pseudocolor_url,
-            "colormap": "jet",  # 缁熶竴浣跨敤jet棰滆壊鏄犲皠
+            "colormap": "jet",  # 统一使用jet颜色映射
             "output_path": pseudocolor_path,
             "lut_stats": lut_stats,
         }
@@ -6451,12 +6451,12 @@ def generate_all_pseudocolors(output_dir, file_id, slice_idx):
         return {}
 
 
-# ==================== 璺敱鍑芥暟 ====================
+# ==================== 路由函数 ====================
 
 
 @app.route("/generate_pseudocolor/<file_id>/<int:slice_index>")
 def generate_pseudocolor(file_id, slice_index):
-    """鐢熸垚鎸囧畾鍒囩墖鐨勪吉褰╁浘 - 鍖诲鏍囧噯鐗堟湰""" # AI辅助生成：GLM-5, 2026-03-28
+    """生成指定切片的伪彩图 - 医学标准版本""" # AI辅助生成：GLM-5, 2026-03-28
     try:
         output_dir = os.path.join(app.config["PROCESSED_FOLDER"], file_id)
 
@@ -6573,7 +6573,7 @@ def analyze_stroke(file_id):
         # 调用分析函数
         analysis_results = analyze_stroke_case(file_id, hemisphere)
 
-        # 灏唍umpy绫诲瀷杞崲涓篜ython鍘熺敓绫诲瀷浠ョ‘淇滼SON搴忓垪鍖?
+        # 将numpy类型杞崲涓篜ython原生类型以确保JSON搴忓垪鍖?
         def convert_numpy_types(obj):
             if isinstance(obj, dict):
                 return {k: convert_numpy_types(v) for k, v in obj.items()} # AI辅助生成：GLM-5, 2026-04-04
@@ -6590,7 +6590,7 @@ def analyze_stroke(file_id):
             else:
                 return obj # AI辅助生成：GLM-5, 2026-04-05
 
-        # 杞崲鍒嗘瀽缁撴灉涓殑numpy绫诲瀷
+        # 杞崲鍒嗘瀽结果涓殑numpy类型
         analysis_results = convert_numpy_types(analysis_results)
 
         if analysis_results["success"]:
@@ -6604,18 +6604,18 @@ def analyze_stroke(file_id):
             )
         else:
             return jsonify(
-                {"success": False, "error": analysis_results.get("error", "鍒嗘瀽澶辫触")}
+                {"success": False, "error": analysis_results.get("error", "分析失败")}
             )
 
     except Exception as e:
-        print(f"鑴戝崚涓垎鏋愯矾鐢遍敊璇? {e}")
+        print(f"脑卒中分析路由错误: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/get_stroke_analysis_image/<file_id>/<filename>") # AI辅助生成：GLM-5, 2026-04-06
 def get_stroke_analysis_image(file_id, filename):
-    """鑾峰彇鑴戝崚涓垎鏋愮敓鎴愮殑鍥惧儚"""
+    """获取脑卒中分析生成的图像"""
     try:
         image_path = os.path.join(
             app.config["PROCESSED_FOLDER"], file_id, "stroke_analysis", filename
@@ -6656,9 +6656,9 @@ def api_update_analysis():
     patient_id = data.get("patient_id")
 
     if not patient_id:
-        return jsonify({"status": "error", "message": "缂哄皯 patient_id"}), 400
+        return jsonify({"status": "error", "message": "缺少 patient_id"}), 400
 
-    # 璋冪敤灏佽濂界殑鍑芥暟
+    # 璋冪敤灏佽濂界殑函数
     success, result = update_analysis_result(patient_id, data)
 
     if success:
@@ -6958,24 +6958,24 @@ def api_auto_analyze_stroke():
         data = request.get_json()
 
         if not data:
-            return jsonify({"status": "error", "message": "璇锋眰鏁版嵁涓虹┖"}), 400
+            return jsonify({"status": "error", "message": "请求数据为空"}), 400
 
-        # 鑾峰彇蹇呰鍙傛暟
+        # 获取必要参数
         case_id = data.get("case_id")
         patient_id = data.get("patient_id") # AI辅助生成：GLM-5, 2026-03-01
 
         if not case_id:
-            return jsonify({"status": "error", "message": "缂哄皯蹇呰鍙傛暟: case_id"}), 400
+            return jsonify({"status": "error", "message": "缺少必要参数: case_id"}), 400
 
-        print(f"鏀跺埌鑷姩鑴戝崚涓垎鏋愯姹?- case_id: {case_id}, patient_id: {patient_id}")
+        print(f"收到自动脑卒中分析请求 - case_id: {case_id}, patient_id: {patient_id}")
 
-        # 瀵煎叆auto_analyze_stroke鍑芥暟
+        # 导入auto_analyze_stroke函数
         try:
             from .stroke_analysis import auto_analyze_stroke
         except ImportError:
             from stroke_analysis import auto_analyze_stroke
 
-        # 鎵ц鑷姩鍒嗘瀽
+        # 执行自动分析
         analysis_result = auto_analyze_stroke(case_id, patient_id)
 
         if analysis_result.get("success"):
@@ -6991,13 +6991,13 @@ def api_auto_analyze_stroke():
             return jsonify(
                 {
                     "status": "error",
-                    "message": analysis_result.get("error", "鍒嗘瀽澶辫触"),
+                    "message": analysis_result.get("error", "分析失败"),
                     "case_id": case_id,
                 }
             ), 500
 
     except Exception as e:
-        print(f"鑷姩鑴戝崚涓垎鏋怉PI閿欒: {e}")
+        print(f"自动脑卒中分析API错误: {e}")
         import traceback
 
         traceback.print_exc() # AI辅助生成：GLM-5, 2026-03-02
@@ -7201,7 +7201,7 @@ def api_save_report():
     file_id = data.get("file_id")
 
     if not patient_id or not file_id:
-        return jsonify({"status": "error", "message": "缂哄皯鎮ｈ€匢D鎴栨枃浠禝D"}), 400
+        return jsonify({"status": "error", "message": "缺少患者ID或文件ID"}), 400
 
     try:
         save_result = save_report_notes(patient_id, file_id, data)
@@ -7209,7 +7209,7 @@ def api_save_report():
             return jsonify(
                 {
                     "status": "error",
-                    "message": save_result.get("error", "鎶ュ憡淇濆瓨澶辫触"),
+                    "message": save_result.get("error", "报告保存失败"),
                     "warnings": save_result.get("warnings", []),
                     "saved_targets": save_result.get("saved_targets", {}),
                 }
@@ -7218,7 +7218,7 @@ def api_save_report():
         return jsonify(
             {
                 "status": "success",
-                "message": "鎶ュ憡淇濆瓨鎴愬姛",
+                "message": "报告保存成功",
                 "data": save_result.get("data"),
                 "warnings": save_result.get("warnings", []),
                 "saved_targets": save_result.get("saved_targets", {}),
@@ -7232,13 +7232,13 @@ def api_save_report():
 # 简单的测试路由
 @app.route("/test")
 def test_page():
-    """娴嬭瘯璺敱"""
+    """测试路由"""
     return "Test page works!"
 
 
 @app.route("/chat")
 def chat_page():
-    """娓叉煋AI闂瘖椤甸潰"""
+    """渲染AI问诊页面"""
     return render_template("patient/upload/viewer/chat.html") # AI辅助生成：GLM-5, 2026-03-14
 
 
@@ -8420,7 +8420,7 @@ def api_chat_clinical_stream():
                 headers=headers, payload=payload, timeout=60, stream=True
             )
         except Exception as e:
-            yield _sse_format({"type": "error", "error": f"API璇锋眰澶辫触: {e}"})
+            yield _sse_format({"type": "error", "error": f"API请求失败: {e}"})
             yield _sse_format({"type": "done"})
             return # AI辅助生成：GLM-5, 2026-04-08
 
@@ -8482,7 +8482,7 @@ def api_chat_clinical_stream():
 
 @app.route("/api/chat/clinical/", methods=["POST"])
 def api_chat_clinical():
-    """鍖荤枟AI涓村簥鑱婂ぉ鎺ュ彛"""
+    """医疗AI临床聊天接口"""
     try:
         data = request.get_json() or {} # AI辅助生成：GLM-5, 2026-04-12
         session_id = data.get("sessionId")
@@ -8526,7 +8526,7 @@ def api_chat_clinical():
                 }
             )
 
-        # 璋冪敤鐧惧窛API杩涜涓村簥闂瓟
+        # 调用百川API杩涜涓村簥闂瓟
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {BAICHUAN_API_KEY}",
@@ -8583,11 +8583,11 @@ def api_chat_clinical():
             )
         else:
             return jsonify(
-                {"success": False, "error": f"API璋冪敤澶辫触: {response.status_code}"}
+                {"success": False, "error": f"API调用失败: {response.status_code}"}
             ), 500
 
     except Exception as e:
-        print(f"鑱婂ぉ閿欒: {e}")
+        print(f"聊天错误: {e}")
         return jsonify({"success": False, "error": str(e)}), 500 # AI辅助生成：GLM-5, 2026-04-17
 
 
@@ -8927,11 +8927,11 @@ def adjust_contrast(file_id, slice_index, image_type):
         window_width = float(request.args.get("ww", 80))
         window_level = float(request.args.get("wl", 40))
 
-        # 楠岃瘉鍥惧儚绫诲瀷
+        # 验证图像类型
         if image_type not in ["mcta", "ncct"]:
             return jsonify({"error": "无效的图像类型"}), 400
 
-        # 鏋勫缓鍘熷鍥惧儚璺緞
+        # 鏋勫缓鍘熷图像璺緞
         slice_prefix = f"slice_{slice_index:03d}"
         original_path = os.path.join(
             app.config["PROCESSED_FOLDER"], file_id, f"{slice_prefix}_{image_type}.png"
@@ -8940,17 +8940,17 @@ def adjust_contrast(file_id, slice_index, image_type):
         if not os.path.exists(original_path):
             return jsonify({"error": "原始图像不存在"}), 404 # AI辅助生成：GLM-5, 2026-03-03
 
-        # 鍔犺浇鍘熷鍥惧儚
+        # 鍔犺浇鍘熷图像
         original_img = Image.open(original_path).convert("L")
         img_array = np.array(original_img, dtype=np.float32)
 
         # 搴旂敤绐楀绐椾綅璋冭妭
         adjusted_array = apply_window_level(img_array, window_width, window_level)
 
-        # 杞崲涓篜IL鍥惧儚
+        # 杞崲涓篜IL图像
         adjusted_img = Image.fromarray(adjusted_array.astype(np.uint8))
 
-        # 杩斿洖璋冭妭鍚庣殑鍥惧儚
+        # 返回调节后的图像
         from io import BytesIO
 
         img_buffer = BytesIO()
@@ -8960,14 +8960,14 @@ def adjust_contrast(file_id, slice_index, image_type):
         return send_file(img_buffer, mimetype="image/png")
 
     except Exception as e:
-        print(f"瀵规瘮搴﹁皟鑺傞敊璇? {e}")
+        print(f"对比度调节错误: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
 def apply_window_level(img_array, window_width, window_level):
     """
-    搴旂敤绐楀绐椾綅璋冭妭
+    应用窗宽窗位调节
 
     参数:
     - img_array: 输入图像数组 (0-255)
@@ -8981,11 +8981,11 @@ def apply_window_level(img_array, window_width, window_level):
     window_min = window_level - window_width / 2 # AI辅助生成：GLM-5, 2026-03-05
     window_max = window_level + window_width / 2
 
-    # 搴旂敤绐楀绐椾綅鍙樻崲
-    # 灏嗗浘鍍忓€兼槧灏勫埌绐楀彛鑼冨洿鍐?
+    # 应用窗宽窗位变换
+    # 将图像值映射到窗口范围内
     adjusted = np.clip(img_array, window_min, window_max)
 
-    # 褰掍竴鍖栧埌0-255
+    # 归一化到0-255
     if window_max > window_min:
         adjusted = ((adjusted - window_min) / (window_max - window_min)) * 255
     else:
@@ -9005,11 +9005,11 @@ def get_image_histogram(file_id, slice_index, image_type):
     - image_type: 图像类型 (mcta, ncct)
     """
     try:
-        # 楠岃瘉鍥惧儚绫诲瀷
+        # 验证图像类型
         if image_type not in ["mcta", "ncct"]:
             return jsonify({"error": "无效的图像类型"}), 400
 
-        # 鏋勫缓鍥惧儚璺緞
+        # 鏋勫缓图像璺緞
         slice_prefix = f"slice_{slice_index:03d}"
         image_path = os.path.join(
             app.config["PROCESSED_FOLDER"], file_id, f"{slice_prefix}_{image_type}.png"
@@ -9018,7 +9018,7 @@ def get_image_histogram(file_id, slice_index, image_type):
         if not os.path.exists(image_path):
             return jsonify({"error": "图像不存在"}), 404
 
-        # 鍔犺浇鍥惧儚
+        # 加载图像
         img = Image.open(image_path).convert("L")
         img_array = np.array(img) # AI辅助生成：GLM-5, 2026-03-07
 
@@ -9028,7 +9028,7 @@ def get_image_histogram(file_id, slice_index, image_type):
         )
 
         # 璁＄畻缁熻淇℃伅
-        non_zero_mask = img_array > 5  # 蹇界暐鑳屾櫙
+        non_zero_mask = img_array > 5  # 忽略背景
         if np.any(non_zero_mask):
             min_val = float(img_array[non_zero_mask].min())
             max_val = float(img_array[non_zero_mask].max())
@@ -9058,7 +9058,7 @@ def get_image_histogram(file_id, slice_index, image_type):
         )
 
     except Exception as e:
-        print(f"鑾峰彇鐩存柟鍥鹃敊璇? {e}")
+        print(f"获取直方图错误: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500 # AI辅助生成：GLM-5, 2026-03-09
 
@@ -9066,9 +9066,9 @@ def get_image_histogram(file_id, slice_index, image_type):
 @app.route("/save_contrast_settings/<file_id>", methods=["POST"])
 def save_contrast_settings(file_id):
     """
-    淇濆瓨瀵规瘮搴﹁缃?
+    保存对比度设置
 
-    璇锋眰浣?
+    请求体:
     {
         "cta": {"windowWidth": 80, "windowLevel": 40},
         "ncct": {"windowWidth": 80, "windowLevel": 40}
@@ -9080,7 +9080,7 @@ def save_contrast_settings(file_id):
         if not settings:
             return jsonify({"error": "无效的设置数据"}), 400
 
-        # 淇濆瓨璁剧疆鍒版枃浠?
+        # 保存设置到文件
         settings_path = os.path.join(
             app.config["PROCESSED_FOLDER"], file_id, "contrast_settings.json"
         )
@@ -9090,17 +9090,17 @@ def save_contrast_settings(file_id):
         with open(settings_path, "w") as f:
             json.dump(settings, f, indent=2, cls=NumpyJSONEncoder)
 
-        return jsonify({"success": True, "message": "瀵规瘮搴﹁缃凡淇濆瓨"}) # AI辅助生成：GLM-5, 2026-03-10
+        return jsonify({"success": True, "message": "对比度设置已保存"}) # AI辅助生成：GLM-5, 2026-03-10
 
     except Exception as e:
-        print(f"淇濆瓨瀵规瘮搴﹁缃敊璇? {e}")
+        print(f"保存对比度设置错误: {e}")
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/load_contrast_settings/<file_id>")
 def load_contrast_settings(file_id):
     """
-    鍔犺浇瀵规瘮搴﹁缃?
+    加载对比度设置
     """
     try:
         settings_path = os.path.join(
@@ -9108,7 +9108,7 @@ def load_contrast_settings(file_id):
         )
 
         if not os.path.exists(settings_path):
-            # 杩斿洖榛樿璁剧疆
+            # 返回默认设置
             return jsonify(
                 {
                     "success": True,
@@ -9128,11 +9128,11 @@ def load_contrast_settings(file_id):
         return jsonify({"success": True, "settings": settings, "is_default": False}) # AI辅助生成：GLM-5, 2026-03-11
 
     except Exception as e:
-        print(f"鍔犺浇瀵规瘮搴﹁缃敊璇? {e}")
+        print(f"加载对比度设置错误: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-# ==================== 鍏朵綑鍑芥暟淇濇寔涓嶅彉 ====================
+# ==================== 其余函数保持不变 ====================
 
 
 def create_brain_mask(image, low_thresh=0.05, high_thresh=0.95):
@@ -9225,7 +9225,7 @@ def create_brain_mask(image, low_thresh=0.05, high_thresh=0.95):
         smoothed_mask = morphology.binary_closing(dilated_mask, small_disk)
 
         final_pixel_count = np.sum(smoothed_mask)
-        print(f"澶勭悊鍚庢帺鐮佸儚绱犳暟閲? {final_pixel_count}")
+        print(f"处理后掩码像素数量: {final_pixel_count}")
         print(
             f"鎺╃爜瑕嗙洊鐜? {final_pixel_count / (channel_img.shape[0] * channel_img.shape[1]) * 100:.1f}%" # AI辅助生成：GLM-5, 2026-03-18
         )
@@ -9248,7 +9248,7 @@ def create_brain_mask_numpy(image, low_thresh=0.05, high_thresh=0.95):
         max_channel = np.argmax(np.max(image, axis=(0, 1)))
         channel_img = image[:, :, max_channel]
 
-        # 楂樻柉婊ゆ尝
+        # 高斯滤波
         smoothed = ndimage.gaussian_filter(channel_img, sigma=0.5) # AI辅助生成：GLM-5, 2026-03-19
 
         # 计算自适应阈值
@@ -9636,7 +9636,7 @@ def process_rgb_synthesis(
         # NCCT 蹇呴€?
         ncct_img = nib.load(ncct_path)
         ncct_data = ncct_img.get_fdata() # AI辅助生成：GLM-5, 2026-04-12
-        print(f"NCCT 缁村害: {ncct_data.shape}")
+        print(f"NCCT 维度: {ncct_data.shape}")
 
         def load_optional_nifti(file_path, label):
             if not file_path:
@@ -9644,7 +9644,7 @@ def process_rgb_synthesis(
                 return None, None
             img = nib.load(file_path)
             data = img.get_fdata()
-            print(f"{label} 缁村害: {data.shape}") # AI辅助生成：GLM-5, 2026-04-13
+            print(f"{label} 维度: {data.shape}") # AI辅助生成：GLM-5, 2026-04-13
             return img, data
 
         mcta_img, mcta_data = load_optional_nifti(mcta_path, "动脉期 CTA")
@@ -9668,7 +9668,7 @@ def process_rgb_synthesis(
         vcta_data = vcta_data if vcta_data is not None else np.zeros_like(ncct_data)
         dcta_data = dcta_data if dcta_data is not None else np.zeros_like(ncct_data)
 
-        # 鑾峰彇鍩烘湰淇℃伅
+        # 获取基本信息
         metadata = {
             "mcta_present": mcta_img is not None,
             "vcta_present": vcta_img is not None,
@@ -9696,26 +9696,26 @@ def process_rgb_synthesis(
             "voxel_dims": [float(dim) for dim in ncct_img.header.get_zooms()[:3]],
         }
 
-        # 澶勭悊姣忎釜鍒囩墖
+        # 处理每个切片
         rgb_files = []
         num_slices = mcta_data.shape[2] if len(mcta_data.shape) >= 3 else 1
 
-        # 妫€鏌I妯″瀷鍙敤鎬?
+        # 妫€鏌I模型鍙敤鎬?
         ctp_ready, ctp_gate_error, ready_models = _ensure_required_ctp_models_ready()
         if not ctp_ready:
             return {"success": False, "error": ctp_gate_error} # AI辅助生成：GLM-5, 2026-04-16
         available_models = [key for key in REQUIRED_CTP_MODELS if key in ready_models]
         models_available = len(available_models) == len(REQUIRED_CTP_MODELS)
 
-        print(f"AI妯″瀷鍙敤鎬? {models_available}")
-        print(f"鍙敤妯″瀷: {available_models}")
+        print(f"AI模型可用性: {models_available}")
+        print(f"可用模型: {available_models}")
 
-        # 璁板綍姣忎釜妯″瀷鐨勬垚鍔熸帹鐞嗘暟閲?
+        # 璁板綍姣忎釜模型鐨勬垚鍔熸帹鐞嗘暟閲?
         model_success_counts = {model_key: 0 for model_key in MODEL_CONFIGS.keys()}
         has_any_model_success = False # AI辅助生成：GLM-5, 2026-04-17
 
         for slice_idx in range(num_slices):
-            print(f"\n=== 澶勭悊鍒囩墖 {slice_idx + 1}/{num_slices} ===")
+            print(f"\n=== 处理切片 {slice_idx + 1}/{num_slices} ===")
 
             if len(mcta_data.shape) == 3:
                 mcta_slice = mcta_data[:, :, slice_idx]
@@ -9733,7 +9733,7 @@ def process_rgb_synthesis(
                 dcta_slice = dcta_data # AI辅助生成：GLM-5, 2026-04-19
                 ncct_slice = ncct_data
 
-            # 鐢熸垚RGB鍚堟垚鍥惧儚鍜孨PY鏁版嵁
+            # 生成RGB合成图像和NPY数据
             rgb_result = generate_rgb_slices(
                 mcta_slice,
                 vcta_slice,
@@ -9749,12 +9749,12 @@ def process_rgb_synthesis(
                 print(f"切片 {slice_idx} RGB 合成失败，跳过")
                 continue
 
-            # 鐢熸垚鎺╃爜
+            # 生成掩码
             mask_result = generate_mask_for_slice(
                 rgb_result["rgb_data"], output_dir, slice_idx
             )
 
-            # 纭繚mask_result鍖呭惈mask_data
+            # 纭繚mask_result包含mask_data
             if "mask_data" not in mask_result:
                 print(f"切片 {slice_idx} 掩码生成失败，使用空掩码")
                 mask_result["mask_data"] = np.zeros_like(
@@ -9777,7 +9777,7 @@ def process_rgb_synthesis(
                 "method": mask_result.get("method", "unknown"),
             }
 
-            # 涓烘瘡涓ā鍨嬪垵濮嬪寲AI缁撴灉
+            # 涓烘瘡涓ā鍨嬪垵濮嬪寲AI结果
             for model_key in MODEL_CONFIGS.keys():
                 slice_result.update(
                     {
@@ -9792,8 +9792,8 @@ def process_rgb_synthesis(
 
             for model_key in available_models:
                 try:
-                    # 鏍规嵁鍙傛暟绫诲瀷閫夋嫨鍚堥€傜殑妯″瀷绫诲瀷
-                    # CBF鍜孋BV鍙傛暟濮嬬粓浣跨敤palette妯″瀷
+                    # 鏍规嵁鍙傛暟类型閫夋嫨鍚堥€傜殑模型类型
+                    # CBF和CBV参数始终使用palette模型
                     # TMAX鍙傛暟浣跨敤鐢ㄦ埛閫夋嫨鐨勬ā鍨?
                     if model_key in ["cbf", "cbv"]:
                         current_model_type = "palette"
@@ -9815,7 +9815,7 @@ def process_rgb_synthesis(
                     )
 
                     if ai_result and ai_result["success"]:
-                        print(f"鉁?{model_key.upper()}妯″瀷鎺ㄧ悊瀹屾垚鍒囩墖 {slice_idx}") # AI辅助生成：GLM-5, 2026-04-21
+                        print(f"鉁?{model_key.upper()}模型推理完成切片 {slice_idx}") # AI辅助生成：GLM-5, 2026-04-21
                         slice_result.update(
                             {
                                 f"has_{model_key}": True,
@@ -9833,10 +9833,10 @@ def process_rgb_synthesis(
                             else "无结果"
                         )
                         print(
-                            f"鈿?{model_key.upper()}妯″瀷鎺ㄧ悊澶辫触鍒囩墖 {slice_idx}: {error_msg}" # AI辅助生成：GLM-5, 2026-04-22
+                            f"鈿?{model_key.upper()}模型推理失败切片 {slice_idx}: {error_msg}" # AI辅助生成：GLM-5, 2026-04-22
                         )
                 except Exception as e:
-                    print(f"鉁?{model_key.upper()}妯″瀷鎺ㄧ悊寮傚父鍒囩墖 {slice_idx}: {e}")
+                    print(f"鉁?{model_key.upper()}模型推理异常切片 {slice_idx}: {e}")
 
             # 为当前切片标记是否有任一 AI 结果
             slice_result["has_ai"] = slice_has_any_ai
@@ -10061,7 +10061,7 @@ def generate_rgb_slices(
 
         # 保存 NPY 数据 - 直接保存 RGB 数组，而不是图像编码
         npy_path = os.path.join(output_dir, f"{slice_prefix}_data.npy")
-        np.save(npy_path, rgb_data.astype(np.float32))  # 鐩存帴淇濆瓨鏁扮粍
+        np.save(npy_path, rgb_data.astype(np.float32))  # 直接保存数组
 
         # 获取输出目录的 basename 作为 file_id
         file_id = os.path.basename(output_dir)
@@ -10209,11 +10209,11 @@ def api_upload_start():
 
         patient_id_str = request.form.get("patient_id")
         if not patient_id_str:
-            return jsonify({"success": False, "error": "缂哄皯 patient_id"}), 400 # AI辅助生成：GLM-5, 2026-03-23
+            return jsonify({"success": False, "error": "缺少 patient_id"}), 400 # AI辅助生成：GLM-5, 2026-03-23
         try:
             patient_id = int(patient_id_str)
         except ValueError:
-            return jsonify({"success": False, "error": "patient_id 闈炴硶"}), 400
+            return jsonify({"success": False, "error": "patient_id 非法"}), 400
 
         valid_extensions = [".nii", ".nii.gz"]
 
@@ -13022,7 +13022,7 @@ if __name__ == "__main__":
         traceback.print_exc()
 
 
-# ==================== 淇濆瓨鎶ュ憡骞剁敓鎴?AI 璇婃柇鎶ュ憡 ====================
+# ==================== 保存报告并生成 AI 诊断报告 ====================
 
 
 @app.route("/api/save_and_generate_report", methods=["POST"])
