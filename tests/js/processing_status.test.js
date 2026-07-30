@@ -150,6 +150,196 @@ test("collateral execution metadata remains planned and cannot masquerade as run
     assert.equal(collateral.status, "pending");
 });
 
+test("approved execution cards retain Agent and Skill metadata in the sequential feed", () => {
+    const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
+    const nodes = [
+        {
+            id: "upload_modality_detect",
+            key: "modality_detect",
+            subtitle: "模态识别与路径判定",
+            detailInput: { available_modalities: ["ncct", "mcta", "vcta", "dcta"] },
+            meta: [],
+        },
+    ];
+
+    const [decorated] = processing.decorateExecutionNodes(dag, nodes);
+
+    assert.equal(decorated.subtitle, "影像质控 · Triage Planner");
+    assert.equal(decorated.detailInput.assigned_agent, "Triage Planner");
+    assert.equal(decorated.detailInput.called_skill_id, "SKILL_MODALITY_ID");
+    assert.equal(decorated.detailInput.skill_name, "modality_identification");
+    assert.ok(decorated.meta.includes("assigned_agent · Triage Planner"));
+});
+
+test("NCCT running is the only visible execution node while later steps are pending", () => {
+    processing.state.nodes = [
+        { id: "three-class", key: "three_class", group: "upload", status: "running" },
+        { id: "ctp", key: "ctp_generate", group: "upload", status: "pending" },
+        { id: "vessel", key: "vessel_occlusion", group: "upload", status: "pending" },
+    ];
+
+    processing.syncRevealQueue();
+
+    assert.deepEqual(processing.state.revealedNodeIds, ["three-class"]);
+    assert.deepEqual(processing.state.revealPendingIds, ["ctp", "vessel"]);
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[0]).status,
+        "running",
+    );
+});
+
+test("NCCT completed and CTP running are displayed from the same backend poll", () => {
+    processing.state.nodes = [
+        { id: "three-class", key: "three_class", group: "upload", status: "completed" },
+        { id: "ctp", key: "ctp_generate", group: "upload", status: "running" },
+        { id: "vessel", key: "vessel_occlusion", group: "upload", status: "pending" },
+    ];
+
+    processing.syncRevealQueue();
+
+    assert.deepEqual(processing.state.revealedNodeIds, ["three-class", "ctp"]);
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[0]).status,
+        "completed",
+    );
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[1]).status,
+        "running",
+    );
+});
+
+test("CTP completion does not reveal the next pending node", () => {
+    processing.state.nodes = [
+        { id: "three-class", key: "three_class", group: "upload", status: "completed" },
+        { id: "ctp", key: "ctp_generate", group: "upload", status: "completed" },
+        { id: "vessel", key: "vessel_occlusion", group: "upload", status: "pending" },
+    ];
+
+    processing.syncRevealQueue();
+
+    assert.deepEqual(processing.state.revealedNodeIds, ["three-class", "ctp"]);
+    assert.deepEqual(processing.state.revealPendingIds, ["vessel"]);
+});
+
+test("the next node is appended only after its backend status becomes running", () => {
+    processing.state.nodes = [
+        { id: "three-class", key: "three_class", group: "upload", status: "completed" },
+        { id: "ctp", key: "ctp_generate", group: "upload", status: "completed" },
+        { id: "vessel", key: "vessel_occlusion", group: "upload", status: "pending" },
+    ];
+
+    processing.syncRevealQueue();
+    processing.state.nodes[2].status = "running";
+    processing.syncRevealQueue();
+
+    assert.deepEqual(
+        processing.state.revealedNodeIds,
+        ["three-class", "ctp", "vessel"],
+    );
+});
+
+test("elapsed time cannot complete a running node or reveal a pending node", () => {
+    const originalNow = Date.now;
+    let now = 1000;
+    Date.now = () => now;
+    try {
+        processing.state.nodes = [
+            { id: "ctp", key: "ctp_generate", group: "upload", status: "running" },
+            { id: "vessel", key: "vessel_occlusion", group: "upload", status: "pending" },
+        ];
+
+        processing.syncRevealQueue();
+        now += 10 * 60 * 1000;
+        processing.syncRevealQueue();
+
+        assert.deepEqual(processing.state.revealedNodeIds, ["ctp"]);
+        assert.equal(
+            processing.withDisplayStatus(processing.state.nodes[0]).status,
+            "running",
+        );
+    } finally {
+        Date.now = originalNow;
+    }
+});
+
+test("skipped and waiting states are visible while review blocks later nodes", () => {
+    processing.state.nodes = [
+        { id: "skipped-step", key: "archive_ready", group: "upload", status: "skipped" },
+        { id: "review-step", key: "human_confirm", group: "agent", status: "waiting" },
+        { id: "future-step", key: "stroke_analysis", group: "agent", status: "completed" },
+    ];
+
+    processing.syncRevealQueue();
+    assert.deepEqual(processing.state.revealedNodeIds, ["skipped-step", "review-step"]);
+    assert.equal(processing.nodeStatus("skipped"), "skipped");
+    assert.equal(processing.canAdvanceRevealFrom(processing.state.nodes[1]), false);
+});
+
+test("upload job completion cannot be overwritten by stale Agent running hints", () => {
+    const resolved = processing.resolveUploadNodeState(
+        { status: "completed", message: "CTP 灌注图生成完成" },
+        { status: "running", message: "Tool running" },
+        { status: "running", inputSummary: "正在调用旧 Agent" },
+    );
+
+    assert.equal(resolved.status, "completed");
+    assert.equal(resolved.message, "CTP 灌注图生成完成");
+    assert.equal(resolved.summaryHint, null);
+});
+
+test("backend CTP progress text remains authoritative while the node is running", () => {
+    processing.state.latestJob = {
+        status: "running",
+        steps: [{
+            key: "ctp_generate",
+            status: "running",
+            message: "正在生成 CTP 灌注图：CBV · 切片 2/4 · 41%",
+        }],
+    };
+    processing.state.latestRun = {
+        steps: [{
+            key: "generate_ctp_maps",
+            status: "completed",
+            message: "stale completion",
+        }],
+    };
+    processing.state.hints = {
+        generate_ctp_maps: {
+            status: "completed",
+            resultSummary: "旧 Agent 已完成",
+        },
+    };
+
+    const node = processing.buildNodes().find((item) => item.key === "ctp_generate");
+
+    assert.equal(node.status, "running");
+    assert.match(node.fallback, /CBV · 切片 2\/4 · 41%/);
+    assert.match(node.summary.doing, /正在执行/);
+    assert.doesNotMatch(node.summary.doing, /旧 Agent 已完成/);
+});
+
+test("completed NCCT card does not retain a stale executing conclusion", () => {
+    processing.state.latestJob = {
+        status: "running",
+        result: {
+            three_class_summary: {
+                display: "正常 2 | 脑出血 0 | 脑缺血 1",
+            },
+        },
+        steps: [{
+            key: "three_class",
+            status: "completed",
+            message: "正常 2 | 脑出血 0 | 脑缺血 1",
+        }],
+    };
+
+    const node = processing.buildNodes().find((item) => item.key === "three_class");
+
+    assert.equal(node.status, "completed");
+    assert.match(node.summary.doing, /已完成/);
+    assert.doesNotMatch(node.summary.doing, /正在执行/);
+});
+
 test("corrupt completed vessel payload without prediction evidence becomes an issue", () => {
     const normalized = processing.normalizeVesselOcclusionResult({
         status: "completed",
@@ -179,7 +369,7 @@ test("a legacy label without model evidence remains unavailable", () => {
     assert.equal(result.vessel_occlusion_class_result, null);
 });
 
-test("missing CTA is a completed non-applicable upload step", () => {
+test("missing CTA is a skipped non-applicable upload step", () => {
     processing.state.latestJob = {
         status: "completed",
         result: {
@@ -199,7 +389,7 @@ test("missing CTA is a completed non-applicable upload step", () => {
     };
 
     const node = processing.buildNodes().find((item) => item.key === "vessel_occlusion");
-    assert.equal(node.status, "completed");
+    assert.equal(node.status, "skipped");
     assert.match(node.fallback, /No CTA slice images found/);
     assert.equal(node.riskItems.length, 0);
 });

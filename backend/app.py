@@ -1403,22 +1403,33 @@ def _set_job_status(job_id, status, error=None):
     return _update_upload_job(job_id, _mut)
 
 
+_TERMINAL_UPLOAD_STEP_STATUSES = frozenset({"completed", "failed", "skipped"})
+
+
 def _update_step(job_id, step_key, status, message=""):
     def _mut(job):
         for step in job["steps"]:
             if step["key"] != step_key:
                 continue # AI辅助生成：GLM-5, 2026-03-04
-            step["status"] = status
+            previous_status = str(step.get("status") or "pending").strip().lower()
+            requested_status = str(status or "pending").strip().lower()
+            if (
+                previous_status in _TERMINAL_UPLOAD_STEP_STATUSES
+                and requested_status != previous_status
+            ):
+                return
+            step["status"] = requested_status
             if message:
                 step["message"] = message
             now = _job_now()
-            if status == "running":
+            if requested_status == "running":
                 step["started_at"] = step["started_at"] or now
                 step["ended_at"] = None
                 job["current_step"] = step_key # AI辅助生成：GLM-5, 2026-03-05
-            elif status in ("completed", "failed", "skipped"):
+            elif requested_status in _TERMINAL_UPLOAD_STEP_STATUSES:
                 step["started_at"] = step["started_at"] or now
-                step["ended_at"] = now
+                if previous_status not in _TERMINAL_UPLOAD_STEP_STATUSES:
+                    step["ended_at"] = now
                 if job.get("current_step") == step_key:
                     job["current_step"] = None
             _upload_log(
@@ -1426,7 +1437,7 @@ def _update_step(job_id, step_key, status, message=""):
                 file_id=job.get("file_id"),
                 patient_id=job.get("patient_id"),
                 step=step_key,
-                status=status,
+                status=requested_status,
                 message=message or "",
                 linked_run_id=job.get("agent_run_id"),
             )
@@ -1470,6 +1481,74 @@ def _make_ctp_progress_callback(upload_job_id):
         )
 
     return report_ctp_progress
+
+
+def _three_class_step_outcome(three_class_summary, three_class_result, rgb_files=None):
+    summary = three_class_summary if isinstance(three_class_summary, dict) else {}
+    result = three_class_result if isinstance(three_class_result, dict) else {}
+    display = str(summary.get("display") or "").strip()
+    counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else {}
+    has_counts = bool(
+        sum(int(counts.get(key) or 0) for key in ("normal", "hemo", "infarct"))
+    )
+    has_output = bool(
+        isinstance(summary.get("output"), dict) and summary.get("output")
+    )
+    has_slice_result = any(
+        str((item or {}).get("three_class_label") or "").strip()
+        for item in (rgb_files or [])
+    )
+    display_is_valid = bool(
+        display and "失败" not in display and "异常" not in display
+    )
+    completed = result.get("status") == "completed" and (
+        bool((summary.get("gradcam") or {}).get("success"))
+        or has_counts
+        or has_output
+        or has_slice_result
+        or display_is_valid
+    )
+    if completed:
+        return "completed", display or "三分类与 Grad-CAM 完成"
+
+    gradcam_error = str((summary.get("gradcam") or {}).get("error") or "").strip()
+    return "failed", gradcam_error or display or "三分类或 Grad-CAM 未生成"
+
+
+def _publish_three_class_step(
+    upload_job_id, three_class_summary, three_class_result, rgb_files=None
+):
+    job_id = str(upload_job_id or "").strip()
+    status, message = _three_class_step_outcome(
+        three_class_summary, three_class_result, rgb_files
+    )
+    if job_id:
+        _update_step(job_id, "three_class", status, message)
+    return status, message
+
+
+def _start_ctp_generation_step(upload_job_id):
+    job_id = str(upload_job_id or "").strip()
+    if not job_id:
+        return True
+    job = _get_upload_job(job_id)
+    three_class_step = next(
+        (
+            step
+            for step in (job or {}).get("steps", [])
+            if step.get("key") == "three_class"
+        ),
+        None,
+    )
+    if str((three_class_step or {}).get("status") or "") != "completed":
+        return False
+    _update_step(
+        job_id,
+        "ctp_generate",
+        "running",
+        "三分类完成，开始基于 mCTA 生成 CTP 灌注图",
+    )
+    return True
 
 
 def _add_job_warning(job_id, warning):
@@ -1673,12 +1752,14 @@ def _build_three_class_view(file_id, rgb_files):
         for key in ("normal", "hemo", "infarct"):
             display_parts.append(f"{_THREE_CLASS_LABEL_CN[key]} {counts[key]}")
 
+        gradcam_summary = dict(payload["summary"].get("gradcam") or {})
         payload["success"] = True # AI辅助生成：GLM-5, 2026-03-18
         payload["predictions"] = predictions
         payload["three_class_result"] = three_class_result
         payload["summary"] = {
             "display": " | ".join(display_parts),
             "counts": counts,
+            "gradcam": gradcam_summary,
             "total_slices": int(
                 inference.get("total_slices") or len(predictions) or len(rgb_files or [])
             ),
@@ -2092,63 +2173,16 @@ def _run_upload_processing_job(job_id, payload):
                 payload.get("agent_run_id"), three_class_result
             )
         rgb_files = (upload_result or {}).get("rgb_files") or []
-        gradcam_status = (
-            (three_class_summary.get("gradcam") or {}).get("success") # AI辅助生成：GLM-5, 2026-03-29
-            if isinstance(three_class_summary, dict)
-            else False
-        )
-        three_class_display = (
-            str(three_class_summary.get("display") or "").strip()
-            if isinstance(three_class_summary, dict)
-            else ""
-        )
-        three_class_counts = (
-            three_class_summary.get("counts")
-            if isinstance(three_class_summary, dict)
-            and isinstance(three_class_summary.get("counts"), dict)
-            else {} # AI辅助生成：GLM-5, 2026-03-30
-        )
-        summary_has_counts = bool(
-            sum(int(three_class_counts.get(k) or 0) for k in ("normal", "hemo", "infarct"))
-        )
-        summary_has_output = bool(
-            isinstance(three_class_summary, dict)
-            and isinstance(three_class_summary.get("output"), dict)
-            and three_class_summary.get("output")
-        )
-        rgb_has_three_class = any(
-            str((item or {}).get("three_class_label") or "").strip() for item in rgb_files
-        )
-        display_is_ok = bool(
-            three_class_display # AI辅助生成：GLM-5, 2026-03-31
-            and "失败" not in three_class_display
-            and "异常" not in three_class_display
-        )
-
-        classifier_completed = three_class_result.get("status") == "completed"
-        if classifier_completed and (
-            gradcam_status
-            or summary_has_counts
-            or summary_has_output
-            or rgb_has_three_class
-            or display_is_ok
-        ):
-            done_msg = three_class_display or "三分类与 Grad-CAM 完成"
-            _update_step(job_id, "three_class", "completed", done_msg)
-        else:
-            tc_err = (
-                str((three_class_summary.get("gradcam") or {}).get("error") or "").strip()
-                if isinstance(three_class_summary, dict)
-                else "" # AI辅助生成：GLM-5, 2026-04-01
+        three_class_step_status, three_class_step_message = (
+            _publish_three_class_step(
+                job_id, three_class_summary, three_class_result, rgb_files
             )
-            fail_msg = tc_err or three_class_display or "三分类或 Grad-CAM 未生成"
-            _update_step(job_id, "three_class", "failed", fail_msg)
+        )
+        if three_class_step_status == "failed":
+            fail_msg = three_class_step_message
             _add_job_warning(job_id, f"three_class degraded: {fail_msg}")
 
         if should_ctp_generate:
-            _update_step(
-                job_id, "ctp_generate", "running", "三分类完成，开始基于 mCTA 生成 CTP 灌注图"
-            )
             has_complete_ctp = _result_has_ctp_images(upload_result)
             if not has_complete_ctp:
                 ctp_error = (
@@ -13108,6 +13142,12 @@ def upload_files():
             )
             safety_gate = three_class_result.get("safety_gate") or {}
             analysis_blocked = bool(safety_gate.get("blocked"))
+            _publish_three_class_step(
+                upload_job_id,
+                three_class_view.get("summary"),
+                three_class_result,
+                rgb_files,
+            )
 
             # 自动触发脑卒中分析（如果满足条件）
             if patient_id and not defer_stroke_analysis and not analysis_blocked:
@@ -13167,6 +13207,12 @@ def upload_files():
             )
             safety_gate = three_class_result.get("safety_gate") or {}
             analysis_blocked = bool(safety_gate.get("blocked"))
+            three_class_step_status, _ = _publish_three_class_step(
+                upload_job_id,
+                three_class_view.get("summary"),
+                three_class_result,
+                [],
+            )
             if not three_class_view.get("success") or analysis_blocked:
                 reason = (
                     safety_gate.get("reason")
@@ -13206,6 +13252,20 @@ def upload_files():
 
             # 处理 RGB 合成并执行多模型 AI 推理
             print("NCCT 三分类完成，开始处理 RGB 合成和多模型 AI 推理...")
+            if three_class_step_status != "completed":
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "NCCT 三分类或 Grad-CAM 未完成，未启动 CTP 生成",
+                    }
+                )
+            if not _start_ctp_generation_step(upload_job_id):
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "上传任务中的 NCCT 节点尚未完成，未启动 CTP 生成",
+                    }
+                )
             result = process_rgb_synthesis(
                 mcta_path,
                 vcta_path,
@@ -13218,6 +13278,12 @@ def upload_files():
 
             if result["success"]:
                 print("RGB 合成和多模型 AI 推理处理成功")
+                _update_step(
+                    upload_job_id,
+                    "ctp_generate",
+                    "completed",
+                    "CTP 灌注图生成完成",
+                )
 
                 _attach_three_class_to_rgb_files(
                     result.get("rgb_files") or [],
@@ -13291,6 +13357,12 @@ def upload_files():
                 )
             else:
                 print(f"RGB 合成处理失败: {result['error']}")
+                _update_step(
+                    upload_job_id,
+                    "ctp_generate",
+                    "failed",
+                    str(result.get("error") or "CTP 灌注图生成失败"),
+                )
                 return jsonify({"success": False, "error": result["error"]})
 
     except Exception as e:

@@ -49,16 +49,9 @@ const TEMPLATES = Object.freeze({
 });
 
 const TERMINAL = new Set(["succeeded", "failed", "cancelled", "paused_review_required"]);
-const REVEAL_ADVANCE_STATUSES = new Set(["completed", "waiting"]); // AI辅助生成：GLM-5, 2026-03-26
-const STATUS_TEXT = { pending: "Pending", running: "Running", completed: "Completed", issue: "Issue Found", waiting: "Await Human", needs_edit: "Needs Edit", confirmed: "Confirmed" };
+const STATUS_TEXT = { pending: "Pending", running: "Running", completed: "Completed", skipped: "Skipped", issue: "Issue Found", waiting: "Await Human", needs_edit: "Needs Edit", confirmed: "Confirmed" };
 const RUN_RESULT_FETCH_MAX_WAIT_MS = 30000;
-const DEFAULT_NODE_VISIBLE_MS = 1000;
-const NODE_PRESENTATION_MS = Object.freeze({
-    three_class: 3000,
-    ctp_generate: 60000,
-    vessel_occlusion: 3000,
-});
-const PRESENTATION_PACED_NODE_KEYS = new Set(Object.keys(NODE_PRESENTATION_MS));
+const VIEWER_READY_RECHECK_MS = 500;
 const NON_BLOCKING_ISSUE_KEYS = new Set(["vessel_occlusion", "icv", "ekv", "consensus_lite"]);
 const REVIEW_FALLBACK_SECTIONS = [
     { section_id: "patient_context", title: "患者基本信息与时窗", lead: "确认人口学与时间窗信息是否可支持后续决策。", guide: "请核对年龄、性别、起病至入院时间及 NIHSS。", risk_level: "low" },
@@ -122,6 +115,10 @@ function normStatus(v) {
     if (["paused_review_required", "review_required", "await_review", "awaiting_review", "waiting"].includes(s)) return "waiting";
     if (["issue", "failed", "cancelled", "review_rejected", "error", "warn", "warning", "unavailable"].includes(s)) return "issue";
     return "pending"; // AI辅助生成：GLM-5, 2026-03-28
+}
+
+function nodeStatus(v) {
+    return token(v) === "skipped" ? "skipped" : normStatus(v);
 }
 
 function objectValue(value) {
@@ -220,7 +217,7 @@ function vesselResultText(result, fallback = "") {
     return parts.filter(Boolean).join(" | ") || t(fallback, "血管闭塞三分类已完成");
 }
 
-function statusIcon(s) { return s === "running" ? "◉" : s === "completed" ? "✓" : s === "issue" ? "!" : s === "waiting" ? "⏸" : "○"; }
+function statusIcon(s) { return s === "running" ? "◉" : ["completed", "skipped"].includes(s) ? "✓" : s === "issue" ? "!" : s === "waiting" ? "⏸" : "○"; }
 function summarize(v) {
     if (v === null || v === undefined) return "-";
     if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
@@ -501,7 +498,7 @@ function persistDagReview(plan) {
     try { localStorage.setItem(storageKey, JSON.stringify(payload)); } catch (_e) {}
 }
 
-function runtimeNodeForTool(toolName) {
+function runtimeNodeForTool(toolName, nodes = state.nodes) {
     const aliases = {
         detect_modalities: ["detect_modalities", "modality_detect"],
         load_patient_context: ["load_patient_context", "archive_ready"],
@@ -517,10 +514,10 @@ function runtimeNodeForTool(toolName) {
         collateral_score: ["collateral_score"],
     };
     const candidates = aliases[toolName] || [toolName];
-    return (state.nodes || []).find((node) => candidates.includes(node.key)) || null;
+    return (nodes || []).find((node) => candidates.includes(node.key)) || null;
 }
 
-function systemExecutionRows(plan) {
+function systemExecutionRows(plan, nodes = state.nodes) {
     return (plan?.nodes || []).map((clinicalNode) => ({
         clinicalNode,
         invocations: (clinicalNode.tools || []).map((toolName) => {
@@ -529,7 +526,7 @@ function systemExecutionRows(plan) {
                 skillId: "SKILL_UNKNOWN",
                 skillName: toolName,
             };
-            const runtimeNode = runtimeNodeForTool(toolName);
+            const runtimeNode = runtimeNodeForTool(toolName, nodes);
             return {
                 toolName,
                 ...meta,
@@ -538,6 +535,43 @@ function systemExecutionRows(plan) {
             };
         }),
     }));
+}
+
+function decorateExecutionNodes(plan, nodes) {
+    const executionByRuntimeId = new Map();
+    systemExecutionRows(plan, nodes).forEach(({ clinicalNode, invocations }) => {
+        invocations.forEach((invocation) => {
+            const runtimeId = invocation.runtimeNode?.id;
+            if (runtimeId && !executionByRuntimeId.has(runtimeId)) {
+                executionByRuntimeId.set(runtimeId, { clinicalNode, invocation });
+            }
+        });
+    });
+    return (nodes || []).map((node) => {
+        const context = executionByRuntimeId.get(node.id);
+        if (!context) return node;
+        const { clinicalNode, invocation } = context;
+        const detailInput = objectValue(node.detailInput)
+            ? { ...node.detailInput }
+            : { runtime_input: node.detailInput };
+        Object.assign(detailInput, {
+            assigned_agent: invocation.agent,
+            called_skill_id: invocation.skillId,
+            skill_name: invocation.skillName,
+            clinical_task: clinicalNode.title,
+        });
+        return {
+            ...node,
+            subtitle: `${clinicalNode.title} · ${invocation.agent}`,
+            detailInput,
+            meta: [...new Set([
+                ...(Array.isArray(node.meta) ? node.meta : []),
+                `assigned_agent · ${invocation.agent}`,
+                `called_skill_id · ${invocation.skillId}`,
+                `skill_name · ${invocation.skillName}`,
+            ])],
+        };
+    });
 }
 
 function drawClinicalDagEdges(plan) {
@@ -614,71 +648,11 @@ function queueClinicalDagEdges(plan) {
 
 function renderSystemExecution(plan) {
     const audit = $("systemReviewAudit");
-    const feed = $("runtimeFeed");
-    if (!audit || !feed) return;
+    if (!audit) return;
     const reviewedAt = state.dagReview.approvedAt
         ? new Date(state.dagReview.approvedAt).toLocaleString()
         : "-";
-    audit.innerHTML = `<span>review_status <strong>approved</strong></span><span>doctor_final_decision <strong>approved</strong></span><span>${escapeHtml(state.dagReview.reviewer)} · ${escapeHtml(reviewedAt)}</span>`;
-    const rows = systemExecutionRows(plan);
-    feed.innerHTML = "";
-    addNarrative(feed, "AGENT ORCHESTRATION", `医生已确认“${plan.label}”，系统按临床任务顺序展示对应 Agent 与 Skill。`);
-
-    let order = 0;
-    rows.forEach(({ clinicalNode, invocations }) => {
-        invocations.forEach((item) => {
-            order += 1;
-            const runtimeNode = item.runtimeNode || {};
-            const statusLabel = item.capabilityStatus === "planned"
-                ? "规划能力，尚未接入运行时"
-                : ({ pending: "等待执行", running: "正在执行", completed: "执行完成", issue: "执行结果需处理", waiting: "等待人工确认" }[item.status] || "等待执行");
-            const titleMeta = TOOL_META[item.toolName] || [];
-            const runtimeCardNode = {
-                ...runtimeNode,
-                id: `approved_${clinicalNode.id}_${item.toolName}`,
-                key: item.toolName,
-                order,
-                title: runtimeNode.title || titleMeta[0] || `${item.agent}.run()`,
-                subtitle: `${clinicalNode.title} · ${item.agent}`,
-                chip: runtimeNode.chip || titleMeta[2] || item.toolName,
-                status: item.status,
-                group: "agent",
-                guide: `临床任务：${clinicalNode.title}。由 ${item.agent} 调用 ${item.skillName} 完成。`,
-                summary: {
-                    doing: runtimeNode.summary?.doing || `${item.agent} 正在调用 ${item.skillName}`,
-                    meaning: runtimeNode.summary?.meaning || clinicalNode.description,
-                    conclusion: item.capabilityStatus === "planned"
-                        ? "该能力已纳入 DAG，当前标记为规划能力。"
-                        : runtimeNode.summary?.conclusion || statusLabel,
-                },
-                riskLevel: runtimeNode.riskLevel || clinicalNode.riskLevel || "medium",
-                riskItems: Array.isArray(runtimeNode.riskItems) ? runtimeNode.riskItems : [],
-                actionRequired: runtimeNode.actionRequired || "",
-                actionLog: runtimeNode.actionLog || "",
-                detailInput: {
-                    assigned_agent: item.agent,
-                    called_skill_id: item.skillId,
-                    skill_name: item.skillName,
-                    clinical_task: clinicalNode.title,
-                },
-                detailResult: runtimeNode.detailResult || statusLabel,
-                meta: [
-                    `assigned_agent · ${item.agent}`,
-                    `called_skill_id · ${item.skillId}`,
-                    `skill_name · ${item.skillName}`,
-                ],
-            };
-            feed.appendChild(nodeCard(runtimeCardNode, {
-                isActive: item.status === "running" || item.status === "waiting",
-                isHistory: item.status === "completed",
-                isNew: false,
-            }));
-        });
-    });
-
-    if (order === 0) {
-        feed.innerHTML = '<div class="runtime-empty">当前临床路径暂无可展示的 Agent 与 Skill。</div>';
-    }
+    audit.innerHTML = `<span>review_status <strong>approved</strong></span><span>doctor_final_decision <strong>approved</strong></span><span>${escapeHtml(state.dagReview.reviewer)} · ${escapeHtml(reviewedAt)}</span><span>${escapeHtml(plan?.label || "临床 DAG")}</span>`;
 }
 
 function updateDagApproveButton() {
@@ -1216,89 +1190,41 @@ function clearRevealTimer() {
     state.revealTimerDue = 0;
 }
 
-function nodeById(id) {
-    return state.nodes.find((n) => n.id === id) || null;
-}
-
-function revealDurationMs(nodeOrId) {
-    const node = typeof nodeOrId === "string" ? nodeById(nodeOrId) : nodeOrId;
-    const key = node?.key || "";
-    return Number(NODE_PRESENTATION_MS[key] || DEFAULT_NODE_VISIBLE_MS);
-}
-
-function revealedForMs(nodeOrId, now = Date.now()) {
-    const id = typeof nodeOrId === "string" ? nodeOrId : nodeOrId?.id;
-    if (!id || !state.revealedNodeIds.includes(id)) return 0;
-    return Math.max(0, now - Number(state.revealAt[id] || now)); // AI辅助生成：GLM-5, 2026-04-23
-}
-
-function displayStatusForNode(node, now = Date.now()) {
+function displayStatusForNode(node) {
     if (!node) return "pending";
-    const rawStatus = normStatus(node.rawStatus || node.status);
-    if (rawStatus === "issue") return "issue";
     if (!state.revealedNodeIds.includes(node.id)) return "pending";
-    if (!PRESENTATION_PACED_NODE_KEYS.has(node.key)) return rawStatus;
-    if (node.key === "ctp_generate" && rawStatus !== "completed") return "running";
-    return revealedForMs(node, now) >= revealDurationMs(node) ? "completed" : "running";
+    return nodeStatus(node.rawStatus || node.status);
 }
 
 function displayFallbackForNode(node, displayStatus) {
     if (!node) return ""; // AI辅助生成：GLM-5, 2026-03-01
     if (displayStatus === "issue") return node.fallback || "节点执行异常";
-    if (!PRESENTATION_PACED_NODE_KEYS.has(node.key)) return node.fallback;
-    if (node.key === "three_class") {
+    if (node.key === "three_class" && displayStatus === "completed") {
         const summary = threeClassSummaryText();
-        return displayStatus === "completed"
-            ? (summary && summary !== "-" ? summary : (node.fallback || "NCCT 三分类已完成"))
-            : "正在执行 NCCT 三分类与 Grad-CAM";
+        return summary && summary !== "-" ? summary : (node.fallback || "NCCT 三分类已完成");
     }
-    if (node.key === "ctp_generate") {
-        return displayStatus === "completed"
-            ? "CTP 灌注图谱生成完成" // AI辅助生成：GLM-5, 2026-03-02
-            : "正在生成 CBF/CBV/Tmax 灌注核心参数";
-    }
-    if (node.key === "vessel_occlusion") {
-        return displayStatus === "completed"
-            ? vesselResultText(normalizeVesselOcclusionResult(node.detailResult), node.fallback)
-            : "正在执行血管堵塞三分类评估";
+    if (node.key === "vessel_occlusion" && displayStatus === "completed") {
+        return vesselResultText(normalizeVesselOcclusionResult(node.detailResult), node.fallback);
     }
     return node.fallback;
 }
 
-function withDisplayStatus(node, now = Date.now()) {
-    const rawStatus = normStatus(node?.rawStatus || node?.status); // AI辅助生成：GLM-5, 2026-03-04
-    const displayStatus = displayStatusForNode(node, now);
-    if (!PRESENTATION_PACED_NODE_KEYS.has(node.key)) {
-        return { ...node, rawStatus, displayStatus, status: displayStatus };
-    }
-    const displayFallback = displayFallbackForNode(node, displayStatus);
+function withDisplayStatus(node) {
+    const rawStatus = nodeStatus(node?.rawStatus || node?.status); // AI辅助生成：GLM-5, 2026-03-04
+    const displayStatus = displayStatusForNode(node);
     return {
         ...node,
         rawStatus,
         displayStatus,
         status: displayStatus,
-        fallback: displayFallback,
-        summary: summaryTriplet(node.key, displayStatus, null, displayFallback),
-        riskLevel: token(node.riskLevel || (rawStatus === "issue" ? "high" : "none")),
-        riskItems: rawStatus === "issue" && !node.riskItems?.length ? [displayFallback] : (node.riskItems || []),
-        actionRequired: displayStatus === "waiting" ? node.actionRequired : "",
     };
-}
-
-function revealNode(id, now = Date.now()) {
-    if (!id || state.revealedNodeIds.includes(id)) return false;
-    state.revealedNodeIds.push(id);
-    state.revealAt[id] = now;
-    return true;
 }
 
 function canAdvanceRevealFrom(node) {
     if (!node) return false; // AI辅助生成：GLM-5, 2026-03-05
-    const status = normStatus(node.status);
+    const status = nodeStatus(node.status);
     if (status === "issue") return !isBlockingIssue(node);
-    if (node.key === "ctp_generate") return status === "completed";
-    if (PRESENTATION_PACED_NODE_KEYS.has(node.key)) return true;
-    return REVEAL_ADVANCE_STATUSES.has(status);
+    return ["completed", "skipped"].includes(status);
 }
 
 function isBlockingIssue(node) {
@@ -1308,102 +1234,36 @@ function isBlockingIssue(node) {
     return !isCompletedUploadWithDegradedStep;
 }
 
-function scheduleRevealTick(delayMs) {
-    const delay = Math.max(0, Number(delayMs) || 0);
-    const due = Date.now() + delay;
-    if (state.revealTimer && state.revealTimerDue && state.revealTimerDue <= due + 25) {
-        return; // AI辅助生成：GLM-5, 2026-03-06
-    }
-    clearRevealTimer();
-    state.revealTimerDue = due;
-    state.revealTimer = setTimeout(() => {
-        state.revealTimer = null;
-        state.revealTimerDue = 0;
-        syncRevealQueue();
-        render();
-    }, delay);
-}
-
 function syncRevealQueue() {
     const order = state.nodes.map((n) => n.id); // AI辅助生成：GLM-5, 2026-03-07
-    if (!order.length) {
-        state.revealedNodeIds = [];
-        state.revealPendingIds = [];
-        clearRevealTimer();
-        return;
-    }
-
-    const oldRevealed = new Set(state.revealedNodeIds);
-    state.revealedNodeIds = order.filter((id) => oldRevealed.has(id));
-    state.revealPendingIds = order.filter((id) => !state.revealedNodeIds.includes(id));
-
-    const now = Date.now(); // AI辅助生成：GLM-5, 2026-03-08
-    const firstIssueIndex = state.nodes.findIndex((node) => isBlockingIssue(node));
-    if (firstIssueIndex >= 0) {
-        const issueId = order[firstIssueIndex];
-        if (!state.revealedNodeIds.includes(issueId)) {
-            revealNode(issueId, now);
+    clearRevealTimer();
+    const now = Date.now();
+    state.revealedNodeIds = [];
+    let blocked = false;
+    state.nodes.forEach((node) => {
+        if (blocked) return;
+        const status = nodeStatus(node.rawStatus || node.status);
+        if (status === "pending") return;
+        state.revealedNodeIds.push(node.id);
+        if (status === "waiting" || (status === "issue" && isBlockingIssue(node))) {
+            blocked = true;
         }
-        const issueOrderIndex = state.revealedNodeIds.indexOf(issueId);
-        state.revealedNodeIds = state.revealedNodeIds.slice(0, issueOrderIndex + 1);
-        state.revealPendingIds = order.filter((id) => !state.revealedNodeIds.includes(id));
-        clearRevealTimer();
-        return; // AI辅助生成：GLM-5, 2026-03-09
-    }
-
-    if (!state.revealedNodeIds.length) {
-        revealNode(order[0], now);
-        state.revealPendingIds = order.slice(1);
-    }
-
-    const lastId = state.revealedNodeIds[state.revealedNodeIds.length - 1];
-    const lastNode = nodeById(lastId);
-    if (!lastNode) {
-        clearRevealTimer();
-        return;
-    }
-
-    if (isBlockingIssue(lastNode)) {
-        clearRevealTimer();
-        return; // AI辅助生成：GLM-5, 2026-03-10
-    }
-
-    if (!canAdvanceRevealFrom(lastNode)) {
-        clearRevealTimer();
-        return;
-    }
-
-    const lastIndex = order.indexOf(lastId);
-    const nextId = lastIndex >= 0 ? order[lastIndex + 1] : "";
-    if (!nextId) {
-        clearRevealTimer();
-        return;
-    }
-
-    const requiredVisibleMs = revealDurationMs(lastNode);
-    const shownFor = now - Number(state.revealAt[lastId] || now); // AI辅助生成：GLM-5, 2026-03-11
-    if (shownFor < requiredVisibleMs) {
-        scheduleRevealTick(requiredVisibleMs - shownFor);
-        return;
-    }
-
-    revealNode(nextId, now);
-    state.revealPendingIds = order.filter((id) => !state.revealedNodeIds.includes(id));
-    const nextNode = nodeById(nextId);
-    if (nextNode && canAdvanceRevealFrom(nextNode)) {
-        scheduleRevealTick(revealDurationMs(nextNode));
-    } else {
-        clearRevealTimer();
-    }
+    });
+    state.revealPendingIds = order.filter(
+        (id) => !state.revealedNodeIds.includes(id)
+    );
+    state.revealedNodeIds.forEach((id) => {
+        if (!state.revealAt[id]) state.revealAt[id] = now;
+    });
 }
 
 function isRevealSequenceComplete() {
-    const order = state.nodes.map((n) => n.id); // AI辅助生成：GLM-5, 2026-03-12
-    if (!order.length) return true;
-    if (!order.every((id) => state.revealedNodeIds.includes(id))) return false;
-    const lastId = order[order.length - 1];
-    const shownFor = Date.now() - Number(state.revealAt[lastId] || 0);
-    return shownFor >= revealDurationMs(lastId);
+    if (!state.nodes.length) return true; // AI辅助生成：GLM-5, 2026-03-12
+    return state.nodes.every((node) => {
+        const status = nodeStatus(node.rawStatus || node.status);
+        if (["completed", "skipped"].includes(status)) return true;
+        return status === "issue" && !isBlockingIssue(node);
+    });
 }
 
 function viewerUrl() { if (!state.fileId) return "/viewer"; const p = new URLSearchParams({ file_id: state.fileId }); if (state.runId) p.set("run_id", state.runId); return `/viewer?${p.toString()}`; }
@@ -1441,9 +1301,23 @@ function templateFor(key) { return TEMPLATES[key] || TEMPLATES.default; }
 function summaryTriplet(key, status, hint, fallback) {
     const tpl = templateFor(key);
     return {
-        doing: hint?.inputSummary || `${status === "running" ? "正在执行" : status === "completed" ? "已完成" : status === "issue" ? "风险中断" : status === "waiting" ? "等待人工" : "等待执行"}：${tpl[1]}`,
+        doing: hint?.inputSummary || `${status === "running" ? "正在执行" : status === "completed" ? "已完成" : status === "skipped" ? "已跳过" : status === "issue" ? "风险中断" : status === "waiting" ? "等待人工" : "等待执行"}：${tpl[1]}`,
         meaning: hint?.clinicalImpact || tpl[2],
         conclusion: hint?.resultSummary || `当前结论：${fallback}`,
+    };
+}
+
+function resolveUploadNodeState(jobStep, runStep, hint) {
+    const source = jobStep || runStep || hint || null;
+    const status = nodeStatus(source?.status || "pending");
+    const hintStatus = nodeStatus(hint?.status || "pending");
+    return {
+        status,
+        message: t(
+            jobStep?.error || jobStep?.message || runStep?.message,
+            "",
+        ),
+        summaryHint: !jobStep && (!hint || hintStatus === status) ? hint : null,
     };
 }
 
@@ -1457,28 +1331,23 @@ function buildNodes() {
         const runStep = cfg.delegated ? runSteps[cfg.delegated] : null;
         const jobStep = jobSteps[cfg.key] || null;
         const vesselResult = cfg.key === "vessel_occlusion" ? vesselOcclusionResult(jobStep, h) : null;
-        const runStatus = normStatus(runStep?.status || "pending");
-        const preferActiveUploadVesselStep = cfg.key === "vessel_occlusion"
-            && jobStep
-            && runStatus === "pending"
-            && normStatus(state.latestJob?.status) !== "completed";
-        let status = normStatus(
-            h?.status
-            || (preferActiveUploadVesselStep ? jobStep?.status : runStep?.status)
-            || jobStep?.status
-            || "pending"
-        );
+        const resolvedState = resolveUploadNodeState(jobStep, runStep, h);
+        let status = resolvedState.status;
         const uploadJobStatus = normStatus(state.latestJob?.status);
         if (vesselResult && (!["pending", "running"].includes(status) || ["completed", "issue"].includes(uploadJobStatus))) {
             const notApplicable = vesselResult.status === "unavailable"
                 && vesselResult.error_code === "CTA_INPUT_MISSING"
                 && token(jobStep?.status) === "skipped";
-            status = vesselResult.status === "completed" || notApplicable ? "completed" : "issue";
+            status = vesselResult.status === "completed"
+                ? "completed"
+                : notApplicable
+                    ? "skipped"
+                    : "issue";
         }
-        const fallbackDefault = status === "pending" ? "节点未开始" : status === "running" ? "节点处理中" : status === "waiting" ? "等待人工确认" : status === "completed" ? "节点已完成" : "节点执行异常";
+        const fallbackDefault = status === "pending" ? "节点未开始" : status === "running" ? "节点处理中" : status === "waiting" ? "等待人工确认" : status === "skipped" ? "节点已跳过" : status === "completed" ? "节点已完成" : "节点执行异常";
         let fallback = cfg.key === "ctp_generate" && status === "pending" && threeClassStatus !== "completed"
             ? "等待 NCCT 三分类完成后启动" // AI辅助生成：GLM-5, 2026-03-17
-            : t((runStep && runStep.message) || (jobStep && jobStep.message), fallbackDefault);
+            : t(resolvedState.message, fallbackDefault);
         if (cfg.key === "vessel_occlusion") {
             const stepMessage = t((jobStep && (jobStep.error || jobStep.message)), "");
             fallback = vesselResult
@@ -1498,7 +1367,7 @@ function buildNodes() {
             : (h?.output ?? fallback);
         nodes.push({
             id: `upload_${cfg.key}`, key: cfg.key, title: cfg.title, subtitle: cfg.subtitle, chip: cfg.chip, status, rawStatus: status, group: "upload", order: idx + 1,
-            guide: templateFor(cfg.key)[0], summary: summaryTriplet(cfg.key, status, h, fallback),
+            guide: templateFor(cfg.key)[0], summary: summaryTriplet(cfg.key, status, resolvedState.summaryHint, fallback),
             detailInput, detailResult,
             riskLevel: token(h?.riskLevel || (status === "issue" ? "high" : "none")), riskItems: Array.isArray(h?.riskItems) ? h.riskItems : (status === "issue" ? [fallback] : []),
             actionRequired: t(h?.actionRequired, status === "waiting" ? "请医生确认该节点后继续。" : ""), actionLog: t(h?.actionLog, ""),
@@ -1520,11 +1389,11 @@ function buildNodes() {
         const key = t(s?.key, ""); if (!key || skip.has(key) || key === "triage_planner") return;
         const h = state.hints[key] || null;
         const directVesselResult = key === "vessel_occlusion" ? vesselOcclusionResult(null, h) : null;
-        let st = normStatus(h?.status || s.status || "pending");
+        let st = nodeStatus(s.status || h?.status || "pending");
         if (directVesselResult) {
             st = directVesselResult.status === "completed" ? "completed" : "issue";
         }
-        const defaultFallback = st === "pending" ? "节点未开始" : st === "running" ? "节点处理中" : st === "waiting" ? "等待人工确认" : st === "completed" ? "节点已完成" : "节点执行异常";
+        const defaultFallback = st === "pending" ? "节点未开始" : st === "running" ? "节点处理中" : st === "waiting" ? "等待人工确认" : st === "skipped" ? "节点已跳过" : st === "completed" ? "节点已完成" : "节点执行异常";
         const fallback = directVesselResult
             ? vesselResultText(directVesselResult, t(s.message, defaultFallback))
             : t(s.message, defaultFallback);
@@ -1538,7 +1407,8 @@ function tableRows(data) { if (data === null || data === undefined) return [{ k:
 
 function nodeCard(node, ctx = {}) {
     const card = document.createElement("article");
-    const classes = [`runtime-node-card`, `status-${node.status}`];
+    const visualStatus = node.status === "skipped" ? "completed" : node.status;
+    const classes = [`runtime-node-card`, `status-${visualStatus}`];
     if (node.key) classes.push(`runtime-node-${String(node.key).replace(/[^a-z0-9_-]/gi, "_")}`);
     if (ctx.isActive) classes.push("is-active");
     if (ctx.isHistory) classes.push("is-history");
@@ -1552,10 +1422,10 @@ function nodeCard(node, ctx = {}) {
     const detail = `
       <div class="runtime-node-detail${expanded ? " expanded" : ""}">
         <div class="runtime-node-block"><div class="runtime-node-block-label">INPUT</div><table class="runtime-detail-table"><tbody>${tableRows(node.detailInput).map((x) => `<tr><th>${x.k}</th><td>${x.v}</td></tr>`).join("")}</tbody></table><pre class="runtime-node-pre">${pretty(node.detailInput)}</pre></div>
-        <div class="runtime-node-block result-${node.status}"><div class="runtime-node-block-label">RESULT</div><table class="runtime-detail-table"><tbody>${tableRows(node.detailResult).map((x) => `<tr><th>${x.k}</th><td>${x.v}</td></tr>`).join("")}</tbody></table><pre class="runtime-node-pre">${pretty(node.detailResult)}</pre></div>
+        <div class="runtime-node-block result-${visualStatus}"><div class="runtime-node-block-label">RESULT</div><table class="runtime-detail-table"><tbody>${tableRows(node.detailResult).map((x) => `<tr><th>${x.k}</th><td>${x.v}</td></tr>`).join("")}</tbody></table><pre class="runtime-node-pre">${pretty(node.detailResult)}</pre></div>
       </div>`;
     card.innerHTML = `
-      <div class="runtime-node-head"><div class="runtime-node-head-left"><span class="runtime-node-icon status-${node.status}">${statusIcon(node.status)}</span><div class="runtime-node-title-wrap"><div class="runtime-node-title">${node.title}</div><div class="runtime-node-subtitle">${node.subtitle}</div></div></div><span class="runtime-status-pill ${node.status}">${STATUS_TEXT[node.status] || STATUS_TEXT.pending}</span></div>
+      <div class="runtime-node-head"><div class="runtime-node-head-left"><span class="runtime-node-icon status-${visualStatus}">${statusIcon(node.status)}</span><div class="runtime-node-title-wrap"><div class="runtime-node-title">${node.title}</div><div class="runtime-node-subtitle">${node.subtitle}</div></div></div><span class="runtime-status-pill ${visualStatus}">${STATUS_TEXT[node.status] || STATUS_TEXT.pending}</span></div>
       <div class="runtime-node-guide">${t(node.guide)}</div>
       <div class="runtime-node-summary">
         <div class="runtime-summary-row"><span class="runtime-summary-key">正在做</span><span class="runtime-summary-value">${t(node.summary.doing)}</span></div>
@@ -1780,7 +1650,12 @@ function render() {
     const run = state.latestRun || {};
     const job = state.latestJob || {};
     const clinicalDag = clinicalDagForJob(job);
+    const executionPlan = buildClinicalDag(modalities());
+    hydrateDagReview(executionPlan);
     state.nodes = buildNodes();
+    if (state.dagReview.approved && state.dagReview.fingerprint === executionPlan.dagId) {
+        state.nodes = decorateExecutionNodes(executionPlan, state.nodes);
+    }
 
     const currentNodeIds = new Set(state.nodes.map((n) => n.id));
     Object.keys(state.revealAt).forEach((id) => { if (!currentNodeIds.has(id)) delete state.revealAt[id]; });
@@ -1948,7 +1823,7 @@ function scheduleViewer(requireReport = false) {
             state.viewerDelayTimer = setTimeout(() => {
                 state.viewerDelayTimer = null;
                 scheduleViewer(requireReport); // AI辅助生成：GLM-5, 2026-04-11
-            }, DEFAULT_NODE_VISIBLE_MS);
+            }, VIEWER_READY_RECHECK_MS);
         }
         return;
     }
@@ -2275,11 +2150,15 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         state,
         normStatus,
+        nodeStatus,
         normalizeVesselOcclusionResult,
         vesselOcclusionResult,
         vesselFailureText,
         vesselResultText,
+        displayStatusForNode,
         displayFallbackForNode,
+        withDisplayStatus,
+        resolveUploadNodeState,
         canAdvanceRevealFrom,
         isBlockingIssue,
         syncRevealQueue,
@@ -2291,7 +2170,7 @@ if (typeof module !== "undefined" && module.exports) {
         buildClinicalDag,
         clinicalDagStructureKey,
         systemExecutionRows,
+        decorateExecutionNodes,
         clinicalDagForJob,
     };
 }
-

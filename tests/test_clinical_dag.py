@@ -275,3 +275,117 @@ def test_ctp_progress_callback_records_model_and_slice_progress(monkeypatch):
     assert "CBV" in updates[0][3]
     assert "切片 2/4" in updates[0][3]
     assert "切片 2/4 已完成" in updates[1][3]
+
+
+def test_upload_step_statuses_follow_real_ncct_then_ctp_boundaries(monkeypatch):
+    job_id = "job-status-order"
+    modalities = ["ncct", "mcta", "vcta", "dcta"]
+    app_module._create_upload_job(
+        job_id,
+        patient_id=1,
+        file_id="case-status-order",
+        modalities=modalities,
+        clinical_dag=build_clinical_dag(modalities),
+    )
+    events = []
+    monkeypatch.setattr(
+        app_module,
+        "_upload_log",
+        lambda **entry: events.append(
+            (entry.get("step"), entry.get("status"), entry.get("message"))
+        ),
+    )
+
+    app_module._update_step(
+        job_id,
+        "three_class",
+        "running",
+        "正在执行 NCCT 三分类与 Grad-CAM",
+    )
+    status, _ = app_module._publish_three_class_step(
+        job_id,
+        {
+            "display": "正常 1 | 脑出血 0 | 脑缺血 0",
+            "counts": {"normal": 1, "hemo": 0, "infarct": 0},
+            "gradcam": {"success": True, "error": ""},
+        },
+        {"status": "completed"},
+    )
+    assert status == "completed"
+    assert app_module._start_ctp_generation_step(job_id) is True
+    app_module._make_ctp_progress_callback(job_id)(
+        slice_number=1,
+        total_slices=2,
+        model_key="cbf",
+        phase="model_running",
+    )
+    app_module._update_step(
+        job_id,
+        "ctp_generate",
+        "completed",
+        "CTP 灌注图生成完成",
+    )
+
+    transitions = []
+    for step, state, _ in events:
+        item = (step, state)
+        if not transitions or transitions[-1] != item:
+            transitions.append(item)
+    assert transitions == [
+        ("three_class", "running"),
+        ("three_class", "completed"),
+        ("ctp_generate", "running"),
+        ("ctp_generate", "completed"),
+    ]
+
+
+def test_terminal_ctp_status_cannot_regress_from_a_late_progress_callback(monkeypatch):
+    job_id = "job-terminal-ctp"
+    modalities = ["ncct", "mcta", "vcta", "dcta"]
+    app_module._create_upload_job(
+        job_id,
+        patient_id=1,
+        file_id="case-terminal-ctp",
+        modalities=modalities,
+        clinical_dag=build_clinical_dag(modalities),
+    )
+    app_module._update_step(job_id, "three_class", "completed", "三分类完成")
+    assert app_module._start_ctp_generation_step(job_id) is True
+    app_module._update_step(job_id, "ctp_generate", "completed", "CTP 完成")
+
+    logged = []
+    monkeypatch.setattr(
+        app_module,
+        "_upload_log",
+        lambda **entry: logged.append((entry.get("step"), entry.get("status"))),
+    )
+    app_module._make_ctp_progress_callback(job_id)(
+        slice_number=2,
+        total_slices=2,
+        model_key="tmax",
+        phase="model_running",
+    )
+
+    job = app_module._get_upload_job(job_id)
+    ctp_step = next(step for step in job["steps"] if step["key"] == "ctp_generate")
+    assert ctp_step["status"] == "completed"
+    assert ctp_step["message"] == "CTP 完成"
+    assert logged == []
+
+
+def test_ctp_cannot_start_before_ncct_reaches_completed():
+    job_id = "job-ctp-before-ncct"
+    modalities = ["ncct", "mcta", "vcta", "dcta"]
+    app_module._create_upload_job(
+        job_id,
+        patient_id=1,
+        file_id="case-ctp-before-ncct",
+        modalities=modalities,
+        clinical_dag=build_clinical_dag(modalities),
+    )
+    app_module._update_step(job_id, "three_class", "running", "NCCT 运行中")
+
+    assert app_module._start_ctp_generation_step(job_id) is False
+    job = app_module._get_upload_job(job_id)
+    ctp_step = next(step for step in job["steps"] if step["key"] == "ctp_generate")
+    assert ctp_step["status"] == "pending"
