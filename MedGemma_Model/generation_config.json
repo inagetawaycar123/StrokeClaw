@@ -1,0 +1,8 @@
+{
+  "cache_implementation": "hybrid",
+  "eos_token_id": [
+    1,
+    106
+  ],
+  "transformers_version": "4.57.1"
+}

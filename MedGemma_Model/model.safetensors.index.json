@@ -1,0 +1,601 @@
+{
+  "metadata": {
+    "total_size": 8600158944
+  },
+  "weight_map": {
+    "language_model.model.embed_tokens.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.input_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.mlp.down_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.mlp.gate_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.mlp.up_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.post_attention_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.post_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.pre_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.self_attn.k_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.self_attn.k_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.self_attn.o_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.self_attn.q_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.self_attn.q_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.0.self_attn.v_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.input_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.mlp.down_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.mlp.gate_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.mlp.up_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.post_attention_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.post_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.pre_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.self_attn.k_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.self_attn.k_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.self_attn.o_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.self_attn.q_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.self_attn.q_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.1.self_attn.v_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.input_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.mlp.down_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.mlp.gate_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.mlp.up_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.post_attention_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.post_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.pre_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.self_attn.k_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.self_attn.k_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.self_attn.o_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.self_attn.q_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.self_attn.q_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.10.self_attn.v_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.input_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.mlp.down_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.mlp.gate_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.mlp.up_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.post_attention_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.post_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.pre_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.self_attn.k_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.self_attn.k_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.self_attn.o_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.self_attn.q_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.self_attn.q_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.11.self_attn.v_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.input_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.mlp.down_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.mlp.gate_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.mlp.up_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.post_attention_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.post_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.pre_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.self_attn.k_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.self_attn.k_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.self_attn.o_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.self_attn.q_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.self_attn.q_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.12.self_attn.v_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.input_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.mlp.down_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.mlp.gate_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.mlp.up_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.post_attention_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.post_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.pre_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.self_attn.k_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.self_attn.k_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.self_attn.o_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.self_attn.q_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.self_attn.q_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.13.self_attn.v_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.14.input_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.14.mlp.down_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.14.mlp.gate_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.14.mlp.up_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.14.post_attention_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.14.post_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.14.pre_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.14.self_attn.k_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.14.self_attn.k_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.14.self_attn.o_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.14.self_attn.q_norm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.14.self_attn.q_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.14.self_attn.v_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.15.input_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.mlp.down_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.mlp.gate_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.mlp.up_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.post_attention_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.post_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.pre_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.self_attn.k_norm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.self_attn.k_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.self_attn.o_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.self_attn.q_norm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.self_attn.q_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.15.self_attn.v_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.input_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.mlp.down_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.mlp.gate_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.mlp.up_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.post_attention_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.post_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.pre_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.self_attn.k_norm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.self_attn.k_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.self_attn.o_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.self_attn.q_norm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.self_attn.q_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.16.self_attn.v_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.input_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.mlp.down_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.mlp.gate_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.mlp.up_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.post_attention_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.post_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.pre_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.self_attn.k_norm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.self_attn.k_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.self_attn.o_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.self_attn.q_norm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.self_attn.q_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.17.self_attn.v_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.input_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.mlp.down_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.mlp.gate_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.mlp.up_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.post_attention_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.post_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.pre_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.self_attn.k_norm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.self_attn.k_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.self_attn.o_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.self_attn.q_norm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.self_attn.q_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.18.self_attn.v_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.input_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.mlp.down_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.mlp.gate_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.mlp.up_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.post_attention_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.post_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.pre_feedforward_layernorm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.self_attn.k_norm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.self_attn.k_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.self_attn.o_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.self_attn.q_norm.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.self_attn.q_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.19.self_attn.v_proj.weight": "model-00002-of-00002.safetensors",
+    "language_model.model.layers.2.input_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.2.mlp.down_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.2.mlp.gate_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.2.mlp.up_proj.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.2.post_attention_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers.2.post_feedforward_layernorm.weight": "model-00001-of-00002.safetensors",
+    "language_model.model.layers# CTçŒæ³¨TMAXå½±åƒé¢„å¤„ç†è¯„ä¼°æŠ¥å‘Š
+
+## 1. æ¨¡åž‹è¦æ±‚å’Œèƒ½åŠ›åˆ†æž
+
+### 1.1 MedGemma 1.5 4Bæ¨¡åž‹èƒ½åŠ›
+- **é«˜ç»´åŒ»å­¦æˆåƒæ”¯æŒ**ï¼šèƒ½å¤Ÿå¤„ç†3D CTå’ŒMRIä½“ç§¯æ•°æ®
+- **è¾“å…¥è¦æ±‚**ï¼š
+  - å›¾åƒåˆ†è¾¨çŽ‡ï¼š896 x 896
+  - å›¾åƒç¼–ç ï¼š256 tokens each
+  - æ€»è¾“å…¥é•¿åº¦ï¼š128K tokens
+- **è¾“å‡ºèƒ½åŠ›**ï¼š
+  - ç”Ÿæˆæ–‡æœ¬å“åº”
+  - æ€»è¾“å‡ºé•¿åº¦ï¼š8192 tokens
+- **æŠ€æœ¯ç‰¹ç‚¹**ï¼š
+  - ä½¿ç”¨SigLIPå›¾åƒç¼–ç å™¨ï¼Œä¸“é—¨åœ¨åŒ»å­¦æ•°æ®ä¸Šé¢„è®­ç»ƒ
+  - æ”¯æŒ3Dæ”¾å°„å­¦å›¾åƒåˆ†ç±»
+  - å¯¹3D CTæ•°æ®æœ‰ä¸€å®šçš„å¤„ç†èƒ½åŠ›
+
+### 1.2 é¢„å¤„ç†è¦æ±‚
+- **CTã€MRIå’Œå…¨åˆ‡ç‰‡ç»„ç»‡ç—…ç†å­¦å›¾åƒ**éœ€è¦ç‰¹æ®Šé¢„å¤„ç†
+- å‚è€ƒæä¾›çš„CTå’ŒWSIç¬”è®°æœ¬ç¤ºä¾‹è¿›è¡Œé¢„å¤„ç†
+
+## 2. å½“å‰é¢„å¤„ç†è„šæœ¬è¯„ä¼°
+
+### 2.1 åŠŸèƒ½æ¦‚è¿°
+- **æ–‡ä»¶åŠ è½½**ï¼šæ”¯æŒåŠ è½½nii.gzæ ¼å¼çš„åŒ»å­¦å½±åƒæ–‡ä»¶
+- **åˆ‡ç‰‡æå–**ï¼šèƒ½å¤Ÿä»Ž3Dä½“ç§¯æ•°æ®ä¸­æå–2Dåˆ‡ç‰‡
+- **æ•°æ®æ ‡å‡†åŒ–**ï¼šå®žçŽ°æœ€å°å€¼-æœ€å¤§å€¼æ ‡å‡†åŒ–
+- **æ ¼å¼è½¬æ¢**ï¼šå°†numpyæ•°ç»„è½¬æ¢ä¸ºPIL Image
+- **å°ºå¯¸è°ƒæ•´**ï¼šå°†å›¾åƒè°ƒæ•´ä¸ºæ¨¡åž‹è¦æ±‚çš„896x896å¤§å°
+
+### 2.2 ä»£ç ç»“æž„
+```python
+class ImagePreprocessor:
+    def load_image(self):  # åŠ è½½nii.gzæ–‡ä»¶
+    def get_slice(self, slice_index, axis=2):  # èŽ·å–åˆ‡ç‰‡
+    def normalize_slice(self, slice_data):  # æ ‡å‡†åŒ–åˆ‡ç‰‡
+    def convert_to_pil(self, slice_data):  # è½¬æ¢ä¸ºPIL Image
+    def process_image_for_model(self, slice_index, axis=2):  # å¤„ç†å›¾åƒ
+```
+
+## 3. CTçŒæ³¨TMAXå½±åƒç‰¹æ®Šéœ€æ±‚åˆ†æž
+
+### 3.1 æ•°æ®æ ¼å¼å…¼å®¹æ€§
+- **æ ¼å¼**ï¼šnii.gzæ ¼å¼ï¼Œ3Dä½“ç§¯æ•°æ®
+- **ç»´åº¦**ï¼šé€šå¸¸ä¸º(å®½ Ã— é«˜ Ã— åˆ‡ç‰‡æ•°)ï¼Œå¦‚(256, 256, 17)
+- **æ•°æ®ç±»åž‹**ï¼šæµ®ç‚¹åž‹æ•°æ®ï¼Œéœ€è¦é€‚å½“çš„æ ‡å‡†åŒ–
+
+### 3.2 å™ªå£°å¤„ç†
+- **CTçŒæ³¨å™ªå£°**ï¼šæ‰«æè¿‡ç¨‹ä¸­çš„é‡å­å™ªå£°ã€è¿åŠ¨ä¼ªå½±
+- **TMAXè®¡ç®—å™ªå£°**ï¼šçŒæ³¨åŽå¤„ç†è¿‡ç¨‹ä¸­äº§ç”Ÿçš„å™ªå£°
+
+### 3.3 å¯¹æ¯”åº¦è°ƒæ•´
+- **TMAXå€¼èŒƒå›´**ï¼šé€šå¸¸ä¸º0-10ç§’ï¼Œéœ€è¦é€‚å½“çš„å¯¹æ¯”åº¦è°ƒæ•´ä»¥çªå‡ºçŒæ³¨å¼‚å¸¸åŒºåŸŸ
+- **çŒæ³¨å¼‚å¸¸æ£€æµ‹**ï¼šéœ€è¦å¢žå¼ºçŒæ³¨å»¶è¿ŸåŒºåŸŸä¸Žæ­£å¸¸åŒºåŸŸçš„å¯¹æ¯”åº¦
+
+### 3.4 ç©ºé—´åˆ†è¾¨çŽ‡æ ‡å‡†åŒ–
+- **æ‰«æè®¾å¤‡å·®å¼‚**ï¼šä¸åŒè®¾å¤‡çš„ç©ºé—´åˆ†è¾¨çŽ‡å¯èƒ½ä¸åŒ
+- **å„å‘å¼‚æ€§**ï¼šCTæ‰«æå¯èƒ½å­˜åœ¨å„å‘å¼‚æ€§ï¼Œéœ€è¦å„å‘åŒæ€§é‡é‡‡æ ·
+
+### 3.5 ä¼ªå½±åŽ»é™¤
+- **è¿åŠ¨ä¼ªå½±**ï¼šæ‰«æè¿‡ç¨‹ä¸­æ‚£è€…è¿åŠ¨å¯¼è‡´çš„ä¼ªå½±
+- **é‡‘å±žä¼ªå½±**ï¼šå¦‚æžœå­˜åœ¨é‡‘å±žæ¤å…¥ç‰©
+- **éƒ¨åˆ†å®¹ç§¯æ•ˆåº”**ï¼šåˆ‡ç‰‡åŽšåº¦å¯¼è‡´çš„è¾¹ç•Œæ¨¡ç³Š
+
+### 3.6 åŒ»å­¦å½±åƒå¤„ç†è¡Œä¸šæ ‡å‡†
+- **DICOMæ ‡å‡†**ï¼šè™½ç„¶å½“å‰ä½¿ç”¨nii.gzæ ¼å¼ï¼Œä½†åº”è€ƒè™‘DICOMå…¼å®¹æ€§
+- **NIfTIæ ‡å‡†**ï¼šç¡®ä¿ç¬¦åˆNIfTIæ ¼å¼è§„èŒƒ
+- **é¢„å¤„ç†æµç¨‹æ ‡å‡†åŒ–**ï¼šéµå¾ªåŒ»å­¦å½±åƒé¢„å¤„ç†çš„æœ€ä½³å®žè·µ
+
+## 4. å½“å‰é¢„å¤„ç†æµç¨‹è¯„ä¼°
+
+### 4.1 ä¼˜åŠ¿
+- **åŸºæœ¬åŠŸèƒ½å®Œæ•´**ï¼šèƒ½å¤Ÿå®ŒæˆåŠ è½½ã€åˆ‡ç‰‡æå–ã€æ ‡å‡†åŒ–å’Œå°ºå¯¸è°ƒæ•´çš„åŸºæœ¬æµç¨‹
+- **æ ¼å¼æ”¯æŒ**ï¼šæ”¯æŒnii.gzæ ¼å¼ï¼Œç¬¦åˆåŒ»å­¦å½±åƒå¸¸ç”¨æ ¼å¼
+- **æ¨¡åž‹å…¼å®¹**ï¼šèƒ½å¤Ÿå°†å›¾åƒè°ƒæ•´ä¸ºæ¨¡åž‹è¦æ±‚çš„896x896å¤§å°
+- **å®žçŽ°ç®€å•**ï¼šä»£ç ç»“æž„æ¸…æ™°ï¼Œæ˜“äºŽç†è§£å’Œç»´æŠ¤
+
+### 4.2 ä¸è¶³
+- **ç¼ºä¹å™ªå£°å¤„ç†**ï¼šæ²¡æœ‰å®žçŽ°ä»»ä½•å™ªå£°åŽ»é™¤ç®—æ³•
+- **å¯¹æ¯”åº¦è°ƒæ•´ç®€å•**ï¼šä»…ä½¿ç”¨æœ€å°å€¼-æœ€å¤§å€¼æ ‡å‡†åŒ–ï¼Œç¼ºä¹é’ˆå¯¹TMAXçš„ç‰¹æ®Šå¯¹æ¯”åº¦è°ƒæ•´
+- **ç©ºé—´åˆ†è¾¨çŽ‡æ ‡å‡†åŒ–ç¼ºå¤±**ï¼šæ²¡æœ‰å®žçŽ°å„å‘åŒæ€§é‡é‡‡æ ·
+- **ä¼ªå½±åŽ»é™¤ç¼ºå¤±**ï¼šæ²¡æœ‰å®žçŽ°ä»»ä½•ä¼ªå½±åŽ»é™¤æŠ€æœ¯
+- **TMAXç‰¹æ®Šå¤„ç†ç¼ºå¤±**ï¼šæ²¡æœ‰é’ˆå¯¹TMAXå½±åƒçš„ç‰¹æ®Šå¤„ç†é€»è¾‘
+- **è¡Œä¸šæ ‡å‡†åˆè§„æ€§**ï¼šæ²¡æœ‰æ˜Žç¡®çš„åŒ»å­¦å½±åƒå¤„ç†è¡Œä¸šæ ‡å‡†åˆè§„æ€§æ£€æŸ¥
+
+## 5. é’ˆå¯¹TMAXå½±åƒçš„ç‰¹æ®Šé¢„å¤„ç†å»ºè®®
+
+### 5.1 å™ªå£°å¤„ç†
+- **é«˜æ–¯æ»¤æ³¢**ï¼šæ·»åŠ é«˜æ–¯æ»¤æ³¢ä»¥å‡å°‘éšæœºå™ªå£°
+- **ä¸­å€¼æ»¤æ³¢**ï¼šæ·»åŠ ä¸­å€¼æ»¤æ³¢ä»¥å‡å°‘æ¤’ç›å™ªå£°
+- **éžå±€éƒ¨å‡å€¼æ»¤æ³¢**ï¼šæ·»åŠ éžå±€éƒ¨å‡å€¼æ»¤æ³¢ä»¥æ›´å¥½åœ°ä¿ç•™è¾¹ç¼˜ä¿¡æ¯
+
+### 5.2 å¯¹æ¯”åº¦è°ƒæ•´
+- **è‡ªé€‚åº”ç›´æ–¹å›¾å‡è¡¡åŒ–**ï¼šå®žçŽ°CLAHEä»¥å¢žå¼ºå±€éƒ¨å¯¹æ¯”åº¦
+- **TMAXå€¼èŒƒå›´ä¼˜åŒ–**ï¼šåŸºäºŽä¸´åºŠç»éªŒè®¾ç½®åˆç†çš„TMAXå€¼èŒƒå›´ï¼ˆå¦‚0-6ç§’ï¼‰
+- **ç™¾åˆ†ä½æ ‡å‡†åŒ–**ï¼šä½¿ç”¨ç™¾åˆ†ä½æ ‡å‡†åŒ–ï¼ˆå¦‚1%-99%ï¼‰ä»¥å‡å°‘ outliersçš„å½±å“
+
+### 5.3 ç©ºé—´åˆ†è¾¨çŽ‡æ ‡å‡†åŒ–
+- **å„å‘åŒæ€§é‡é‡‡æ ·**ï¼šå®žçŽ°å„å‘åŒæ€§é‡é‡‡æ ·ï¼Œç¡®ä¿ç©ºé—´åˆ†è¾¨çŽ‡ä¸€è‡´
+- **åˆ†è¾¨çŽ‡ç»Ÿä¸€**ï¼šå°†ä¸åŒè®¾å¤‡çš„æ‰«ææ•°æ®ç»Ÿä¸€åˆ°ç›¸åŒçš„ç©ºé—´åˆ†è¾¨çŽ‡
+
+### 5.4 ä¼ªå½±åŽ»é™¤
+- **è¿åŠ¨ä¼ªå½±æ ¡æ­£**ï¼šå®žçŽ°åŸºäºŽé…å‡†çš„è¿åŠ¨ä¼ªå½±æ ¡æ­£
+- **é‡‘å±žä¼ªå½±å‡å°‘**ï¼šå¦‚æžœå­˜åœ¨é‡‘å±žæ¤å…¥ç‰©ï¼Œå®žçŽ°é‡‘å±žä¼ªå½±å‡å°‘ç®—æ³•
+- **éƒ¨åˆ†å®¹ç§¯æ•ˆåº”æ ¡æ­£**ï¼šå®žçŽ°åŸºäºŽæ·±åº¦å­¦ä¹ çš„éƒ¨åˆ†å®¹ç§¯æ•ˆåº”æ ¡æ­£
+
+### 5.5 åŒ»å­¦å½±åƒå¤„ç†æ ‡å‡†åˆè§„æ€§
+- **DICOMå…ƒæ•°æ®ä¿ç•™**ï¼šå¦‚æžœä»ŽDICOMè½¬æ¢ï¼Œä¿ç•™é‡è¦çš„å…ƒæ•°æ®
+- **NIfTIå¤´ä¿¡æ¯å®Œæ•´æ€§**ï¼šç¡®ä¿NIfTIå¤´ä¿¡æ¯å®Œæ•´ä¸”æ­£ç¡®
+- **é¢„å¤„ç†æ­¥éª¤è®°å½•**ï¼šå®žçŽ°é¢„å¤„ç†æ­¥éª¤çš„è®°å½•ï¼Œæ”¯æŒå¯è¿½æº¯æ€§
+
+### 5.6 ä»£ç ä¼˜åŒ–å»ºè®®
+- **æ¨¡å—åŒ–è®¾è®¡**ï¼šå°†é¢„å¤„ç†åŠŸèƒ½æ¨¡å—åŒ–ï¼Œä¾¿äºŽæ‰©å±•å’Œç»´æŠ¤
+- **å‚æ•°åŒ–é…ç½®**ï¼šæ·»åŠ å‚æ•°åŒ–é…ç½®ï¼Œæ”¯æŒä¸åŒç±»åž‹å½±åƒçš„é¢„å¤„ç†
+- **æ€§èƒ½ä¼˜åŒ–**ï¼šä¼˜åŒ–å¤„ç†é€Ÿåº¦ï¼Œç‰¹åˆ«æ˜¯å¯¹äºŽå¤§åž‹3Dä½“ç§¯æ•°æ®
+- **é”™è¯¯å¤„ç†**ï¼šå¢žå¼ºé”™è¯¯å¤„ç†èƒ½åŠ›ï¼Œæé«˜é²æ£’æ€§
+
+## 6. ç»“è®ºä¸Žå»ºè®®
+
+### 6.1 ç»“è®º
+- **å½“å‰é¢„å¤„ç†è„šæœ¬**ï¼šæä¾›äº†åŸºæœ¬çš„é¢„å¤„ç†åŠŸèƒ½ï¼Œèƒ½å¤Ÿæ»¡è¶³æ¨¡åž‹çš„åŸºæœ¬è¾“å…¥è¦æ±‚
+- **TMAXç‰¹æ®Šéœ€æ±‚**ï¼šå½“å‰è„šæœ¬æœªèƒ½å……åˆ†æ»¡è¶³TMAXå½±åƒçš„ç‰¹æ®Šé¢„å¤„ç†éœ€æ±‚
+- **æ”¹è¿›ç©ºé—´**ï¼šå­˜åœ¨æ˜¾è‘—çš„æ”¹è¿›ç©ºé—´ï¼Œç‰¹åˆ«æ˜¯åœ¨å™ªå£°å¤„ç†ã€å¯¹æ¯”åº¦è°ƒæ•´ã€ç©ºé—´åˆ†è¾¨çŽ‡æ ‡å‡†åŒ–å’Œä¼ªå½±åŽ»é™¤æ–¹é¢
+
+### 6.2 å»ºè®®
+1. **å¢žå¼ºå™ªå£°å¤„ç†èƒ½åŠ›**ï¼šæ·»åŠ å¤šç§å™ªå£°åŽ»é™¤ç®—æ³•ï¼Œé’ˆå¯¹CTçŒæ³¨å’ŒTMAXè®¡ç®—å™ªå£°
+2. **ä¼˜åŒ–å¯¹æ¯”åº¦è°ƒæ•´**ï¼šå®žçŽ°é’ˆå¯¹TMAXå½±åƒçš„ç‰¹æ®Šå¯¹æ¯”åº¦è°ƒæ•´ç­–ç•¥
+3. **å®žçŽ°ç©ºé—´åˆ†è¾¨çŽ‡æ ‡å‡†åŒ–**ï¼šæ·»åŠ å„å‘åŒæ€§é‡é‡‡æ ·åŠŸèƒ½
+4. **æ·»åŠ ä¼ªå½±åŽ»é™¤æŠ€æœ¯**ï¼šå®žçŽ°é’ˆå¯¹è¿åŠ¨ä¼ªå½±å’Œé‡‘å±žä¼ªå½±çš„åŽ»é™¤ç®—æ³•
+5. **æé«˜è¡Œä¸šæ ‡å‡†åˆè§„æ€§**ï¼šç¡®ä¿é¢„å¤„ç†æµç¨‹ç¬¦åˆåŒ»å­¦å½±åƒå¤„ç†çš„è¡Œä¸šæ ‡å‡†
+6. **ä»£ç ç»“æž„ä¼˜åŒ–**ï¼šæ”¹è¿›ä»£ç ç»“æž„ï¼Œæé«˜å¯ç»´æŠ¤æ€§å’Œå¯æ‰©å±•æ€§
+7. **æ€§èƒ½ä¼˜åŒ–**ï¼šä¼˜åŒ–å¤„ç†é€Ÿåº¦ï¼Œç‰¹åˆ«æ˜¯å¯¹äºŽå¤§åž‹3Dä½“ç§¯æ•°æ®
+8. **æµ‹è¯•éªŒè¯**ï¼šä½¿ç”¨ä¸´åºŠæ•°æ®éªŒè¯é¢„å¤„ç†æ•ˆæžœï¼Œç¡®ä¿æ”¹è¿›çš„é¢„å¤„ç†æµç¨‹èƒ½å¤Ÿæé«˜æ¨¡åž‹çš„åˆ†æžæ€§èƒ½
+
+## 7. æŠ€æœ¯å®žçŽ°å»ºè®®
+
+### 7.1 å™ªå£°å¤„ç†å®žçŽ°
+```python
+def denoise_slice(self, slice_data, method='gaussian', sigma=1.0):
+    """
+    å¯¹åˆ‡ç‰‡æ•°æ®è¿›è¡Œå™ªå£°åŽ»é™¤
+    Args:
+        slice_data: åˆ‡ç‰‡æ•°æ®
+        method: åŽ»å™ªæ–¹æ³• ('gaussian', 'median', 'non_local_means')
+        sigma: é«˜æ–¯æ»¤æ³¢çš„sigmaå€¼
+    Returns:
+        np.ndarray: åŽ»å™ªåŽçš„åˆ‡ç‰‡æ•°æ®
+    """
+    if method == 'gaussian':
+        from scipy.ndimage import gaussian_filter
+        return gaussian_filter(slice_data, sigma=sigma)
+    elif method == 'median':
+        from scipy.ndimage import median_filter
+        return median_filter(slice_data, size=3)
+    elif method == 'non_local_means':
+        # å®žçŽ°éžå±€éƒ¨å‡å€¼æ»¤æ³¢
+        pass
+    return slice_data
+```
+
+### 7.2 å¯¹æ¯”åº¦è°ƒæ•´å®žçŽ°
+```python
+def enhance_contrast(self, slice_data, method='clahe', clip_limit=0.03):
+    """
+    å¢žå¼ºåˆ‡ç‰‡æ•°æ®çš„å¯¹æ¯”åº¦
+    Args:
+        slice_data: åˆ‡ç‰‡æ•°æ®
+        method: å¯¹æ¯”åº¦å¢žå¼ºæ–¹æ³• ('clahe', 'percentile')
+        clip_limit: CLAHEçš„clip limit
+    Returns:
+        np.ndarray: å¯¹æ¯”åº¦å¢žå¼ºåŽçš„åˆ‡ç‰‡æ•°æ®
+    """
+    if method == 'clahe':
+        from skimage.exposure import equalize_adapthist
+        return equalize_adapthist(slice_data, clip_limit=clip_limit)
+    elif method == 'percentile':
+        # ç™¾åˆ†ä½æ ‡å‡†åŒ–
+        p1 = np.percentile(slice_data, 1)
+        p99 = np.percentile(slice_data, 99)
+        return np.clip((slice_data - p1) / (p99 - p1), 0, 1)
+    return slice_data
+```
+
+### 7.3 ç©ºé—´åˆ†è¾¨çŽ‡æ ‡å‡†åŒ–å®žçŽ°
+```python
+def resample_to_isotropic(self, target_resolution=(1.0, 1.0, 1.0)):
+    """
+    å¯¹3Dä½“ç§¯æ•°æ®è¿›è¡Œå„å‘åŒæ€§é‡é‡‡æ ·
+    Args:
+        target_resolution: ç›®æ ‡å„å‘åŒæ€§åˆ†è¾¨çŽ‡
+    Returns:
+        np.ndarray: é‡é‡‡æ ·åŽçš„3Dä½“ç§¯æ•°æ®
+    """
+    if self.image_data is None:
+        return None
+    
+    # è®¡ç®—é‡é‡‡æ ·å› å­
+    # å®žçŽ°é‡é‡‡æ ·é€»è¾‘
+    # è¿”å›žé‡é‡‡æ ·åŽçš„æ•°æ®
+    pass
+```
+
+### 7.4 å®Œæ•´é¢„å¤„ç†æµç¨‹ä¼˜åŒ–
+```python
+def process_tmax_image(self, slice_index, axis=2, 
+                       denoise_method='gaussian', 
+                       contrast_method='clahe',
+                       tmax_range=(0, 6)):
+    """
+    å¤„ç†TMAXå½±åƒåˆ‡ç‰‡
+    Args:
+        slice_index: åˆ‡ç‰‡ç´¢å¼•
+        axis: åˆ‡ç‰‡è½´
+        denoise_method: åŽ»å™ªæ–¹æ³•
+        contrast_method: å¯¹æ¯”åº¦å¢žå¼ºæ–¹æ³•
+        tmax_range: TMAXå€¼èŒƒå›´
+    Returns:
+        PIL.Image: å¤„ç†åŽçš„å›¾åƒ
+    """
+    # èŽ·å–åˆ‡ç‰‡
+    slice_data = self.get_slice(slice_index, axis)
+    if slice_data is None:
+        return None
+    
+    # åº”ç”¨TMAXå€¼èŒƒå›´é™åˆ¶
+    slice_data = np.clip(slice_data, tmax_range[0], tmax_range[1])
+    
+    # åŽ»å™ª
+    slice_data = self.denoise_slice(slice_data, method=denoise_method)
+    
+    # å¯¹æ¯”åº¦å¢žå¼º
+    slice_data = self.enhance_contrast(slice_data, method=contrast_method)
+    
+    # æ ‡å‡†åŒ–
+    normalized_slice = self.normalize_slice(slice_data)
+    
+    # è½¬æ¢ä¸ºPIL Imageå¹¶è°ƒæ•´å¤§å°
+    pil_image = Image.fromarray(normalized_slice)
+    pil_image = pil_image.resize((896, 896))
+    
+    return pil_image
+```
+
+## 8. è¯„ä¼°æ€»ç»“
+
+å½“å‰çš„å›¾åƒé¢„å¤„ç†è„šæœ¬æä¾›äº†åŸºæœ¬çš„åŠŸèƒ½ï¼Œèƒ½å¤Ÿæ»¡è¶³MedGemmaæ¨¡åž‹çš„åŸºæœ¬è¾“å…¥è¦æ±‚ï¼Œä½†åœ¨å¤„ç†CTçŒæ³¨TMAXå½±åƒæ—¶å­˜åœ¨æ˜¾è‘—çš„ä¸è¶³ã€‚é€šè¿‡å®žæ–½å»ºè®®çš„æ”¹è¿›æŽªæ–½ï¼Œå¯ä»¥æ˜¾è‘—æé«˜é¢„å¤„ç†åŽå½±åƒçš„è´¨é‡ï¼Œä»Žè€Œæå‡æ¨¡åž‹å¯¹TMAXå½±åƒçš„åˆ†æžæ€§èƒ½ã€‚
+
+ç‰¹åˆ«æ˜¯åœ¨å™ªå£°å¤„ç†ã€å¯¹æ¯”åº¦è°ƒæ•´ã€ç©ºé—´åˆ†è¾¨çŽ‡æ ‡å‡†åŒ–å’Œä¼ªå½±åŽ»é™¤æ–¹é¢çš„æ”¹è¿›ï¼Œå°†æœ‰åŠ©äºŽæ¨¡åž‹æ›´å‡†ç¡®åœ°è¯†åˆ«çŒæ³¨å¼‚å¸¸åŒºåŸŸï¼Œä¸ºè„‘å’ä¸­çš„è¯Šæ–­å’Œæ²»ç–—æä¾›æ›´æœ‰ä»·å€¼çš„ä¿¡æ¯ã€‚                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    €¹ƒ>a`>ÜKw>ãÐt>$†s>¶Pa>p=>±(->ZÇ+>àj)>óö$>Ÿ5>£<>ðl#>
+S>{¼Z>?J_>n„W>ÈQ=>ê?>¢ÆC>1Ï?>¥ƒ7>,8>»å8>]Â4>­2>ÞÎ->†+>Öj*>F;&>ÍÞ&>}.>È*>ÜD>ïà>ê>då>Ëe>…">øs*>Z+>ÉB#>ÿÜ#>ã>U>P{>ûV>J	>NBÿ=7lõ=Kmù=^„>®U>n²>Î7>… >/%>¤>Y³>>ƒJ>×;>\z;>ÛKb>¬j>¥£j>±.j>×@c>¤`>´R[>ƒV>_[>±ðj>=>O1> n˜>—ÿ–>>¶ˆ>H-X>êš>¹³>ã>`Vñ=§é=9`ç=Yæñ= >P¬>`Ô>|¡>Z3>ç×9>ÙèP>ÓHH>†D>’ÔF>N>R>†„U>ý<b>g>*f>)„\>(;V>¢[>1©]>b>þi>&‡p>p+y>¤>$‘„>¿…ˆ>_Š>§÷‡>]8‰>G)Š>€>"
+\>v«M>;ÇO>ÎSW>?c>‚Äd>j¶a>“ÁY>O˜U>À“Z>{¸R>*ž:>ÍÒ>¬,ù=K´=Úï…=@.‡=D™‡=‹‘‡=Ž‡=¤‡= ‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¢‡=‘‡=¯‡=¾’‡=‰‡= {‡=6Í‡={/Š=PlŠ=%€†=x=ÞµØ=pC>ÀÒ=>[D>N¤@>¯5>oÑ,>`'>]™,> ÈQ>4_>W-V>®zU>~Q>t7U>\Y>rôY>ªëN>ûH>Q[T>Æ‡V>Œ_W>eM>º|A>'S?>0‡T>[»^>jò_>­Ï]>_Xd>~‹o>ØFv>§¨ƒ>är…>`Øb>…@>°âG>/‰l>å^l>öe>
+öN>â`I>úV>b˜“>kâ¼>c½>“´>Æ1>:îc>2UP>ÔO^>ƒj>¾\>#:]>°¤q>	Œ`>¥Ë'>Ó°6>ÞL>ç5
+>Oà>Ž->ºXT>«lN>ÅŠ×>½D?ŸÌ?^³>%ø‘>ëð¬>5e’>·ò`>˜z>/…>/¬‹>-1k>…16>Î5*> Ö*> Ö">F]>r”>Ž¨>–1.>†qO>Œ¨]>¢wI>Ár5>W<>AþA>öÛC>åXB>UB>1…@>oC>o<>U0/>·H0>˜0>¨›%>°->©* >6þ>½{>ñA>n>—>2X">Ûî'>"ã'>æ&'>~#>=’%>Š	>÷“>7>ž!>ß
+>¦b>]K>l>ë>#l>Ø»>&\>çG>æ>g>iÆ>òn>—>Ó0!>âï;>´\>Êèf>Wªi>ñùn>m>CUj>6'c>QåY>ö÷[>n>wú‚>t‘>è³™>a•>öá‹>½—}>ª`>-ÿR>{@>I7>‹6>¾³>Pæ>v|(>™å;>ÖA>j$O>°|_>Þë\>êO>ZqC>??>°/?>ýN>Ø¶T>éÈZ>ÌŠe>°¦j>p'l>ðke>žW\>òÊ^>&^>æ"`>?ºf>’”k>Ò+p>w>Ðb~>joƒ>·<†>¨Ãƒ>ëè„>”Úˆ>ˆ&ˆ>¨Â‚>ßuy>üpo>Àìg>Ô»q>â¼s>%cg>‡Áb>o>=zm>“ÙK>s<>ÆZ#>0>Ÿ£ˆ=þâ‡=¤‡=ùŽ‡=¨‡=›‡=ž‡=¢‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=ž‡=¥‡=¶‡=o‡=g”‡=X‘‡=Þ^‡=Oˆ=‹âˆ=;—w=]Þ=[ËB>X=H>MèQ>}O>¯C>ƒ::>D<>?,5>“OQ>ï_>ßH>zU;>b@:>óQP>®Î]>l†^>EN>×†E>AìU>:fW>ŽÓI>ñDB>ø‚A>tö=>×íM>²c>’ç€>d>LQ>6ú`>sæe>«c>Ñêp>ä_b>güG>FG>xÙh>õÀj>×[z>_Èz>Í
+a>ie>´)>4°¦>ª¸¼>YŠÃ>û}»>‰ „>_OV>…ÁJ>Ii>>ƒJ;>7 *>fZ$>Ñ >wN>–ë)> P>-î=U>?å;>[Àw>cp>S»>Bå>ÅøÑ>Î©_>X_€>¡¬>Þ>;Ëw>gáJ>‰\>÷jz>…>y¯f>ÕdG>S´Z>6½F>Ëó">³ >™$>Yí>Å4>ÏH>ót=>!‰+>VÆ6> ëE>K2J>j9K>`L>ÌSL>6HO>D×D>‹¹->¼%>ca)>b">pá>Á»>Q¸>ü->’¸>Šm>>"!>0&>zh$>Éq$>d\$>K«$>øT> >è>â
+>Ò¸>(Â>¤8>3}>M
+>f*ý=âÒý='>ã‘>,Í>´%>—*>ˆÁ,>…A.>Ù(/>^·6>‹áJ>_Ãc>Rüg>Élk>ö:m>¡ål>½e>ÖŠZ>õ©V>h^>ˆ*>Þû’>6u•>éa>©}„>¸x>[s>­Áq>1\d>RO`>Ø	j>}æi>qve>º$l>Ùúo>Ðl>Äg>j^>ŒJ>€9>Ò4>>44>k¨5>ÒË<>TŸE>5U>]Èd>I·k>€mo>P%m>Ha>¦`>r¼\>y]>vq_>g‡_>Pd`>ëg>Åòn>Âév>˜~>ùD€>‰º„>_’Œ>¼Ž>¾Ž>\Z‡>1Ð…>I‹…>’î†>‘†>¯ÿp>ŒGt>ã>A%r>sL>š$3>ð>øÒì=½Mq=ƒ¬ˆ=³ˆ=‚‡=˜Œ‡=$‘‡=¯‡=‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡= ‡=¡‡=¯‡=Ž‡=¾‡=m“‡=\†‡=õs‡=@Z‡=!fˆ=Uˆ=ñ‰r=¬uð=ãQK>ƒµK>\*Z>fçd>ýêY>)—X>žxg>V>©ŒM>{Ý\>×9V>‹v[>Ñ3k>°Ÿf>{Mb>þÕa>¨äN>ÊTD>;”P>j ]>Ka>íœT>nyI>†G>"yF>…G>0u>˜ˆƒ>Ó3Z>SS>¦Z>ÙRb>òe>êJ_>¥ÂT>Ä!H>qT>«c_>ã³w>æ¶€>…‚>C7|>yÓŠ>˜H”>áà¬>O·>\¶>Ü$Œ>wtp>QíW>¹ø1>õÍ*>I>ó3>é>O»>&ù$>c>ÜÚ=r>Jc>9½‰>²3†>zJ>D?i>PÅy>ÀÆ$>h>Q™“>Xk>ã…Ž>*j>­t">å[D>-Žh>™ ‹>Æ9†>ü‡>¯J}>CÀU>/2>ðí>“ø>h˜>í">½v*>…Ô">»V8>Á’M>9O>õ“S>ÖÍV>ŠÄS>IcL>@>4*>d9>µŠ>·>.†>ç[ >˜4>Þ¥>·m>Ðj>j>a>©>´Í>…â>¢>öI>Ÿ>P>[º>ÿÝ>ªÃ >—…ú=³F	>BO>ÇÎ>úuø=Ëãò=¢û>Ÿ>×²>Öq0>’ù9>'Ö;>oÄ=>ò”:>=6>t@>Ðc>aIf>‘Id> Ùe>Ã˜h>ÏÁ`>p+W>2L>b4E> \>[d‰>;0‘>º>-‚>À€>Þ‡€>&#p>e—h>C§[>™"f>ÿïl>Ér>R±m>ƒ m>Zn>ð
+i>pAW>ÏQ@>ö.>þ`%>ôÌ&>9->áR2>èK<>gíK>¨³^>Û¾l>ºv>’@q>de>éµ\>L Z>åX>–U>X7S>¼R>	á\>÷8d>" j>Hˆs>–y}>Y‡>´Õ>“>‰’>/Ž>%O“>å“>ç•>ËŒ‹>UNu>í>û3†>»ät>ÕlO>î1>(´>pë='`m=¢×ˆ=}Eˆ=æ}‡=G‹‡=Q‘‡=µ‡=›‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¢‡=¡‡=“‡=¶‡=S‘‡=–Ž‡=—Ÿ‡=¹™‡=ô…‡=,;ˆ=ˆæˆ=Ün=XÏ>#™T>NO>t`V>Qâf>b=p>rzr>~ƒ>vî…>¤¬n>×Ns>	 Š>*C•>µ¶™>‰>Y„{>Ë\k>IX>9°F>_ÏV>¥žf>î=r>8Wl>=åb>§O>¹L>>W:>°ÚF>šsm>RŠc>8±X>™ÊS>rS>p¸\>_œ^>’`>0V>+ÁK>ñý[>´ç`>'`>J×h>³ˆ>ð“>ü­–>êš>Ú!> ‡›>a_•>¼>ÇÏ”>¡5^>:
+#>Cæ>¦>8R><D>æ[,>Æ$ô=ç:ã=Ñ0>G$‚>J/l>cÏX>qÞR>¹¤+>bn>Êƒ>ÐÌ¤>ži‡>M°m>YÅ‚>îÜƒ>%‹
+>ÌŒ>‹f1>L9\>Ú}>xý>ü(y>ð,l>”j@>¾ï>”¨
+>ùÓ>…r>Sµ>ö>`†>>"mN>‡îT>£^>ša>6>[>ätG>Ÿ6>vç%>šU>ÿ>çB>­>ó;!>A>{2>Áû>†>á>Ê5>/>>ì9>ÑÛ>÷\>W‰>Î@>!½>ï{>¶¯>Å‚þ=¢¡ú=ë>Çf>è
+>Sýü=u@ú=W>4¼>!Í)>xu<>5L>£P>\H>–A>Š>>¢A>`^S>:X>æËW>Ïo[>$–g>ãÃf>³zV>úéR>‘ÆV>xâX>7˜p>	†>Ë§ˆ>¦2‚>N.€> ¢t>`õm>è’f>ðC]>iÜa>}c>t
+k>üq>Cn>¤¨n>¸kn>ï5_>ëÂE>¶õ">öí>Œ0>K|(>¤->Q3>0”?>´¡U>SQm>_w>Hv>Gœn>ÆÜa>9OY>ÏR>oyL>ÞF>úE>yŠP>•IZ>h‡b>GŒk>Gi~>Ÿ²‰>Ü“>º'>n0Ž>!¸ˆ>“Uˆ>(§—>æi‹>¾>‘2>Šd…>V‡†>@X>o¶\>ˆáA>Ç¯%>Úõ=¢‡h=‰=¯sˆ=çx‡=¡‰‡=‰‘‡=»‡=š‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=¡‡=ž‡=‡=ø‘‡=Å‹‡=4˜‡=s\‡=)x‡=3ˆ=®¾ˆ=õÖk=<>ïX>‚pQ>ÆP>£R[>¾[r>Rí…>Uk‘>ó%”>Š‹>&”>èž>]Î¡>SäŸ>«Þ>Ù5‚>9õk>´ëK>)C>Z¢`>#Ôu>(£t>ž~y>ê‡}>De>3OE>@E>°€N>×^>¢8_>{ÜN>»I>{ÁK>?V>šc>38g>·¦a>¸T>láa>—_a>V]W>OR>éˆy>Ã½>Mé—>ïœ>~Å–>$0”>ô¤–>xð‘>#o>Uo„>„_>;tM>¹@>~‹6> L=>Ë¼'>Gð=Òï=Ê÷>…yn>G+K>Qà?>¬m=>#6>( .>©u>ñŽ­>ƒ’>öÀœ>Ç!>@@R>×N>Ü£>(>ÇW>òË2>Ï¥b>ó¾b>WkP>c,>|>\å>-P>ö[>û>‘5>¼sW>9ç]>Wwd>>‰k>Ýqk>þÑf>U|U>Ø¿5>«">?>òÉ>}¥!>Œ'$>´%>óç>eì>£7>t÷=òÙ	>(X>®i>G>õ`>V4>,'>QÌ>m>ã>wL>S>E%>j[>Yß>¡œ>+ >ß‘>v÷	>ÇŒ>=H1>
+§>>dòN>z'V>aK>KXD>ÍD>+·B>cB>læC>ÇãI>	¤X>ú‰‚>Æ	†>ýè^>õg`>6se>ÏÎ`>Íè`>—n>Š}t>ªnv> Èu>Ø°l>¾f>Ài[>œ9T>ûcT>^¦M>ÇºQ>e>Jàb>™»[>¨zQ>D±:>€¼*>ø>Ù?>>T»(>‡@*>”¯.>Œ¯:>™ìO>ß9f>Õír>ðØy>óÊt>Dëe>÷AX>ÄR>–J>Ùœ@>Ï<@>þÃG>²eO>þX\>¡Ël>Ôß~>·
+„>b“ˆ>Ÿ0ˆ>$¦ƒ>L¸|> Œ…>N×“>ŠWu>Ñt>Î“w>*9|>uWm>{
+  "do_convert_rgb": true,
+  "do_normalize": true,
+  "do_pan_and_scan": null,
+  "do_rescale": true,
+  "do_resize": true,
+  "image_mean": [
+    0.5,
+    0.5,
+    0.5
+  ],
+  "image_processor_type": "Gemma3ImageProcessor",
+  "image_seq_length": 256,
+  "image_std": [
+    0.5,
+    0.5,
+    0.5
+  ],
+  "pan_and_scan_max_num_crops": null,
+  "pan_and_scan_min_crop_size": null,
+  "pan_and_scan_min_ratio_to_activate": null,
+  "processor_class": "Gemma3Processor",
+  "resample": 2,
+  "rescale_factor": 0.00392156862745098,
+  "size": {
+    "height": 896,
+    "width": 896
+  }
+}
+                                                                                                                                                                                                                                                                                                                                                                                                                                         DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=BÜ=AÜ=BÜ=BÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=BÜ=DÜ=FÜ=DÜ=DÜ=DÜ=DÜ=FÜ=FÜ=HÜ=HÜ=JÜ=AÜ=PÜ=WÜ=QÜ=LÜ=FÜ=BÜ=DÜ=BÜ=BÜ=DÜ=DÜ=FÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=BÜ=FÜ=JÜ=DÜ=?Ü=BÜ=BÜ=BÜ=DÜ=?Ü=9Ü=5Ü=5Ü=,Ü=[Ü=Ü=íÛ=Ü=!Ü=?Ü=QÜ=FÜ=JÜ=JÜ=HÜ=AÜ==Ü=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=BÜ=DÜ=FÜ=FÜ=FÜ=FÜ=DÜ=FÜ=JÜ=LÜ=LÜ=NÜ=9Ü=YÜ=sÜ=fÜ=YÜ=JÜ=?Ü=DÜ=BÜ=BÜ=BÜ=DÜ=HÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=BÜ=?Ü=?Ü=AÜ=AÜ=AÜ=DÜ=HÜ=DÜ=FÜ=NÜ=SÜ=!Ü=
+Ü=WÜ=mÜ=`Ü=[Ü=UÜ=HÜ=Ü=ÅÜ=åÜ=ÔÜ=UÝ=dÛ=Šß=fß=yÞ=`Ý=9Ü=¾Û=&Ü=Ü=Ü=Ü=|Ü=€Ü=?Ü=BÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ==Ü=PÜ=lÜ=lÜ=dÜ=_Ü=YÜ=BÜ=.Ü=BÜ=0Ü=Ü=ÔÛ=PÝ=çÝ=­Û=Û=wÛ=§Û=ÐÛ=#Ü=Ú=‘Ø=«×=&Ø=“Ô=}â=1Ä=Æ=°Ì=“Ô=úÜ=à=(Ý=ÒÝ=¯Ý=¦Ý=œÚ=¥Ú=sÜ=SÜ=BÜ=DÜ=DÜ=FÜ=FÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=FÜ=BÜ=DÜ=BÜ=lÜ=ÿÛ=uÛ=wÛ=šÛ=¸Û=ÖÛ=]Ü=¸Ü=JÜ=ÀÜ=«Ý=†Þ=‡Ö=ðÓ=­ß=íá=[à=fß={Þ=[Ý=òç=Èï==ô=¾ñ=±€=¶½=é,€=Å$€=€= €=FÕ=ÖÈ==×=QÔ=åÔ=,Õ=]å=éã=FÛ=ÿÛ=SÜ=FÜ=AÜ==Ü==Ü=BÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=FÜ=FÜ=AÜ=HÜ=FÜ=HÜ=ÐÛ=Ý=“Þ=ŠÞ=#Þ=ÏÝ=|Ý=ëÛ=Û=?Ü=ÏÚ=DØ=Ö=ñì=Jó=Ò=Í=öÐ=¢Ó=]Ö=oØ=‰º= ¥=™=ñŸ=ºp=€=d|~=½¶~=8=„=Eö=	€=ë=;ò=íð=ôï=ÙÁ=iÈ=#ß=ÿÜ=Ü=AÜ=QÜ=WÜ=[Ü=HÜ=FÜ=FÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=FÜ=FÜ=?Ü=LÜ=DÜ=BÜ=„Û=HÞ=•ß=†ß=ÏÞ=;Þ=ÚÝ=ôÚ=Û=ÑÜ=ëØ=‚Õ=[Ö=þö=—ó="Ì=ºÐ=ÃÑ=@Ô=åØ=WÇ=ë£=“=¼‰=Â‰==¦€=Î~=vQ=†œ=Ä÷=G1€=z€=¯ö=™õ=’ö=ð=ó¶=JÔ=Åß=³Ü=Ü=FÜ=_Ü=dÜ=fÜ=HÜ=FÜ=FÜ=BÜ=BÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ={
+  "image_seq_length": 256,
+  "processor_class": "Gemma3Processor"
+}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      T_³=®7a=®{=€=L¤=Ù=…=óÁƒ=€‰=‚==ž>ˆò:>†1>’c;>@/>¨$>gâ7>r–n>§	¤>;º¿>ƒRË>.¨Ë>ñã¾>é™ª>ýŸ>¹ª›>Ï‡š>Ø3œ>–Îw>ËŽa>äY9>S > >ÎŸ>‹>¢ù=GÖ=ˆÝ=-,Ý=!Ð=@‚=*“=‡&|=Ÿ¤€=£«ƒ=[N„=“ç‚=ñ^=|t=Hn=È\=œ’=×¥|=Q|=»TT= ä¸=cA>­•1>”À0>dõC>©ÂQ>»>zÄï=Mnî=ô²>>[â>bb>w£>æv>! >WÈ$>S">ƒÛ>×w#>Ä+'>¿y%>¡>i: >³¥ë=Ñ°ê=†ï=7/>Öð0>ÁR>”_`>Ë‚>ÝŽ>ô,>"ËŒ>×˜ˆ>*‚>.6y>írj>`ÞQ>àT7>my>?Ü>æ$>;˜%>é->¬y>V€>r&>Fó&>…í>l>×¼#>Ÿ1>óŠ'>®>ÿù=©Íì=ßí=êÿ>À~ƒ>þáK>ö‚è=+°æ=èó='‘ô=þ‚>þ>H±>¹j!>{,>¢§H>É|`>sB>óÂ;>`Š>o?™¨ ?¬xB>bžK>4ÑB>K%>ÒÉÇ=Íh=è‚=KK€=°¨=Ú=sÞ=4Ü=5Ü=FÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=FÜ=4Ü=4Ü=bÞ=ûÙ=Ä¦=ÛK€=ô=Ãb=èÓ =Q×>ðƒ>}˜t>ÀW>•FJ>XaL>äG>ž8S>e-C>Dƒ8>¿ì2>¶Ê0>”22>.ëA>^„X>Ó†]>5OY>¨„T>ÇE>] K>üe`>“æ[>©’->›µÚ=<'?>u©˜>éUk>:²ô=pû>ßà>2>@Ï>$„>3S>õ>CÜ>‡q+>¡&>þ=5æ=u*Ï=ˆiˆ=Ê±d=ˆ’ò=0ð=W¾Ä=tÛ>¤ûF>œ¾Y>üÇ^>Žm]>à-i>†µT>x9>íM.>™Â.>þìH> ¤P>Ë>>2=>ÈaC>ÚêE>%íF>™¹L>§=J>)DA>ß2=>ÖÈ4>Ä.>Û,>„>—åú=«Á=çá¬=i=¬=íóœ=šß§=¹òª=˜BŽ=²1Œ=á4”=3Q=>dÃY>{÷D>ŠrC>ôD>ß_9>´^,>Ü£/>‡j>›¨>kò¹>x°>¤¡ >´Q>2‹>¶C>JÿŒ>Šãq>~)(>fâ>ðU>Œ>Ó >$G">U:>p^
+>ˆ>=d>s¡>å>Ç€=Si=x=dw|=ƒ€=ìÍ=„€=54€=MÃ=“ƒ=Ô}=PK}=÷´=»öw=œ×=Ê>c>ÆæI>>>•þT>X¨Z>i')>‚Šá=\Zÿ=I	>G $>{¥->jN/>B2>ø	>\xî=Ø’ÿ=g>‹+ÿ=äJû=SÑý=éíü=SÂù=8Xô=•ªî=ê=s/ô=?,ø=åÙò=Ë‹õ=a>‘ù>µ'>‡E0>â›C>¿F>8ÝE>-òJ>4ÏH>2Á:>31(>Ÿ¾>³¯>ßM >–0>®ÎC>#M,>èé&>™">aå$>)Ý>æ>2ý7>g·D>n ?>ÙÏ>© >¾÷ë=?Dï=w‡>èÅs>HDR>g
+>!Kû=´ý=O…>·d/>ß>J>q>Ó	/>ò·‘>”­>—@>y«õ=Íá8>9éÔ>ñ¹¹>ÕéB>€¸R>“IM>œh>¶v=ôÂ†=í}=ò“=dê=ÚÚ=úÜ=AÜ=;Ü=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=NÜ=NÜ=Û=Ý=û=p=È˜}=ÿá”=<3B>¨g>a”}>àk>JÑa>WW>æ¬J>¡æD>Ë4J>ãßA>ñ7>¬+1>P"0>.'0>Zä0>M67>tû>>!@>¨B>³7D>à„4>jéM>0Ú=AMò=®ÿë=%r>&3Ž>«²†>×Tu>ÁU>…ÌE>ýM>ˆ“L>°7U>—¸h>‘>p>€U>i}c>N½F>£´Ù=³>Žp>UÇ=L°§=>I!>iwË=°’>T˜A>ÔW>ð¿a>dW>n²k>¸Úg>@“E>±R3>ÄôM>‡@l>eOc>Y8M>¤K>š,W>ã#N>ƒ!K>LS>!E> ;>|7>Ãå4>£$5>='>Æq>m(>¼$>ª#>ùJ >.Ë>jT#>I¾ >=Ú=O ¹=	>í+^>6´e>A˜R>_H>*G>ËêD>1^=>']/>aj5>Dñ‰>Wú©>ýª¢>Z¾—>ª‘>cJ>m@‰>µ}>£ÕK>%>“¤>Œ>*C>AÐ'>²”8>vö7>ÌU%>º=>g‹&>Z2>Ñú">š—¬=Ãê¨=á9=éŽ=øGk=
+Åp=ãu=¹}=[%=6k‚=òˆ=_f†=Hµ=ê&¢=”6>„Çc>rv]>4¾Y>ºsZ>Íd>X‹J>/=2>—->"8>”8>ëXI>Ð[M>yÜH>v6>ˆ]>½¯>ó«>ß=é=ÄÜ={¥Ý=1²ô=`¢>À]>-t>Ú9þ="À÷=í=:ó=8ä=ù*â=Õâ >€ü>9”
+>+ï	>+¼>ü>
+ñ+>/p2>ÛC->a, >ª>aô >}>¸æ#>5®B>wc>¨‘W>n»H>iú/>ø!>*>>¡Ç?>(æZ>^>áÝ8>UW
+>š¯>€ž>¿ÿ>®=>n?£>–6œ>â=Í
+>“‡\>¯‰u>	^>Û_>l>ë²> >©^Ó>T¶“>+,> MO>ú†>«[^>+m\>õþ[>c`>HK->’X«=Z²v=ÚŠ=õ'€=ˆê=¯é=Ó=—Ü=‰Ü=?Ü=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ==Ü=FÜ=wÜ=fÚ=…€=ñø~=úàj=Nù>žOQ>SÎD>ç->>Ï;>$>>(‘F>ä.I>ñûD>a?>v<<>xA6>*0>Ú¥.>>.>Ú‚*>{+>¤0>ˆ¦5>ÐV:>iq<>cr4>)º8>Ñ»å=œè¾=¬Ë5>!K>Ð"`>:w>üØŠ>Í*~>ý@i>ƒé[>¡õ[>BTf>ÌS>üå”>Ë¬€>M¿y>@ÊF>Q¯=½Ÿ>ÒH6>â«>SŒø=šŽD>MÕ$>¤kÄ=ªhõ=¬q;>ýT>î[>ÂqS>6c>Î(d>€€Y>NH>XÀf>œxs>pþZ>h—L>À_V>!>c>	ŠK>I×N>ÖaT>®zI>aA8>_l/>Ó6>º<>~å9>Ñ=>‘‰:>§7*>ç©->rè9>ZMD>ôb,>@>“	>ö>ÜcF>Žk>j>û^>«uR>U+G>'A>€†:>ÆÕ2>Òá2>ÆÑ`>Ed>³œw>-Éx>þŒ>f>héw>ƒœR>5>³Ô>Ö>ÃJ>¹ˆ&>1>•T>>YOA>®+;>ë°:>+›2>ŠÆ.>".>T"'>ÕÈ*>í‡6>5*)>ÏOŸ=±ï‘=Áº„="“n=2-a=q)V=ÿób=ëjc=WLJ>ÿuN>œ›Z>É]>ÄÒW>Ñve>Øp>Êkq>¾òf>äQP>§QS>´†d>Ç*O>m`H>r¿C>”á=>|…:>y8>CJ9>¸ÿ5>{˜>¨ >j¥ù=—<
+>H°M>çC3>!Tî=šm>Kæ>Ïíë=Jþß=’)Ö=†]Û=Ùªò=¯Ë>´6>rÐ	>Ç…ø=Ž[ô=>†>˜à	>ÜW>Xü=)ôö=ÖL>ë&>X£W>Y6z>†5y>óÐf>ùÕB>Ñv>“>jº/>¤^J>¯äb>]•`>\u/>þ%>ë>Xî>Þ>\‡(>y!f>ž¼‘>t½>è¶9>vš>´3•>”à>¬[!>Ë >O>	›><yÏ>ÃN¾>0‚~>môR>H‡V>7Àm>i^r>2Îd>ê¼>E†…>õ56>ûZ=Ö‡=Rõ~='9=‘›=f€=šÚ=ðÚ=]Ü=FÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=AÜ=?Ü=ÞÜ=žÛ=‘Í=
+€=|=Z÷¦=Ä’>Xµ4>,>+3>§7>¹3>Šu.>`Œ5>ÿ9>D9>3¡4>"A/>%^,>Z},>ß€">=¥>R>!>2p+>ÿ.6>þY7>í0>A·/>ƒ.>_
+>£Ë:>ÿ½>>Ðó3>B,1>ý~A>êùm>•†>û¼|>†>+‡>ã>h¡>È	>ÖUa>—Ô:>Ú>ÛS*>=ù;>¥8>,>ïÃ&> I.>ºuò=&Ä>ì$C>úSX>áÈ\>ÄÈO>§šU>º^>GiX>Ñ6\>!¦d>So>DÔy>c­f>2ïf>Ë_>ÃˆU>.*d>Ï_>ôóQ>§;>ë'>d->©e8> c:>­W4>h>vl#>È¼*>«TL> U[>)%d> Kc>8+>]!>¡–:>z‹H>‘[>‰c>„S>ÖûG>%Q;>ÃË5>t40>eV'> ‡*>p¿:>­BA>÷0>‹ÍM>˜b>i9>>±C2>4X.>ç‘>) >;">A$+>1&4>I×:>Ó+?>ªB>¶MA>al8>ç¸,>y÷">7ˆ$>„)> ÔA>ÏÀW>{S>,÷P>•!V>k•B>O1>âŒ>,–>F>yîY>Ò‰d>éÀk>iCk>Dl>Uq>Ív€>+¿„>„ƒ>^eo>3p>'!l>wB\>Ã9T>ì=Q>£åR>Â_>è–j>ïGh>€N>ƒÀ<>1á3>o^8> ßC>M´_>c:>ù->p7>Õ>nïî=SËà=üañ=áï=*×ë=’ì=@é=u}í=§‡ç=úbÜ=»pØ=°ÈÒ=<ÓÑ=Ò€ô=2(>¹~>q|>
+?>ru>Hë‚>_W‚>@Çv>bpT>*õ&>iè>ª{$>ðé=>M>Ot2>ãa>ƒ—>ó@>^>ž#>s/>z{9>4Lx>c€´>È>@AÃ>4K>	x(>Ý,>JR>±*7>(º>ÖÌ>£@>mw>ŠÞ`>ƒ]a>“Be>÷j>Ç#€>~Ø†>„‰>I |>I}>ío1=©=Y*=à_€=`0=“â=á=ëÛ=?Ü=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=AÜ=AÜ=ÑÜ=¼Û=SÌ=“
+€=9Ï€=îãk=²ß«=<U5>Ö.>O.5>¦!:> 	4>Ÿt)>È5,>009>!c=>.»7>¶/>d¾+>íL,>u·(>É >ã\>Óq%>€Ž4>T5>4Ë1>Ûd.>‡“I>Ò?>Ñ<>„2>=ó'>]>k >Ýg?>±€>Ž>Ç•>Áº¢>c¢> I¤>éN„>q„d>kd>Õßi>kDN>™7>z '>Ç">÷c!>„Z2>÷½/>Þ0>ýš>> >L>*lZ>ÌàI>Ü¹I>É×X>GûI>‚P>4]>Råe>Y…>JQƒ>OŸh>ïN>X>lž`>À¿[>â:Q>÷ÚA>Þ2>€Ñ*> $+>â$>}±>o7>D#)>Æ>š®/>ÂŽU>E%h>d8r>7/C>î>î>ìŽ >Ÿ¸?>W·X>ÒT>‹FG>îK7>n¦1>2.>a]!>Ø>
+L+>zÝ?>„c> ->Êt(>‰È->=f1>È/>Y‘+>~=)>l*>‚->æÜ0>BŸ5>—õ>>GåE>Å—C>Þc9>åG->â!> P!>{º#>çÉ$>¼2>zåZ>?ªX>BéH>7Ù^>u|q>âfw>æèƒ>Y4u>_>:~Z>¡p>‹!|>º>…‚>ƒ†>£°˜>	¹¨>ªˆ>‘›R>ÉÖc>si]>¬²T>u„Q>ÝäT>gƒ`>>¯l>í^>ô>>EÝ6>’d:>Õ*B>c{S>€X>Ò_>¼,T>a&>I;>=œ>Få>õõ=`Sì=••ü=•w>šÛ0>ˆË8>ÀÚ;>/K<>ó‡4>D,>¹(>Yº>Ï>C%'>Ï¤B>±t>ëVˆ>Ûˆ>ø†>>{>	wU>Z‚#>X>Mÿ>¢Ã>Î™ >Îû>I°>ó,>Ê€>Àk>;G!>ös8>à¹=>õ‹c>?šŸ>B¾>y§°>Uîa>Ã 0>zü=>»x>ž=><`>óq>oüU>ñ!M>!
+P>ÁW>\>j<b>êŠl>Z´y>½R…>½î…>Màa>Å,>"Á”=DÖu=Ár~=‚q€=Ó=Õ=ÇÜ=YÜ=BÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=BÜ=BÜ=“Ü=öÛ=šÓ=Šû=É€=œf€=Us=… ¶=ºÀ%>Ü2>±í2>.>æ->ïŒ,>ÍW3>/?>ê:>·.>¸Ø,>-‹,>€°,>(> Þ%>È*>”´3>~æ1>«€->Ìú/>|âJ>š…C>>h9>±->Ëù >o2>†k>p*>’OG>Ôe>ÓÃŠ>³<¢>Ò«>«¬>BÄ™>ðÎ|>&çf>aR\>@¯W>–@>ë&>>Ê>U; >ô>£ö,>RÌ4>¸ý5>†é:>äP>~L>ËD>	EU>›ýF>O”I>zÕS>Wœ]>?Mb>ð±a>.ÀZ>{J>Ô!Q>'S>¡íE>EÍF>EOC>z?>†u:>ƒ3>Šz'>ÌE>Tk>`R>ùó
+>CÏ>œó)>ñ{,>61>'°(>‰>>®">Ïî9>^RE>‚ºB>_{;>D—1>¦^->Zâ+>iC >jE><n'>c;->ç‘>|Ê>ÄR)>Ü_0>,1>íR->Àm,>`ó,>þÈ+>þ¿+>ée+>Øñ,>8m6>¨LD>”‚G>N7>Úº,>þP(>š '>=Â&>
+Ù%>­µ4>+3E>×-3>DF>,>ú¥Q>(b…>ö…>¯=>	Fy>Ò‚z>,Þ‚>d”„>ˆ>™e‡>’Hƒ>H–>ôÓ>OÒ>¡j>ÀÓ\>•†M>´0=>¿V?>YÝL>òe>|"v>
+xs>^`>‘¶a>(_>ÄJT>r²S>ÁÚV>Û"f>#êu>Á¼p>.n>
+Vf>Ï(S>¦ªA>w“1>þL>'W>ý±>>ü¬J>£G>ÀM>¿ÂO>aM>xç7>M&>íB9>»aV>H€u>?X‹>{Ž>°ÒŒ>g£‰>s{>ÝC>°” > è'>+*>”*>=,>:H%>1ê >²u">àÌ&>Ñú,>ü±4>±yH>¯h>rfq>_b„>d}Ž>ñ
+…>Ãt`>n$Z>Þ+P>ã	->>;>r†,>M<>¬ØE>ÀL>Z>õÑk>÷ÿo>™¹l>Èžz>C"„>Bƒ}>8<h>Ô²X>ªö>}\~= ý€=Í~=bß=Ý=;Ü=0Ü=FÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=JÜ=HÜ=¶Û=!Ý=bà=zÏ=­€=}=ÍŒ}=²„=d9>Wâ&>Åª0>Wú/>u·/>>¥+>¾P(>ao2>œÇ8>Ÿ->×,>E->ÿ0-> $0>$v.>÷ð/>Pô3>0>¤Å+>ÄF/>®ýC>¿Q=>
+š8>Ÿ*><y>Ò´>îA>ê>Ë¢>Ì!(>|ÖS>“sƒ>E·•>·¦>í‹§>=¤>9{>ëS>s«>>ª*=>‡„/>³w*>äÌ$>µ>-†>z(>­Œ/>ã,1>D"8> ²J>ÃTL>ˆ×T>~êP>}E>ã7C>TKU>­!\>cJc>R!T>ÛçG>lP>"SK>…v9>ÒN6>M{6>@‘=>¶ä?>Tš6>½.@>ñd,>ý:%>®Ž">åð+>Åm$>”+(>ÆY0>A)>|Œ>ê+>\	>Ì$>b->Hm8>T|0>bØ0>ÕÀ+>š\)>³¬(>ˆª>Þ<>Ý?>i>Î–>Uý#>£Ž.>{'2>	d,>³f&>Ü¯&>ˆl)>U*>[H)>z·&>¾š(>÷5>H @>È™<>ð+0>A[.>’.>u]*>>)>-->o9>Oœ9>ÇD&>ÓÜ>ƒ
+>,±!>­ÚZ>“£]>Tii>Y€>+zƒ>>ò†>ºG„>,ö>ó5„>‘E>²‹>þx°>éŠ¦>³»V>
+©N>P£?>ÍZ.>ˆ< >/m,>NW>ŠŠz>†y†>v„ƒ>ç&v>8 d>ãÎa>×\>›j[>‹´d>ÿu>›¿>ÜÐƒ>Õè>ZY}>“æw>´™k>Œâ3>z(><f#>ôE(>äM,>/4>Ê©:>”<>A=>é^T>™:t>Æ„>¸—‹>\Ï‘>ß÷‘> í>òùˆ> €>«V>¡Ä=>$C>äOI>FF>k:@>T¼8>¶0>ùA/>|7>#‚@>q‡E>'=U>ŒC~>«ï€>Út…>Ë_‹>Èm}>•ì~>á"q>†]>üº:>Ÿx0>&á3>ê9>ˆfE>„ÏW>¥Æo>Â>á+Œ>Ka>n³†>ng‡>k|>ÎÕQ>¬ÖD>"D>ÿW>Çã¸=p°u=H€=ÜÛ=ÜØ=sÜ=ëÜ=2Ü==Ü=FÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=FÜ=#Ü=4Ü=Cß=Å×=¡À=
+€=”#€=ÚÕ€=ìj=,-X=ØQ=Ž»
+>_6>?#0>Áî,>$)>¡%#>ZÖ&>‹ò3>ü‚,>”º+>÷Ä+>&:>«R>6>ž­0>Ä4>Hœ4>ë3>Ý->i<>FEB>P=>[ø*>ÔA>V&&>ÆÃ>€¤>ß>ýÙ>3L3>°{P>Ÿ¥b>¡¶ˆ>¾Ó >§ª˜>Û%Œ>íXo>ÖE9> ú,>þ¹/>èÃ4>_—)>)g>®m>Ž(>¤ý+>%H3>ë·1>5m7>¨WD>ÿ}L>’¶\>’U>–B>¦ˆ=>à.L>¥Oh>eªV>;kG>•	O>Õw>>\Ù5>O+/>Øë'>™Ö*>ÍÝ;>Ò@$>…9'>3$0>O¿:>Å?>\ø@>:YH>C®O>ÒV>ÛµN>õá>>Ö%9>Ec3> Ñ.>Ü!>¾ .>'Ê->"+>Sœ'>„ý%>ŠÏ&>­>ô)>³y>Œ\>±'>¤'>P»/>±—0>-n)>®">ðå >Ýî%>2À(>íº$>r3 >‰$%>¿Ó2>‰Ø4>zô+>\)>ºB*>a†'>†ó,>­Í3>$.>ÐÝ">ƒ¿>ÿ¥>ö©>Ì}>žD>á>iÑ	>³ÿ>9^>œƒ>”ÓŽ>Œf>0=ñ=»ñO>¼š|>”N‰>æ ˆ>Ê­<>Xc?>e=T>ôîM>M>:>4Í%>nÅ&>Ü3J>;Ôf>ô<k>ñÀ]>D½P>]êC>qL>'wc>ëe>ºa>Jr>[.}>¯z>äl~>5ƒ>"Ñ€>§rw>ÍÀ=>òÑ>"Ä">éí&>ŽÕ->î¡8>™ =>ïø8>tY>kä‚>ðPŠ>hNŽ>¡¬’>n`•>oó’>¤Œ>»ƒ>'>y>—jk>^|`>âY>sŠR>èlH>ãC>·‰A>‡U?>|HA>`F>Á´M>¹íV>À4d>¥ow>Á·s>ˆ•{>H¢€>y>- z>A…Z>æøW>÷p9>®w4>Œ2>BÀ9>O}O>Éo>/Ý…>L¢‰>/Š>›Ö‰>—Š‰>?ƒ>ã_>nn?>OT>>Ù¶8>Ýç>9‚ü=+ž=÷Ë}=kÏ=h€=Ù=±Ù=‹Ü=[Ü=BÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=AÜ=lÜ=UÜ=Ù=Pâ==Ì=€=Õr=|Ùe=DÝÇ=
+™
+>›Oö=fï">n6>È2>YY/>­’+>YT&>»%%>i„+>-Ï*>bR&>s)>Œ15>È>R>¨ð0>n‰0>œF9>ïB>9­D>úúA>À½O>[ÏN>‚°F>{ )>«K7>¯P>ÖX6>jl&>rë>Ãì>åš$>ì¼?>ä+I>§øc>æ“>0–>I'Ž>ãBƒ>9…]>y9>q†*>Ï*>ki)>>{=>X&>üy&>n³6>CI>5)L>U>Ÿ“M>“øA>/‹I>ËbR>g	R>A-U>èÅp>w3S>mG>„C>±Y7>çS3>
+4>
+|+>Î%>¸T1>øL&>È!>¬V#>é8>9µ@>ÜQF>Ö,Q>¡%Q>š“O>¸9^>ÎÌ`>+©]>É&\>ÿëZ>XE>\Þ(>Np)>œD'>
+$>Æy">=¥#>‚W >žF>hP>KÖ>ªj>Uz$>â¢.>Ò´->›/'>®5!>á >„÷$>+&.>ˆ‘+>rw!>Ú€ >þ&>+Z(>:~">‚!>^ž$>1'>„9>pæ2>½ž>ÿý>„þ>šô>Ž#>°™>[ý>¹'>ý‡	>Ç`>Up>ÎhS>§Î>@þD>÷ƒ=º@->#¯q>n“q>¶$c>ðdI>ûšW>ö<d>Œ`>Î,[>BJO>…X>iài>O„o>[P\>LR@>Y(3>]g1>k"1>þ2O>s°m>nål>ìy>ù‚z>G¦}> „>«>Ó`>Ëš>ùƒ]>t}1>º™&>Ñr(>.>fd8>O=>éWE>…Àr>ÞÓ>Yü†>²{Œ>Ð)‘>x•>Ð”>?‰>Ÿóy>f¼g>c€[>¿Z>¶ÙV>äuO>ÌL>ëP>"3T>–&Y>&Z>#6V>ÛY>Ç€_>çge>èÙj>¨†g>êjk>‰o>S€>8Tp>&BH>áMX>}ÓA>á3>´J<>æÔA>V>GŒm>N¡|>Þ‚>ÉLn>B‹r>Ð„>[óm>D”B>íŠ<>eúD>NW&>i>H
+>ñ©ñ=eþo=S\€=Ž¤=á=ºß=éÛ=.Ü=FÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=JÜ=PÜ=«Û=ÜÛ=Pì=îÈ=ä—~=þ‚=ß†=]®=(M>U[J>²@>Ýû:>v%7>{¸4>$7>§Û6>÷x.>ÒF(>é­*>óg)>Ö”&>%‚*>{¯)>Z›->Ö*>
+;>Ï5G>ƒ7?>$5>êåH>ÑÒU>HU>	ÃM>µ*/>û0U>µWi>JOT>*|E>g
++>¶ó>Sø >+Å6>^{B>O‰Q>†Üv>6ó{>°z>7z>gn>'äZ>|!<>5ç(>c">mE>ÙŒ>ÚÀ>ˆ>”Ñ>… 6>¤ê]>Ltk>Ô(S>n7>9V4>Lu?>³E>:§W>Ïc>é¬K>O>«hQ>ZZ>µ4>82@>/q6>\Ë0>4>Í.>±w(>à®/>òÆJ>©‹R>GT>ï©Y>×1_>ò[>8M>?ÁX>ñÜY>ÉóP>Ü3>4+>Û)%>g&>'¾!>¾H">‘=>§K>éa>+–>î>'„>Öa>Éª!>TY+>£Ç->‰œ+>ƒ&>9>íé">'¼0>ý¬5>m.>$K%>ÎÖ">Æ">àÆ>d†>Ê*>Ê|>äÕ>ê=>£>>ó2>>Ûm>î´>;Á>i>S>‘ >7ü=Â>/|>Gi>}¬÷=Ï>>`¨(>+áC>.¥K>X@;>(./>ü;>ÞA>`‚:>pÛ4> ø>>QCN>Óùi>D€]>Ìo7>4]%>‹7'>Ú¼%>y4>¶^>g§y>»us>´ßs>o9„>À.Š>’„>Ûiz>žÂ‚>F>ir\>|ÔD>j"7>xô8> B>!W>7f>Ou>æþw>@«~>Þÿ…>K'‹>Ž>Ü‡>Y@q>ßúV><wN>ßcR>¦+X>mïX>!,V>…G[>~#`>d>{ºe>Çé_>Y>¤£^>Ìb>d>f>†«g>ö(g>Ýn>Eýƒ>ÒÜl>ëXD>IÐK>­oY>4%S>‰!H>Í•L>R]>Ì}c>Vg>7¾e>çÉV>ªa>fx>Ãl>3|I>È…:>áù>>Wí">èoù=e‡>ìí=^ˆj=~c€=æ€=Ù=0Ý=%Ü=2Ü=FÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=BÜ=AÜ=hÜ=†Ü=¢Ø=Û=x€=w=Ù¥{=á¬†=WÊ=‡¡&>ÑÈ5>Ÿ‹@>„…>>¬h=>‡9>U67>„I=>ð¿C>3·<>4\0>Ø&0>$>¹{)>5í1>s`(>Ø¹&>$9/>ÐØE>ÃœJ>ŒY">k¦>)",>8U>tAU>!£Y>ï%E>XÊ]>m©l>ÖÜU>ªÌ>>ÅÐ%>d?>c»$>8>£ÜH>TÇM>Ï_P>dÏO>NX>~œ`>2Äd>Çc>3D>ŒÔ0>¡æ>|ú=³ë=]Ã>d>iÉ(>ªþ(>]GR>Zo>²un>šX>XÏ9>tÿ>‹™)>¡ÈA>þD>Jý8>ÝD>5˜L>wM>Ÿi8>Uº@>Ã*>ö·5>„b?>NJ>©S>¥L>çÓW>Ün\>R˜Z>yW>•K_>*6_>=”[>¥J>ÝTB>aš=>¨3>˜õ=)s>DL>¦Q">n!>Åä>­¬>A»>WK>ÆB>>‡$>ûô">Â˜!>(×(>õ¸1>Ö›1>g.>*+>ªœ.>^•6>¿#8>…6>‡A(>PÎ>X>é>>îë>ZØ>/n>ê[>3E>+>$£>1e>%ù>›µ>YÁ>Š>{š>jø=!Ûë=‚Âä=`ßå=q†ô=äå>Ýqï=þò=tÂ>d„>ÖR>òú>—>òT>Â>,¢>ƒÄ>µh>W(I>|ê_>w6C>DÛ">†e%>q#>|L'>?>dø_>5º\>œtg> Ï€>Ãã†>-T‚>ix>G›|>Â p>|ûJ>B<>È†1>o‹>>§ÉN>§]_>l’`>
+èe>–±m>hßq>N„{>Ö†z>i>S§X>SûH>Q6>Ã,>5ý;>š›Y>O`e>¢b>¥e>ë¯h>~Ïi>cg>Ö\>ÇùS>nÐY>ci^>¯ža>î–a>fc><~e>BÙm>û5€>u,s>MO>LÝO>œ]>ú|a>hÎY>I)W>Mµ`>W¦X> CL>†ÝF>LØN>ÊE[>›"g>ÛÞh>è’Z>uÅ7>©>Ã÷>"¾û=Ê	>ÈÅØ=eäj=nC€=†8€=ÚÑ=œØ=žÜ=YÜ=BÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=BÜ=?Ü=yÜ=ÑÜ=€Ô=hÕ=Yd€=âµ~=Ëpn=ˆÕ´=÷P>©ã5>á£<>e¢?>ªí?>¸>>ø¹:>´>>EÿH>ƒR>úºO>~U@>£l5>è+3>þa=>äs<>DÆ6>¢çF>•Ï>>)L>ó½O>×º>1‹>ŒN5>GšX>Þ]^>oÝl>Æ¯H>¾3D>;BR>â.F>†0>þ	(>Þ,>t/0>Àä<>µJ[>4ûq>k¡N>V>>©èK>´V>˜Z>
+¬f>„O>ã+A>€(>2p>FD>)æ(>Ðà7>~¯I>nåE>	GK>D9e>ô0p>Þ°l>7wN>ß->²K6>Ö(D>úqI>/>~­2>Iø>>}ë>>Œ<D>´‘:>¢'>	$>ÝG>ù,n>à„>Xr>^*_>¢ÓW>ˆœV>4îJ>Ï˜N>nŸ`>·ìn>PmN>SPL>Ê6>˜>”²ò=Ó¿î=ô
+>›Ò >¡*!>2¤>e>S‹>¥ô>Øš>º{>ôx">@@>
+ƒ%>™3>1«3>“½3>ÅÔ:> D>üpF>ú@>Ý4>&#>í'>µi>B+>)·>gR>Ü]>ß>M@>:0>Ê™>ò>à>%J>°–>Ä>X>¹8
+>s >5Íð=Jœê=þºô=ƒ°ù=ýÔü=6åí=©(è=›ìô=,ð>Fb>C>ML>s§>—!>+ß>Ð‘>ÅŽ>ÃP>p‚C>üŸR>_­2>Jå(>Ò“">ö‹%>Øü1>^F> ±L>RYU>¨i>4G‚>…>­šy>Ú¥j>}Q>ƒß1>¨Ž!>[>Î“)>þXM>½°S>á;H>\L>ÞîY>“Ú\>º²[>î÷M>žD>B>y=>oH0>ë>>@>ùyA>õ—_>‰h>Î°h>Ò(j>çok>ªe>h…S>H^L>ÄcP>™<T>ÿV>¬¥V>ÅöW>¼$]>GÅf>×Šn>Uz>d=s>,%p>‚@p>~po>ÒHm>K¨l>vk>%xZ>'E>&ËF> U>H\>–Ûd>¤a>“P>ª*>Gä	>>ƒ>5&ý=Hm>‹˜Á=?Bn=Î$€==H€=zÏ=“Ö=ÖÜ=lÜ=?Ü=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=FÜ=HÜ=#Ü=Ü=Âß=±Ü=Ù¤=t€=Ô:€=œ¢“=\(>Í6>>®:>M+?>²A>·³C>l¨@>$dK>Ð5i>t>/t>®Ô_>TXK>>9V>±a>´X>c>Xiu>±GY>CâW>½žl>`ãM>v©<>éT>@¼V>[j>q>?>¢(>i1>8>)}6>‰V:>’ß>>-C>kƒP>\>G~>•æt>VM>¸˜I>ÃçP>“rY>ˆ®[>èQ>e¸H>äò=>9.>ÜR3>ÜP?>ça<>QQ>¯ÑQ>óšV>ÙÓe>Dýh>ÓÌe>¹‰O>s>‡â4>¥ÿK>Õ­A>Yq$>Uà6>¯Â=>ÑcE>â":>”7>ïµ>ü>ðzA>|>>{>{<„>Bj>
+fF>yøO>C3O>QH>µy=>»ÿ^>â£J>+þF>º³V>Öú/>“¾>û'ç=:ïø=Ù7>À´">.A>òí>ß>ŸU>>È>{ç>m>¨–>#>Ò¢0>8]5>iù;>ÜD>¶œL>©8N>®ÇF>T+>´>d]>)>QÈ>Î>gr>„e>š;>i">*—>ÂU>Iq>BX>’y>3J>°@>®Æ
+>k\>g÷=þfæ=µYã=¹ú=ß¸>oØ>À‡ü=B’î=Ÿ¯é=¦áö=ø	>CÐ>Ž?>%&>&Y>=>¹!>Ë>5>´">pÆG>¸H>#ê4>Ä.>¾¼.>'`4>1ÿ?>b=D>)]G>QL^>þ(‡>[Ê‰>P†€>2ñe>Æ_O>£9>jC$>ò?>eà>@+>p=>®4>øc5>¸d@>©8@>È.;>[o9>µ;>€ê5>úl2>ÚH->»>Ì>ÙÇ3>úÜ[>æb>Fja>nÃg>q9i>#ÃW>BÄE>sE> I>Ö—I>LtI>bIL>”7I>È9O>`Z>T¯`>…Tw>dœƒ>ëê‚>¹b>›}>Â•|>¦·€>ÿz>°¼c>D­G>h_T>+^>´Õd>œuk>›©d>ðL>êÝ'>_>y>¥bü=‚Fø=Ñ®=£Ær=€=Á?€=žÐ=«Ö=ÔÜ=mÜ=?Ü=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=FÜ=4Ü=Ü=ß=áß=ep=¨!€=¨6†=†oI=ë>+	5>6?:>™š>>oÿB>­‘H>òqI>iïk>ë>Äc“>ä>ôj>•¦v>Æ>,Fx>IIw>¦¯}>òc„>vª>JY€>0¹„>Ízˆ>-ƒ>Íy>î+l>ô!t>ú‡x>ÊU>×Õ(>Ê§%>CÆ5>dH>~GJ>{P>RY>'©e>YXc>½h>·[x>A e>H0Z>Ù˜V>U_Z>‚Ö[>7Q>&C>š‹C>â¾=><>&7I>'YF>RíO>ŽÓQ> 3X>+c>g‚n>#¤h>ÕB>Àœ;>ö^M>®K>>ïŸ(> Ð(>Á\I>òJ>Œ˜?>Iß,>Ó8>ãc>ö[>"T->ÀÕe>/)…>!S„>Œ«m>3?>=,>DæH>þ´T>ïE>4W=>c>>ì4C>:N>|x@>pH>DÛî=Ü›ð=[G>ì%>ïè>cë>N>ü>8>"Ñ>ßñ>ží>ËK#>j.>›8>i1F>YøP>OÊU>:M>ˆ:>£?>>Ï>š>j
+>zã>(>V>ÓÓ>{Ç>Nu>>	>>VØ>e*>ƒ@>Wê>©á>³4>¬ºý=Ìí=ë'Ý=¶ìÛ=( >ca>j>«§>yóø=s)ó=doû="\>!>ÞV>s!>–6'>{Z*>©(>ê>]¸>HS">O™2>áà@>LB>\¾=>Ðm?>§r;>¹E?>xËC>O8G>8ôd>ú>Èç‰>(…>f–r>øM^>t’E>¢,>n >Ûâ> g>8c%>_Ò'>®%>–'>ß–+>ö9>h:>L0>!>~Þ>†›">W%>·-'>D>>ï¾V>ËKY>¯+^>Ä¥d>`›a>¤ÉR>kD>mj<>)ñ=>ç=>ž˜=>
+±?>gx:>sÛ;>„LG>æ]>¼~x>z>/Â|>]L{>{¢y>rm€>L¯>igq>¤à\>^ƒV>™b>£½i>*xw>Ä/€>.Ôu>I{a>É5>2t>,d>¶äú=ÞSî=“t¨=À0s=Ú	€=£C€=Ð=kÖ=ÜÜ=oÜ=?Ü=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=DÜ=;Ü=.Ü=Ý=šÝ=°=Ù €=nµ‚=½Sn=ã·>Ð{->ãÒ5>kn>>:•G>i…L>»&V>ù¿†>Ï>ÿ† >íš>åtŽ>Oáˆ>3¬†>£+‚>7J>MVˆ>gŠ‘>¤˜>t™ž>ñµ’>±}“>ƒì”>"2‹>ÈÊƒ>ZÍ~>W€>ûS>âb+>ÿ .>{=>zQ>‹ãX>@^e>z¼p>¨Is>èÍp>ëŽr>Jy>T	n>Š›^>}…`>{¡^>ürS>ôH>t>>ð‡B>„ZB>"Ë<>ˆG>OÙE>¢­B>?.K>6ÎQ>…ça>S-f>ƒþz>18>±GC>>¼;>ù;>ê$S>@X>É8`>¸`>Ñ#M>î6>f	<>ý:%>ó>äÛ)>jþN>ò‘]>Ýgj>3À^>;ÄB>¯>e­!>"SK>•ÉL>Ú?>mÒ3>X7>\—5>šI>Á^8>(lù=«1ø=jË>¡Ñ,>ÍI,>˜Q(>É—>ðå >ªÌ>^¤>ëo>V%>à6>D>gJ>èÛR>XU_>Ee>­‡V>¾°,>é^>B>;~>ÛÓ
+>£*>43>ù…>ªu>œ>Ì>s>Èì>g=>`¹>>g:
+>¾˜>é>¦<û=+ï=@cã=ƒ®í=¹“>L¤>>·ùþ=b>ø=Íÿõ=ðü=«>>È–>)ö(>ò³7>Ï7>`¤0>6++>¨'>+%>e%>N->îV=>bëE>ƒJ>cE>®=>KŸ>>`‚A>…P>R(…>÷v>(ü‰>À€>¥i>—eP>â18>ë2!>Öõ>J÷>0P>`„>ä>Dw>²>Ñÿ>Ž¤2>jf/>[T!>‡>Ðã">™º'>°q.>Dl@>[ýI>†ùP>…Y>&7`>bæ_>!SV>&ýG>M9>aŽ4>5>ô5>”É3>»Š*>x,>Œ™;>ET>og>¬Rg>­ëg>]¤b>XZ>°Ml>ßÆ>áa># Pythonç‰ˆæœ¬è¦æ±‚
+# python>=3.11
+# pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# ä¸€äº›æ£€æŸ¥å‘½ä»¤ï¼š
+# æ£€æŸ¥æ‰€æœ‰å…³é”®ç»„ä»¶ç‰ˆæœ¬
+# python -c "import torch; print('PyTorchç‰ˆæœ¬:', torch.__version__)"
+# python -c "import torch; print('CUDAå¯ç”¨:', torch.cuda.is_available())"
+# python -c "import numpy; print('NumPyç‰ˆæœ¬:', numpy.__version__)"
+# python -c "import cv2; print('OpenCVç‰ˆæœ¬:', cv2.__version__)"
+# python -c "import transformers; print('Transformersç‰ˆæœ¬:', transformers.__version__)"
+
+# æ ¸å¿ƒä¾èµ–
+transformers==4.50.0   # 4.50.0
+torch==2.1.0+cu118           # æ³¨æ„æ£€æŸ¥æ˜¯å¦æ”¯æŒGPU,æˆ‘åœ¨æ­¤å¤„è£…çš„æ˜¯2.1.0+cu118ç‰ˆæœ¬
+accelerate==1.12.0     # 1.12.0
+sentencepiece>=0.1.99
+
+# å›¾åƒå¤„ç†ä¾èµ–
+pillow>=9.0.0
+numpy==1.26.4          # 1.26.4
+
+# ç½‘ç»œä¸Žæ•°æ®å¤„ç†
+requests>=2.28.0
+urllib3>=1.26.11
+certifi>=2023.7.22
+
+# æµ‹è¯•ç›¸å…³ä¾èµ–
+pytest>=7.4.0
+pytest-cov>=4.1.0
+coverage>=7.3.0
+
+# å¼€å‘å·¥å…·
+black>=23.3.0
+flake8>=6.0.0
+isort>=5.12.0
+
+# å¯é€‰ä¾èµ–ï¼ˆç”¨äºŽç‰¹æ®ŠåŠŸèƒ½ï¼‰
+pydicom>=2.3.0  # å¤„ç†DICOMæ ¼å¼åŒ»å­¦å½±åƒ
+scikit-image>=0.19.0  # é«˜çº§å›¾åƒå¤„ç†
+matplotlib>=3.5.0  # å¯è§†åŒ–
+jupyter>=1.0.0  # äº¤äº’å¼å¼€å‘
+notebook>=6.5.0  # Jupyterç¬”è®°æœ¬
+
+# å›¾åƒå¤„ç†
+opencv-python==4.9.0     # 4.9.0
+
+# åŒ»å­¦å½±åƒå¤„ç†ï¼ˆå¯é€‰ï¼‰
+pydicom>=2.3.0
+nibabel>=5.1.0
+
+# CPUä¼˜åŒ–
+onnxruntime  # ONNXè¿è¡Œæ—¶ï¼ˆå¯é€‰ï¼‰                                                                    žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=Ÿµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸= µ¸= µ¸= µ¸= µ¸=Ÿµ¸=Ÿµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=Ÿµ¸= µ¸=œµ¸=›µ¸=œµ¸=žµ¸=Ÿµ¸= µ¸= µ¸=Ÿµ¸=µ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=µ¸=µ¸=µ¸=µ¸=µ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=µ¸=Ÿµ¸= µ¸=Ÿµ¸=žµ¸=žµ¸=µ¸=µ¸=µ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=¡µ¸=–µ¸=‹µ¸=‹µ¸=Šµ¸=µ¸=‘µ¸=–µ¸=›µ¸=žµ¸= µ¸=¡µ¸=¢µ¸=£µ¸=œµ¸=”µ¸=Œµ¸=¸µ¸=¾µ¸=®µ¸=Ÿµ¸=–µ¸=µ¸=ˆµ¸=›µ¸=¥µ¸=¢µ¸= µ¸=žµ¸=µ¸=µ¸=žµ¸=Ÿµ¸=µ¸=œµ¸=µ¸=Ÿµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=Ÿµ¸=Ÿµ¸=žµ¸= µ¸=žµ¸=¡µ¸=‰µ¸=Úµ¸=)¶¸=-¶¸=0¶¸=¶¸=ÿµ¸=Ùµ¸=·µ¸= µ¸=‘µ¸=‰µ¸=…µ¸={µ¸=²µ¸=ëµ¸="¶¸=Ù´¸=¹´¸=.µ¸=›µ¸=áµ¸=¶¸=D¶¸=¶µ¸=nµ¸=ƒµ¸=’µ¸=Ÿµ¸=¦µ¸=£µ¸=žµ¸=šµ¸=§µ¸=ªµ¸=§µ¸=šµ¸=žµ¸=Ÿµ¸=Ÿµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸= µ¸=œµ¸=œµ¸=œµ¸=Ÿµ¸=”µ¸=µ¸=µ¸=¶¸=G´¸=Ç²¸=²²¸=¥²¸=³¸=­³¸=r´¸=$µ¸=›µ¸=æµ¸=¶¸="¶¸=W¶¸=µ¸=´¸=ø²¸=Ê¹¸=$º¸=Ç·¸=œµ¸=6´¸=J³¸=9²¸=Eµ¸=—¶¸=*¶¸=Üµ¸=›µ¸=vµ¸=‡µ¸=žµ¸=´µ¸=oµ¸=^µ¸=qµ¸=µµ¸=žµ¸=›µ¸=›µ¸=œµ¸=µ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=œµ¸=šµ¸=¥µ¸=¦µ¸=¥µ¸=žµ¸=¼µ¸=£µ¸=Æµ¸=H´¸=¡¹¸=™½¸=Þ½¸=õ½¸=Ê¼¸=»¸=Ø¸¸=ê¶¸= µ¸=Ð´¸=f´¸=*´¸=“³¸=;·¸=º¸=ó¼¸=¥©¸=6©¸=Î¯¸=Òµ¸=¯¹¸=?¼¸=(¿¸=V¶¸=ê²¸=´¸=ò´¸=ªµ¸=¶¸=Ýµ¸=œµ¸=`µ¸=)¶¸=T¶¸=¶¸=\µ¸=Ÿµ¸=¨µ¸=§µ¸=£µ¸=¡µ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=µ¸=µ¸=›µ¸=™µ¸=ªµ¸=©µ¸=§µ¸=°µ¸=¿µ¸=ªµ¸=Îµ¸=»³¸=l½¸=Õ¿¸=dÀ¸=ã¿¸=¾¸=¯»¸=×¸¸=š¶¸= µ¸=8´¸=Æ³¸=”³¸=ü²¸=Œ¹¸=ï»¸=º»¸=-¦¸=¬ª¸=K²¸=ƒ¸¸=¼¸=…¿¸=nÁ¸=Ô³¸=Z²¸=‘³¸=­´¸=˜µ¸=ýµ¸=¿µ¸=wµ¸=Mµ¸= ¶¸=¶¸=¶¸=5µ¸=®µ¸=«µ¸=¬µ¸=¦µ¸=¢µ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸=žµ¸={
+  "summary": {
+    "total_files": 1,
+    "total_slices": 17
+  },
+  "files": [
+    {
+      "file_name": "01-003.nii.gz",
+      "file_path": "example/TMAX\\01-003.nii.gz",
+      "slices_count": 17,
+      "slices": [
+        {
+          "slice_index": 0,
+          "question": "è¿™æ˜¯ä¸€å¼ è„‘å’ä¸­ç—…äººçš„TMAXå½±åƒåˆ‡ç‰‡ï¼Œä½ èƒ½å¤Ÿä»Žä¸­å¾—åˆ°ä»€ä¹ˆä¿¡æ¯ã€‚ç”¨ä¸­æ–‡å›žç­”ã€‚",
+          "answer": "è¯·æ³¨æ„ï¼Œæˆ‘æ— æ³•ç›´æŽ¥åˆ†æžåŒ»å­¦å½±åƒã€‚æˆ‘æ— æ³•æä¾›å…³äºŽè„‘å’ä¸­ç—…äººçš„TMAXå½±åƒåˆ‡ç‰‡çš„ä¿¡æ¯ã€‚\n\n**å¦‚æžœæ‚¨éœ€è¦åˆ†æžåŒ»å­¦å½±åƒï¼Œè¯·å’¨è¯¢ä¸“ä¸šçš„åŒ»ç”Ÿæˆ–å½±åƒå­¦ä¸“å®¶ã€‚** ä»–ä»¬æœ‰ä¸“ä¸šçš„çŸ¥è¯†å’Œå·¥å…·æ¥è§£è¯»è¿™äº›å›¾åƒï¼Œå¹¶æä¾›å‡†ç¡®çš„è¯Šæ–­å’Œå»ºè®®ã€‚\n\n**å¦‚æžœæ‚¨æƒ³äº†è§£TMAXå½±åƒçš„åŽŸç†æˆ–åº”ç”¨ï¼Œæˆ‘å¯ä»¥æä¾›ä¸€äº›ä¸€èˆ¬æ€§çš„ä¿¡æ¯ã€‚** TMAXï¼ˆTemporal Maximum Anisotropyï¼‰æ˜¯ä¸€ç§ç”¨äºŽåˆ†æžè„‘å’ä¸­å½±åƒçš„å›¾åƒå¤„ç†æŠ€æœ¯ã€‚å®ƒé€šè¿‡åˆ†æžè„‘ç™½è´¨çš„çº¹ç†å’Œä¿¡å·ï¼Œæ¥å¸®åŠ©è¯†åˆ«è„‘å’ä¸­çš„åŒºåŸŸã€‚\n\n**è¯·æ³¨æ„ï¼š**\n\n*   **TMAXå½±åƒçš„è§£è¯»éœ€è¦ä¸“ä¸šçŸ¥è¯†ã€‚** ä»…å‡­å›¾åƒæ— æ³•åšå‡ºå‡†ç¡®çš„è¯Šæ–­ã€‚\n*   **TMAXå½±åƒçš„è§£è¯»éœ€è¦ä¸“ä¸šçŸ¥è¯†ã€‚** ä»…å‡­å›¾åƒæ— æ³•åšå‡ºå‡†ç¡®çš„è¯Šæ–­ã€‚\n*   **TMAXå½±åƒçš„è§£è¯»éœ€è¦ä¸“ä¸šçŸ¥è¯†ã€‚** ä»…å‡­å›¾åƒæ— æ³•åšå‡ºå‡†ç¡®çš„è¯Šæ–­ã€‚\n\n**å¦‚æžœæ‚¨æœ‰å…¶ä»–åŒ»å­¦å½±åƒæˆ–ç›¸å…³é—®é¢˜ï¼Œè¯·æä¾›æ›´å¤šä¿¡æ¯ï¼Œå¹¶è¯·å’¨è¯¢ä¸“ä¸šäººå£«ã€‚**"
+        },
+        {
+          "slice_index": 1,
+          "question": "è¿™æ˜¯ä¸€å¼ è„‘å’ä¸­ç—…äººçš„TMAXå½±åƒåˆ‡ç‰‡ï¼Œä½ èƒ½å¤Ÿä»Žä¸­å¾—åˆ°ä»€ä¹ˆä¿¡æ¯ã€‚ç”¨ä¸­æ–‡å›žç­”ã€‚",
+          "answer": "æˆ‘æ— æ³•ç›´æŽ¥ä»Žå›¾åƒä¸­èŽ·å–å…³äºŽè„‘å’ä¸­ç—…äººçš„å…·ä½“ä¿¡æ¯ã€‚æˆ‘éœ€è¦æ›´å¤šå…³äºŽè¯¥å›¾åƒçš„ä¸Šä¸‹æ–‡ä¿¡æ¯ï¼Œä¾‹å¦‚ï¼š\n\n*   **å›¾åƒçš„æ¥æºå’Œæ€§è´¨:** å›¾åƒæ˜¯æ¥è‡ªMRIã€CTè¿˜æ˜¯å…¶ä»–ç±»åž‹çš„æ‰«æï¼Ÿ\n*   **å›¾åƒçš„ç‰¹å®šåŒºåŸŸ:** å›¾åƒæ˜¯æ•´ä¸ªå¤§è„‘çš„è¿˜æ˜¯æŸä¸ªç‰¹å®šåŒºåŸŸï¼ˆå¦‚å¤§è„‘çš®å±‚ã€å¤§è„‘ç™½è´¨ï¼‰ï¼Ÿ\n*   **å›¾åƒçš„æ ‡è®°æˆ–æ³¨é‡Š:** å›¾åƒæ˜¯å¦æœ‰ä»»ä½•æ ‡è®°æˆ–æ³¨é‡Šï¼Œè¿™äº›æ ‡è®°å¯èƒ½æŒ‡å‡ºäº†ç‰¹å®šçš„ç—…å˜åŒºåŸŸæˆ–ç‰¹å¾ï¼Ÿ\n*   **å›¾åƒçš„æ‚£è€…ä¿¡æ¯:** å›¾åƒä¸Žå“ªä¸ªæ‚£è€…çš„ç—…å²å’Œè¯Šæ–­ç›¸å…³ï¼Ÿ\n\n**ä½†æ˜¯ï¼Œæˆ‘å¯ä»¥æ ¹æ®å›¾åƒçš„ç‰¹ç‚¹ï¼Œæä¾›ä¸€äº›å¯èƒ½çš„è§‚å¯Ÿå’ŒæŽ¨æµ‹ï¼š**\n\n*   **è„‘ç»„ç»‡ç»“æž„:** å›¾åƒæ˜¾ç¤ºäº†è„‘ç»„ç»‡çš„ç»“æž„ï¼ŒåŒ…æ‹¬ç°è´¨å’Œç™½è´¨ã€‚\n*   **ç—…å˜åŒºåŸŸ:** å›¾åƒä¸­å¯èƒ½å­˜åœ¨ä¸€äº›å¼‚å¸¸åŒºåŸŸï¼Œè¿™äº›åŒºåŸŸå¯èƒ½ä»£è¡¨äº†è„‘å’ä¸­çš„ç—…å˜ã€‚\n*   **ç—…å˜ç±»åž‹:** å›¾åƒçš„ç‰¹å¾ï¼ˆå¦‚ç—…å˜çš„å¤§å°ã€å½¢çŠ¶ã€å¯†åº¦ï¼‰å¯èƒ½æœ‰åŠ©äºŽæŽ¨æ–­ç—…å˜ç±»åž‹ï¼Œä¾‹å¦‚å‡ºè¡€æ€§å’ä¸­ã€æ¢—æ­»æ€§å’ä¸­ç­‰ã€‚\n*   **ç—…å˜å½±å“:** å›¾åƒå¯èƒ½æ˜¾ç¤ºå‡ºç—…å˜å¯¹å‘¨å›´è„‘ç»„ç»‡çš„æŸå®³ï¼Œä¾‹å¦‚è„‘æ°´è‚¿æˆ–è„‘èŽç¼©ã€‚\n\n**éœ€è¦æ³¨æ„çš„æ˜¯ï¼Œè¿™äº›æŽ¨æµ‹ä»…åŸºäºŽå›¾åƒçš„è§†è§‰ç‰¹å¾ï¼Œä¸èƒ½æ›¿ä»£ä¸“ä¸šçš„åŒ»å­¦è¯Šæ–­ã€‚**\n\n**å¦‚æžœä½ èƒ½æä¾›æ›´å¤šå…³äºŽè¯¥å›¾åƒçš„ä¸Šä¸‹æ–‡ä¿¡æ¯ï¼Œæˆ‘å°†èƒ½å¤Ÿæä¾›æ›´å‡†ç¡®å’Œæœ‰ç”¨çš„ä¿¡æ¯ã€‚**\n\n**è¯·æ³¨æ„ï¼š** æˆ‘æ˜¯ä¸€ä¸ªAIæ¨¡åž‹ï¼Œä¸èƒ½æä¾›åŒ»ç–—å»ºè®®ã€‚ä»»ä½•å…³äºŽåŒ»ç–—è¯Šæ–­æˆ–æ²»ç–—çš„å†³å®šéƒ½åº”ç”±åˆæ ¼çš„åŒ»ç”Ÿåšå‡ºã€‚"
+        },
+        {
+          "slice_index": 2,
+          "question": "è¿™æ˜¯ä¸€å¼ è„‘å’ä¸­ç—…äººçš„TMAXå½±åƒåˆ‡ç‰‡ï¼Œä½ èƒ½å¤Ÿä»Žä¸­å¾—åˆ°ä»€ä¹ˆä¿¡æ¯ã€‚ç”¨ä¸­æ–‡å›žç­”ã€‚",
+          "answer": "è¿™å¼ è„‘å’ä¸­ç—…äººçš„TMAXå½±åƒåˆ‡ç‰‡ï¼Œå¯ä»¥æä¾›ä»¥ä¸‹ä¿¡æ¯ï¼š\n\n1.  **ç—…å˜åŒºåŸŸï¼š** å½±åƒæ˜¾ç¤ºå‡ºè„‘éƒ¨çš„ä¸€ä¸ªåŒºåŸŸå­˜åœ¨å¼‚å¸¸ä¿¡å·ï¼Œè¿™å¯èƒ½ä»£è¡¨äº†è„‘å’ä¸­çš„ç—…å˜åŒºåŸŸã€‚\n2.  **ç—…å˜ç±»åž‹ï¼š** TMAXï¼ˆT2åŠ æƒï¼‰å½±åƒé€šå¸¸èƒ½æ˜¾ç¤ºå‡ºè„‘æ°´è‚¿ã€å‡ºè¡€ç­‰ç—…å˜ã€‚é€šè¿‡è§‚å¯Ÿå½±åƒçš„ä¿¡å·å¼ºåº¦å’Œå½¢æ€ï¼Œå¯ä»¥åˆæ­¥åˆ¤æ–­ç—…å˜ç±»åž‹ã€‚\n3.  **ç—…å˜èŒƒå›´ï¼š** å½±åƒå¯ä»¥å¸®åŠ©è¯„ä¼°ç—…å˜åŒºåŸŸçš„å¤§å°å’ŒèŒƒå›´ã€‚\n4.  **å‘¨å›´ç»„ç»‡ï¼š** å½±åƒå¯ä»¥è§‚å¯Ÿåˆ°ç—…å˜åŒºåŸŸå‘¨å›´çš„æ­£å¸¸è„‘ç»„ç»‡ï¼Œè¿™æœ‰åŠ©äºŽåˆ¤æ–­ç—…å˜çš„å½±å“èŒƒå›´ã€‚\n\néœ€è¦æ³¨æ„çš„æ˜¯ï¼ŒTMAXå½±åƒä»…æ˜¯åˆæ­¥çš„è¯Šæ–­å·¥å…·ï¼Œéœ€è¦ç»“åˆä¸´åºŠä¿¡æ¯å’Œå…¶ä»–å½±åƒå­¦æ£€æŸ¥ï¼ˆå¦‚MRIã€CTï¼‰æ¥åšå‡ºæœ€ç»ˆçš„è¯Šæ–­ã€‚\n\n**æ€»ç»“ï¼š**\n\nè¿™å¼ TMAXå½±åƒåˆ‡ç‰‡æ˜¾ç¤ºäº†è„‘å’ä¸­ç—…å˜åŒºåŸŸï¼Œä½†éœ€è¦ç»“åˆå…¶ä»–ä¿¡æ¯æ¥ç¡®å®šç—…å˜ç±»åž‹ã€èŒƒå›´å’Œå½±å“èŒƒå›´ã€‚"
+        },
+        {
+          "slice_index": 3,
+          "question": "è¿™æ˜¯ä¸€å¼ è„‘å’ä¸­ç—…äººçš„TMAXå½±åƒåˆ‡ç‰‡ï¼Œä½ èƒ½å¤Ÿä»Žä¸­å¾—åˆ°ä»€ä¹ˆä¿¡æ¯ã€‚ç”¨ä¸­æ–‡å›žç­”ã€‚",
+          "answer": "è¯·æ³¨æ„ï¼Œæˆ‘æ— æ³•ç›´æŽ¥åˆ†æžåŒ»å­¦å½±åƒã€‚æˆ‘æ— æ³•æä¾›å…³äºŽè¯¥å›¾åƒçš„è¯Šæ–­æˆ–è§£é‡Šã€‚\n\nä¸è¿‡ï¼Œæˆ‘å¯ä»¥æä¾›ä¸€äº›å…³äºŽTMAXï¼ˆT2-weighted Maximum Intensity Projectionï¼‰å›¾åƒçš„é€šç”¨ä¿¡æ¯ï¼Œå¸®åŠ©ä½ ç†è§£å…¶å¯èƒ½åŒ…å«çš„æ½œåœ¨ä¿¡æ¯ï¼š\n\n*   **TMAXå›¾åƒçš„ç‰¹ç‚¹ï¼š** TMAXå›¾åƒæ˜¯ä¸€ç§é€šè¿‡å°†T2åŠ æƒå›¾åƒçš„å¤šä¸ªåˆ‡ç‰‡è¿›è¡Œæœ€å¤§å¼ºåº¦æŠ•å½±ï¼ˆMIPï¼‰æ¥åˆ›å»ºçš„å›¾åƒã€‚å®ƒèƒ½æä¾›ä¸€ä¸ªæ›´æ¸…æ™°çš„ã€æ›´å…·ç©ºé—´åˆ†è¾¨çŽ‡çš„å›¾åƒï¼Œä»Žè€Œæ›´å¥½åœ°æ˜¾ç¤ºå¤§è„‘ç»“æž„ã€‚\n*   **å¯èƒ½çš„ä¿¡æ¯ï¼š** TMAXå›¾åƒå¯ä»¥å¸®åŠ©åŒ»ç”Ÿè§‚å¯Ÿå¤§è„‘çš„ç»“æž„ï¼Œä¾‹å¦‚ï¼š\n    *   **è„‘å‡ºè¡€ï¼š** TMAXå›¾åƒå¯ä»¥å¸®åŠ©è¯†åˆ«è„‘å‡ºè¡€ï¼Œå› ä¸ºå‡ºè¡€åŒºåŸŸé€šå¸¸ä¼šæ˜¾ç¤ºä¸ºé«˜ä¿¡å·å¼ºåº¦ã€‚\n    *   **è„‘æ°´è‚¿ï¼š** è„‘æ°´è‚¿ï¼ˆè„‘ç»„ç»‡è‚¿èƒ€ï¼‰é€šå¸¸ä¼šæ˜¾ç¤ºä¸ºé«˜ä¿¡å·å¼ºåº¦ï¼ŒTMAXå›¾åƒå¯ä»¥å¸®åŠ©è¯†åˆ«è„‘æ°´è‚¿çš„åŒºåŸŸã€‚\n    *   **è„‘æ¢—æ­»ï¼š** è„‘æ¢—æ­»ï¼ˆè„‘ç»„ç»‡ç¼ºè¡€ï¼‰å¯èƒ½æ˜¾ç¤ºä¸ºä½Žä¿¡å·å¼ºåº¦ï¼ŒTMAXå›¾åƒå¯ä»¥å¸®åŠ©è¯†åˆ«è„‘æ¢—æ­»çš„åŒºåŸŸã€‚\n    *   **è„‘è‚¿ç˜¤ï¼š** è„‘è‚¿ç˜¤å¯èƒ½æ˜¾ç¤ºä¸ºé«˜ä¿¡å·å¼ºåº¦ï¼ŒTMAXå›¾åƒå¯ä»¥å¸®åŠ©è¯†åˆ«è„‘è‚¿ç˜¤çš„åŒºåŸŸã€‚\n    *   **è„‘ç»“æž„ï¼š** TMAXå›¾åƒå¯ä»¥å¸®åŠ©è§‚å¯Ÿå¤§è„‘çš„ç»“æž„ï¼Œä¾‹å¦‚å¤§è„‘çš®å±‚ã€ç™½è´¨ã€è„‘å®¤ç­‰ã€‚\n\n**éœ€è¦å¼ºè°ƒçš„æ˜¯ï¼š**\n\n*   **TMAXå›¾åƒçš„å±€é™æ€§ï¼š** TMAXå›¾åƒçš„ä¿¡å·å¼ºåº¦å¯èƒ½å—åˆ°å¤šç§å› ç´ çš„å½±å“ï¼ŒåŒ…æ‹¬æ‚£è€…çš„ä½“åž‹ã€æ‰«æå‚æ•°ç­‰ã€‚\n*   **éœ€è¦ç»“åˆå…¶ä»–ä¿¡æ¯ï¼š** TMAXå›¾åƒçš„è¯Šæ–­éœ€è¦ç»“åˆæ‚£è€…çš„ä¸´åºŠç—‡çŠ¶ã€ç—…å²ã€å…¶ä»–å½±åƒå­¦æ£€æŸ¥ç»“æžœç­‰ä¿¡æ¯ã€‚\n*   **ä¸“ä¸šåŒ»ç”Ÿè¯Šæ–­ï¼š** æœ€ç»ˆçš„è¯Šæ–­éœ€è¦ç”±ç»éªŒä¸°å¯Œçš„ç¥žç»å½±åƒå­¦åŒ»ç”Ÿè¿›è¡Œã€‚\n\n**æ€»ç»“ï¼š**\n\nTMAXå›¾åƒå¯ä»¥æä¾›å…³äºŽå¤§è„‘ç»“æž„å’Œç—…å˜çš„ä¿¡æ¯ï¼Œä½†éœ€è¦ç»“åˆå…¶ä»–ä¿¡æ¯å’Œä¸“ä¸šåŒ»ç”Ÿè¿›è¡Œè¯Šæ–­ã€‚\n\n**è¯·æ³¨æ„ï¼š** æˆ‘æ— æ³•æä¾›åŒ»ç–—å»ºè®®ã€‚å¦‚æžœä½ å¯¹è¯¥å›¾åƒæœ‰ä»»ä½•ç–‘é—®ï¼Œè¯·å’¨è¯¢åŒ»ç”Ÿã€‚"
+        },
+        {
+          "slice_index": 4,
+          "question": "è¿™æ˜¯ä¸€å¼ è„‘å’ä¸­ç—…äººçš„TMAXå½±åƒåˆ‡ç‰‡ï¼Œä½ èƒ½å¤Ÿä»Žä¸­å¾—åˆ°ä»€ä¹ˆä¿¡æ¯ã€‚ç”¨ä¸­æ–‡å›žç­”ã€‚",
+          "answer": "è¯·æ³¨æ„ï¼Œæˆ‘æ— æ³•ç›´æŽ¥åˆ†æžåŒ»å­¦å½±åƒã€‚æˆ‘æ— æ³•æä¾›å…³äºŽè¯¥å›¾åƒçš„è¯Šæ–­æˆ–è§£é‡Šã€‚\n\nä¸è¿‡ï¼Œæˆ‘å¯ä»¥æä¾›ä¸€äº›å…³äºŽTMAXï¼ˆT2-weighted Maximum Intensity Projectionï¼‰å›¾åƒçš„é€šç”¨ä¿¡æ¯ï¼Œå¸®åŠ©ä½ ç†è§£å…¶å¯èƒ½åŒ…å«çš„æ½œåœ¨ä¿¡æ¯ï¼š\n\n*   **TMAXå›¾åƒçš„ç‰¹ç‚¹ï¼š** TMAXå›¾åƒæ˜¯ä¸€ç§é€šè¿‡å°†T2åŠ æƒå›¾åƒçš„å¤šä¸ªåˆ‡ç‰‡è¿›è¡Œæœ€å¤§å¼ºåº¦æŠ•å½±ï¼ˆMIPï¼‰æ¥åˆ›å»ºçš„å›¾åƒã€‚å®ƒèƒ½æä¾›ä¸€ä¸ªæ›´æ¸…æ™°çš„ã€æ›´å…¨é¢çš„è„‘éƒ¨ç»“æž„è§†å›¾ï¼Œç‰¹åˆ«æ˜¯åœ¨è§‚å¯Ÿè„‘éƒ¨æ·±éƒ¨ç»“æž„æ—¶ã€‚\n*   **æ½œåœ¨ä¿¡æ¯ï¼š** TMAXå›¾åƒå¯ä»¥å¸®åŠ©åŒ»ç”Ÿè§‚å¯Ÿï¼š\n    *   **è„‘éƒ¨ç»“æž„ï¼š** è§‚å¯Ÿè„‘å¹²ã€è„‘å®¤ã€è„‘ç™½è´¨ã€è„‘ç°è´¨ç­‰ç»“æž„ã€‚\n    *   **è„‘éƒ¨å¼‚å¸¸ï¼š** è¯†åˆ«è„‘å‡ºè¡€ã€è„‘æ°´è‚¿ã€è„‘æ¢—æ­»ã€è‚¿ç˜¤ç­‰å¼‚å¸¸æƒ…å†µã€‚\n    *   **è„‘éƒ¨è¡€ç®¡ï¼š** è§‚å¯Ÿè„‘è¡€ç®¡çš„å½¢æ€å’Œå¼‚å¸¸ã€‚\n*   **éœ€è¦ä¸“ä¸šè§£è¯»ï¼š** TMAXå›¾åƒçš„è§£è¯»éœ€è¦ç”±ç»éªŒä¸°å¯Œçš„ç¥žç»å½±åƒå­¦åŒ»ç”Ÿè¿›è¡Œã€‚ä»–ä»¬ä¼šç»“åˆæ‚£è€…çš„ä¸´åºŠä¿¡æ¯å’Œå½±åƒçš„ç»†èŠ‚æ¥åšå‡ºè¯Šæ–­ã€‚\n\n**æ€»ç»“ï¼š**\n\nTMAXå›¾åƒå¯ä»¥æä¾›å…³äºŽè„‘éƒ¨ç»“æž„å’Œå¼‚å¸¸çš„è¯¦ç»†ä¿¡æ¯ï¼Œä½†éœ€è¦ç”±ä¸“ä¸šåŒ»ç”Ÿè¿›è¡Œè§£è¯»ã€‚\n\n**è¯·æ³¨æ„ï¼š**\n\n*   **ä¸è¦è‡ªè¡Œè¯Šæ–­ï¼š** ä»»ä½•åŒ»å­¦å½±åƒçš„è§£è¯»éƒ½åº”ç”±ä¸“ä¸šåŒ»ç”Ÿè¿›è¡Œã€‚\n*   **å¯»æ±‚ä¸“ä¸šå¸®åŠ©ï¼š** å¦‚æžœæ‚¨å¯¹è¯¥å›¾åƒæœ‰ä»»ä½•ç–‘é—®ï¼Œè¯·å’¨è¯¢åŒ»ç”Ÿæˆ–ç›¸å…³ä¸“ä¸šäººå£«ã€‚\n\nå¸Œæœ›è¿™äº›ä¿¡æ¯å¯¹æ‚¨æœ‰æ‰€å¸®åŠ©ï¼"
+        },
+        {
+          "slice_index": 5,
+          "question": "è¿™æ˜¯ä¸€å¼ è„‘å’ä¸­ç—…äººçš„TMAXå½±åƒåˆ‡ç‰‡ï¼Œä½ èƒ½å¤Ÿä»Žä¸­å¾—åˆ°ä»€ä¹ˆä¿¡æ¯ã€‚ç”¨ä¸­æ–‡å›žç­”ã€‚",
+          "answer": "è¯·æ³¨æ„ï¼Œæˆ‘æ— æ³•æä¾›åŒ»ç–—è¯Šæ–­æˆ–è§£è¯»ã€‚ä»¥ä¸‹ä¿¡æ¯ä»…ä¸ºåŸºäºŽå›¾åƒçš„è§‚å¯Ÿï¼Œä¸èƒ½æ›¿ä»£ä¸“ä¸šåŒ»ç”Ÿçš„è¯Šæ–­ã€‚\n\nä»Žè¿™å¼ TMAXï¼ˆT2-weighted Maximum Intensity Projectionï¼‰è„‘å’ä¸­å½±åƒåˆ‡ç‰‡ä¸­ï¼Œå¯ä»¥è§‚å¯Ÿåˆ°ä»¥ä¸‹å‡ ç‚¹ï¼š\n\n1.  **è„‘ç»„ç»‡ç»“æž„ï¼š** å›¾åƒæ˜¾ç¤ºäº†å¤§è„‘çš„ç»“æž„ï¼ŒåŒ…æ‹¬è„‘ç™½è´¨ï¼ˆç™½è‰²çš„åŒºåŸŸï¼‰å’Œè„‘ç°è´¨ï¼ˆç°è‰²çš„åŒºåŸŸï¼‰ã€‚\n2.  **è„‘å’ä¸­åŒºåŸŸï¼š** å›¾åƒä¸­å­˜åœ¨æ˜Žæ˜¾çš„åŒºåŸŸï¼Œè¿™äº›åŒºåŸŸçš„ä¿¡å·å¼ºåº¦ï¼ˆäº®åº¦ï¼‰æ¯”å‘¨å›´åŒºåŸŸè¦é«˜ï¼Œè¿™å¯èƒ½ä»£è¡¨äº†è„‘å’ä¸­ï¼ˆè„‘æ¢—å¡žï¼‰åŒºåŸŸã€‚è¿™äº›åŒºåŸŸé€šå¸¸è¡¨çŽ°ä¸ºè„‘ç™½è´¨çš„åŒºåŸŸï¼Œå› ä¸ºè„‘ç™½è´¨çš„ä¿¡å·å¼ºåº¦é€šå¸¸æ¯”è„‘ç°è´¨çš„ä¿¡å·å¼ºåº¦è¦é«˜ã€‚\n3.  **è„‘å’ä¸­èŒƒå›´ï¼š** å›¾åƒä¸­å¯ä»¥è§‚å¯Ÿåˆ°è„‘å’ä¸­åŒºåŸŸçš„èŒƒå›´ï¼Œè¿™æœ‰åŠ©äºŽè¯„ä¼°è„‘å’ä¸­çš„å¤§å°å’Œå½±å“èŒƒå›´ã€‚\n4.  **è„‘å’ä¸­ç±»åž‹ï¼š** TMAXå›¾åƒå¯ä»¥å¸®åŠ©åŒºåˆ†ä¸åŒç±»åž‹çš„è„‘å’ä¸­ï¼Œä¾‹å¦‚è„‘æ¢—å¡žï¼ˆç¼ºè¡€æ€§è„‘å’ä¸­ï¼‰å’Œè„‘å‡ºè¡€ï¼ˆå‡ºè¡€æ€§è„‘å’ä¸­ï¼‰ã€‚è„‘æ¢—å¡žåŒºåŸŸé€šå¸¸è¡¨çŽ°ä¸ºè„‘ç™½è´¨çš„åŒºåŸŸï¼Œè€Œè„‘å‡ºè¡€åŒºåŸŸé€šå¸¸è¡¨çŽ°ä¸ºè„‘ç°è´¨çš„åŒºåŸŸã€‚\n\n**éœ€è¦å¼ºè°ƒçš„æ˜¯ï¼š**\n\n*   **è¿™åªæ˜¯ä¸€ä¸ªå›¾åƒåˆ‡ç‰‡ï¼š** å›¾åƒä»…æ˜¯è„‘å’ä¸­ç—…äººçš„ä¸€ä¸ªéƒ¨åˆ†ï¼Œä¸èƒ½å®Œå…¨ä»£è¡¨æ•´ä¸ªå¤§è„‘ã€‚\n*   **éœ€è¦ç»“åˆä¸´åºŠä¿¡æ¯ï¼š** å›¾åƒè§£è¯»éœ€è¦ç»“åˆæ‚£è€…çš„ä¸´åºŠç—‡çŠ¶ã€ç—…å²ã€å®žéªŒå®¤æ£€æŸ¥ç»“æžœç­‰ä¿¡æ¯ï¼Œæ‰èƒ½åšå‡ºå‡†ç¡®çš„è¯Šæ–­ã€‚\n*   **éœ€è¦ä¸“ä¸šåŒ»ç”Ÿè

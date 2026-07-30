@@ -1,0 +1,53 @@
+# Python版本要求
+# python>=3.11
+# pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 一些检查命令：
+# 检查所有关键组件版本
+# python -c "import torch; print('PyTorch版本:', torch.__version__)"
+# python -c "import torch; print('CUDA可用:', torch.cuda.is_available())"
+# python -c "import numpy; print('NumPy版本:', numpy.__version__)"
+# python -c "import cv2; print('OpenCV版本:', cv2.__version__)"
+# python -c "import transformers; print('Transformers版本:', transformers.__version__)"
+
+# 核心依赖
+transformers==4.50.0   # 4.50.0
+torch==2.1.0+cu118           # 注意检查是否支持GPU,我在此处装的是2.1.0+cu118版本
+accelerate==1.12.0     # 1.12.0
+sentencepiece>=0.1.99
+
+# 图像处理依赖
+pillow>=9.0.0
+numpy==1.26.4          # 1.26.4
+
+# 网络与数据处理
+requests>=2.28.0
+urllib3>=1.26.11
+certifi>=2023.7.22
+
+# 测试相关依赖
+pytest>=7.4.0
+pytest-cov>=4.1.0
+coverage>=7.3.0
+
+# 开发工具
+black>=23.3.0
+flake8>=6.0.0
+isort>=5.12.0
+
+# 可选依赖（用于特殊功能）
+pydicom>=2.3.0  # 处理DICOM格式医学影像
+scikit-image>=0.19.0  # 高级图像处理
+matplotlib>=3.5.0  # 可视化
+jupyter>=1.0.0  # 交互式开发
+notebook>=6.5.0  # Jupyter笔记本
+
+# 图像处理
+opencv-python==4.9.0     # 4.9.0
+
+# 医学影像处理（可选）
+pydicom>=2.3.0
+nibabel>=5.1.0
+
+# CPU优化
+onnxruntime  # ONNX运行时（可选）
