@@ -8,6 +8,7 @@ never sent to the external report provider.
 from __future__ import annotations
 
 import json
+import copy
 import os
 import re
 import time
@@ -260,6 +261,12 @@ def _prompt_context(
 ) -> Dict[str, Any]:
     safety_gate = _as_dict(ncct.get("safety_gate"))
     gate_blocked = bool(safety_gate.get("blocked"))
+    quality_control = _as_dict(
+        structured_data.get("quality_control_result")
+        or structured_data.get("quality_control")
+        or _as_dict(imaging_data.get("analysis_result")).get("quality_control")
+        or imaging_data.get("quality_control_result")
+    )
     return {
         "patient_context": {
             "age": structured_data.get("patient_age"),
@@ -269,6 +276,36 @@ def _prompt_context(
             "hemisphere": structured_data.get("hemisphere"),
         },
         "available_modalities": modalities,
+        "image_quality_control": {
+            "qc_status": quality_control.get("qc_status"),
+            "qc_score": quality_control.get("qc_score"),
+            "qc_method": quality_control.get("qc_method"),
+            "qc_input_mode": quality_control.get("qc_input_mode"),
+            "qc_not_applicable_checks": quality_control.get(
+                "qc_not_applicable_checks"
+            ),
+            "qc_scan_coverage": quality_control.get("qc_scan_coverage"),
+            "qc_slice_thickness_status": quality_control.get("qc_slice_thickness_status"),
+            "qc_motion_artifact_level": quality_control.get("qc_motion_artifact_level"),
+            "qc_missing_slice_status": quality_control.get("qc_missing_slice_status"),
+            "qc_geometry_status": quality_control.get("qc_geometry_status"),
+            "findings": [
+                {
+                    "code": item.get("code"),
+                    "severity": item.get("severity"),
+                    "modality": item.get("modality"),
+                    "metric": item.get("metric"),
+                    "threshold": item.get("threshold"),
+                    "message": item.get("message"),
+                }
+                for item in (quality_control.get("findings") or [])
+                if isinstance(item, dict)
+            ],
+            "review_override": {
+                "decision": _as_dict(quality_control.get("review_override")).get("decision"),
+                "original_qc_status": _as_dict(quality_control.get("review_override")).get("original_qc_status"),
+            },
+        },
         "ncct_three_class": ncct,
         "vessel_occlusion": {
             "status": vessel.get("status"),
@@ -491,6 +528,11 @@ def _build_report_payload(
         "provider_model": model,
         "is_mock": bool(is_mock),
         "modalities": modalities,
+        "quality_control_result": copy.deepcopy(
+            structured_data.get("quality_control_result")
+            or structured_data.get("quality_control")
+            or {}
+        ),
         "combo": combo,
         "sections": {
             "ncct": dict(ncct),
@@ -608,6 +650,15 @@ def generate_report(
         modalities = normalize_modalities(structured.get("available_modalities"))
     if not modalities:
         modalities = infer_modalities_from_files(file_id)
+    quality_control = _as_dict(
+        structured.get("quality_control_result")
+        or structured.get("quality_control")
+        or _as_dict(imaging.get("analysis_result")).get("quality_control")
+        or imaging.get("quality_control_result")
+    )
+    if quality_control:
+        structured = dict(structured)
+        structured["quality_control_result"] = copy.deepcopy(quality_control)
     _, combo = resolve_modality_combo(modalities)
     core, penumbra, mismatch = _ctp_values(structured, imaging)
     ncct = _resolve_ncct(structured, imaging)

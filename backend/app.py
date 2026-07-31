@@ -29,6 +29,11 @@ try:
     from .compat.adapters import build_clinical_decision_bundle
     from .compat.skill_registry import get_skill_by_id, get_skill_registry, skill_id_for_tool
     from .extensions import NumpyJSONEncoder
+    from .image_quality_control import (
+        apply_quality_review,
+        has_non_overrideable_failure,
+        run_image_quality_control,
+    )
     from .summary_assembler import build_summary_artifacts
     from .structured_report import ensure_structured_report_v2
     from .vessel_context import (
@@ -47,6 +52,11 @@ except ImportError:
     from compat.adapters import build_clinical_decision_bundle
     from compat.skill_registry import get_skill_by_id, get_skill_registry, skill_id_for_tool
     from extensions import NumpyJSONEncoder
+    from image_quality_control import (
+        apply_quality_review,
+        has_non_overrideable_failure,
+        run_image_quality_control,
+    )
     from summary_assembler import build_summary_artifacts
     from structured_report import ensure_structured_report_v2
     from vessel_context import (
@@ -1266,6 +1276,7 @@ print(f"处理目录: {app.config['PROCESSED_FOLDER']}")
 # ==================== Upload Job Center (for /processing) ====================
 UPLOAD_JOB_STEP_DEFS = [
     {"key": "archive_ready", "title": "建立患者档案"},
+    {"key": "image_quality_control", "title": "图像质量控制"},
     {"key": "modality_detect", "title": "识别上传模态"},
     {"key": "three_class", "title": "NCCT三分类与Grad-CAM"},
     {"key": "ctp_generate", "title": "生成CTP灌注图"},
@@ -1422,7 +1433,7 @@ def _update_step(job_id, step_key, status, message=""):
             if message:
                 step["message"] = message
             now = _job_now()
-            if requested_status == "running":
+            if requested_status in {"running", "waiting"}:
                 step["started_at"] = step["started_at"] or now
                 step["ended_at"] = None
                 job["current_step"] = step_key # AI辅助生成：GLM-5, 2026-03-05
@@ -1606,6 +1617,108 @@ def _start_upload_processing_thread(job_id, payload):
 
 def _normalize_uploaded_modalities(modalities):
     return normalize_modalities(modalities) # AI辅助生成：GLM-5, 2026-03-07
+
+
+def _quality_control_paths(payload):
+    paths = {}
+    for field_name, item in (payload.get("files") or {}).items():
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        modality = str(field_name or "").removesuffix("_file").strip().lower()
+        if modality:
+            paths[modality] = item["path"]
+    return paths
+
+
+def _quality_control_message(result):
+    status = str((result or {}).get("qc_status") or "unknown")
+    score = (result or {}).get("qc_score")
+    finding_count = len((result or {}).get("findings") or [])
+    score_text = f"{float(score):.2f}" if isinstance(score, (int, float)) else "--"
+    if status == "warning" and (result or {}).get("qc_input_mode") == "single_slice":
+        return (
+            "单层影像：三维质控项目不适用；可执行检查已完成，流程自动继续"
+            f"（score={score_text}, findings={finding_count}）"
+        )
+    labels = {
+        "passed": "图像质控通过",
+        "warning": "图像质控完成，存在可继续的质量风险",
+        "failed": "图像质控未通过，等待医生复核",
+    }
+    return f"{labels.get(status, '图像质控状态未知')}（score={score_text}, findings={finding_count}）"
+
+
+def _attach_quality_control_to_agent_run(run_id, quality_control_result):
+    if not run_id:
+        return False
+
+    def _mut(run):
+        planner_input = run.setdefault("planner_input", {})
+        planner_input["quality_control_result"] = copy.deepcopy(
+            quality_control_result or {}
+        )
+        planner_input["quality_control"] = copy.deepcopy(
+            quality_control_result or {}
+        )
+
+    return bool(_update_agent_run(run_id, _mut))
+
+
+def _set_agent_quality_checkpoint(run_id, result, *, status="waiting"):
+    if not run_id:
+        return None
+
+    def _mut(run):
+        run["status"] = "paused_review_required"
+        run["stage"] = "review"
+        run["current_tool"] = "image_quality_control"
+        run["termination_reason"] = "image_quality_control_review_required"
+        run["human_checkpoint"] = {
+            "type": "image_quality_control",
+            "status": status,
+            "action_required": "quality_review",
+            "qc_fingerprint": (result or {}).get("qc_fingerprint"),
+            "quality_control_result": copy.deepcopy(result or {}),
+        }
+
+    return _update_agent_run(run_id, _mut)
+
+
+def _persist_quality_control_to_imaging(patient_id, file_id, result):
+    """Merge QC into analysis_result; never replace other model output."""
+    if not SUPABASE_AVAILABLE or not patient_id or not file_id:
+        return False
+    try:
+        imaging = get_imaging_by_case(patient_id, file_id) or {}
+        analysis_result = imaging.get("analysis_result")
+        merged = dict(analysis_result) if isinstance(analysis_result, dict) else {}
+        merged["quality_control"] = copy.deepcopy(result or {})
+
+        def _update_once():
+            return (
+                supabase.table("patient_imaging")
+                .update({"analysis_result": merged})
+                .eq("patient_id", patient_id)
+                .eq("case_id", file_id)
+                .execute()
+            )
+
+        _run_with_supabase_retry("patient_imaging.update_quality_control", _update_once)
+        return True
+    except Exception as exc:
+        print(f"[WARN] patient_imaging quality control update failed: {type(exc).__name__}")
+        return False
+
+
+def _skip_upload_steps_after_quality_control(job_id, reason):
+    started = False
+    for spec in UPLOAD_JOB_STEP_DEFS:
+        key = spec["key"]
+        if key == "image_quality_control":
+            started = True
+            continue
+        if started:
+            _update_step(job_id, key, "skipped", reason)
 
 
 def _build_path_decision(modalities):
@@ -2130,8 +2243,91 @@ def _is_infra_stroke_analysis_error(error_message):
 def _run_upload_processing_job(job_id, payload):
     temp_dir = payload.get("temp_dir") # AI辅助生成：GLM-5, 2026-03-26
     warnings = []
+    preserve_temp_dir = False
     try:
         _set_job_status(job_id, "running")
+
+        quality_control_result = payload.get("quality_control_result")
+        quality_reviewed = bool(payload.get("quality_control_reviewed"))
+        if not isinstance(quality_control_result, dict):
+            _update_step(
+                job_id,
+                "image_quality_control",
+                "running",
+                "正在检查文件完整性、层厚、覆盖、运动伪影、疑似缺片和几何一致性",
+            )
+            path_decision = _build_path_decision(payload.get("modalities"))
+            quality_control_result = run_image_quality_control(
+                _quality_control_paths(payload),
+                payload.get("modalities"),
+                path_decision.get("imaging_path") or "",
+            )
+            payload["quality_control_result"] = copy.deepcopy(quality_control_result)
+            payload["quality_control_reviewed"] = False
+
+        quality_message = _quality_control_message(quality_control_result)
+        _attach_quality_control_to_agent_run(
+            payload.get("agent_run_id"), quality_control_result
+        )
+
+        if (
+            quality_control_result.get("qc_status") == "failed"
+            and not quality_reviewed
+        ):
+            _update_step(job_id, "image_quality_control", "waiting", quality_message)
+
+            def _pause(job):
+                job["status"] = "paused_review_required"
+                job["current_step"] = "image_quality_control"
+                job["quality_control_result"] = copy.deepcopy(quality_control_result)
+                job["quality_review"] = {
+                    "status": "pending",
+                    "decision": None,
+                    "reviewer": None,
+                    "comment": None,
+                    "reviewed_at": None,
+                }
+                job["human_checkpoint"] = {
+                    "type": "image_quality_control",
+                    "status": "waiting",
+                    "action_required": "quality_review",
+                    "qc_fingerprint": quality_control_result.get("qc_fingerprint"),
+                }
+
+            _update_upload_job(job_id, _pause)
+            with UPLOAD_JOBS_LOCK:
+                UPLOAD_JOB_PAYLOADS[job_id] = payload
+            _set_agent_quality_checkpoint(
+                payload.get("agent_run_id"), quality_control_result
+            )
+            preserve_temp_dir = True
+            return
+
+        _update_step(job_id, "image_quality_control", "completed", quality_message)
+        if quality_control_result.get("qc_status") == "warning":
+            _add_job_warning(
+                job_id,
+                quality_control_result.get("qc_warning_message")
+                or "image_quality_control_warning",
+            )
+
+        def _store_quality(job):
+            job["quality_control_result"] = copy.deepcopy(quality_control_result)
+            job["quality_review"] = copy.deepcopy(
+                quality_control_result.get("review_override")
+            )
+            job["human_checkpoint"] = None
+
+        _update_upload_job(job_id, _store_quality)
+        _update_step(job_id, "modality_detect", "running", "正在核验可用影像模态")
+        actual_modalities = sorted(_quality_control_paths(payload))
+        payload["modalities"] = _normalize_uploaded_modalities(actual_modalities)
+        _update_step(
+            job_id,
+            "modality_detect",
+            "completed",
+            f"已核验模态: {payload['modalities']}",
+        )
 
         can_mcta = _is_mcta_combo(payload.get("modalities"))
         has_real_ctp = _has_real_ctp(payload.get("modalities"))
@@ -2154,6 +2350,14 @@ def _run_upload_processing_job(job_id, payload):
                 _update_step(job_id, "ctp_generate", "skipped", reason)
             _set_job_status(job_id, "failed", upload_msg)
             return
+
+        upload_result["quality_control_result"] = copy.deepcopy(
+            quality_control_result
+        )
+        upload_result["quality_control"] = copy.deepcopy(quality_control_result)
+        _persist_quality_control_to_imaging(
+            payload.get("patient_id"), payload.get("file_id"), quality_control_result
+        )
 
         three_class_summary = (upload_result or {}).get("three_class_summary") or {}
         three_class_result = _resolve_ncct_classification(
@@ -2425,7 +2629,7 @@ def _run_upload_processing_job(job_id, payload):
     except Exception as e:
         _set_job_status(job_id, "failed", f"浠诲姟寮傚父: {e}")
     finally:
-        if temp_dir and os.path.exists(temp_dir):
+        if not preserve_temp_dir and temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 
@@ -2460,8 +2664,9 @@ CANONICAL_STAGES = {
 
 AGENT_TOOL_SEQUENCE_MAP = {
     "ncct_only": [
-        "detect_modalities",
         "load_patient_context",
+        "image_quality_control",
+        "detect_modalities",
         "icv",
         "ekv",
         "consensus_lite",
@@ -2469,8 +2674,9 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "human_confirm",
     ],
     "ncct_single_phase_cta": [
-        "detect_modalities",
         "load_patient_context",
+        "image_quality_control",
+        "detect_modalities",
         "vessel_occlusion",
         "icv",
         "ekv",
@@ -2479,8 +2685,9 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "human_confirm",
     ],
     "ncct_mcta": [
-        "detect_modalities",
         "load_patient_context",
+        "image_quality_control",
+        "detect_modalities",
         "vessel_occlusion",
         "generate_ctp_maps",
         "run_stroke_analysis",
@@ -2491,8 +2698,9 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "human_confirm",
     ],
     "ncct_mcta_ctp": [
-        "detect_modalities",
         "load_patient_context",
+        "image_quality_control",
+        "detect_modalities",
         "vessel_occlusion",
         "run_stroke_analysis",
         "icv",
@@ -2504,8 +2712,9 @@ AGENT_TOOL_SEQUENCE_MAP = {
 }
 
 POST_UPLOAD_SUMMARY_TOOL_SEQUENCE = [
-    "detect_modalities",
     "load_patient_context",
+    "image_quality_control",
+    "detect_modalities",
     "run_stroke_analysis",
     "icv",
     "ekv",
@@ -2523,6 +2732,9 @@ AGENT_TOOL_RETRY_LIMITS = {
 }
 
 AGENT_TOOL_STAGE_MAP = {
+    "load_patient_context": "triage",
+    "image_quality_control": "triage",
+    "detect_modalities": "triage",
     "vessel_occlusion": "tooling",
     "icv": "icv",
     "ekv": "ekv",
@@ -2532,8 +2744,9 @@ AGENT_TOOL_STAGE_MAP = {
 }
 
 AGENT_TOOL_LABELS = {
-    "detect_modalities": "Case_Intake.parse()",
-    "load_patient_context": "Image_QC.validate()",
+    "load_patient_context": "Case_Context.load()",
+    "image_quality_control": "Image_QC.validate()",
+    "detect_modalities": "Modality_Detect.route()",
     "vessel_occlusion": "Vessel_Occlusion.classify()",
     "generate_ctp_maps": "MRDPM_Generate.run()",
     "run_stroke_analysis": "Stroke_Analysis.segment()",
@@ -2545,8 +2758,9 @@ AGENT_TOOL_LABELS = {
 }
 
 AGENT_TOOL_DESCRIPTIONS = {
-    "detect_modalities": "识别病例模态组合并确定任务路径",
-    "load_patient_context": "加载病例上下文并完成输入校验",
+    "load_patient_context": "加载患者与本次影像病例上下文",
+    "image_quality_control": "检查影像完整性、层厚、覆盖、运动风险、疑似缺片与几何一致性",
+    "detect_modalities": "核验病例模态组合并确定任务路径",
     "vessel_occlusion": "DINOv3 血管闭塞三分类（正常/LVO/MeVO）",
     "generate_ctp_maps": "按需生成 CTP 灌注图谱",
     "run_stroke_analysis": "执行卒中定量分析并产出关键指标",
@@ -2605,8 +2819,9 @@ DEMO_SCENARIOS = {
 }
 
 W0_TOOL_TITLE_MAP = {
-    "detect_modalities": "Case_Intake.parse()",
-    "load_patient_context": "Image_QC.validate()",
+    "load_patient_context": "Case_Context.load()",
+    "image_quality_control": "Image_QC.validate()",
+    "detect_modalities": "Modality_Detect.route()",
     "vessel_occlusion": "Vessel_Occlusion.classify()",
     "generate_ctp_maps": "MRDPM_Generate.run()",
     "run_stroke_analysis": "Stroke_Analysis.segment()",
@@ -4239,6 +4454,19 @@ def _build_agent_event_clinical_fields(event):
         summary["input_summary"] = "加载患者基础信息、病史及影像上下文。"
         summary["result_summary"] = _agent_compact_value(output_ref or "病例上下文已加载")
         summary["clinical_impact"] = "为后续卒中分割与证据核验提供临床背景。"
+    elif tool_name == "image_quality_control":
+        summary["input_summary"] = "检查影像可读性、层厚、覆盖、运动风险、疑似缺片与几何一致性。"
+        summary["result_summary"] = _quality_control_message(output_ref)
+        summary["clinical_impact"] = "在医学模型运行前识别输入质量风险并执行人工门控。"
+        findings = output_ref.get("findings") if isinstance(output_ref, dict) else []
+        summary["risk_items"] = [
+            str(item.get("message") or item.get("code"))
+            for item in (findings or [])
+            if isinstance(item, dict)
+        ][:5]
+        if (output_ref or {}).get("qc_status") == "failed":
+            summary["risk_level"] = "high"
+            summary["action_required"] = "医生接受可覆盖风险或退回重新上传"
     elif tool_name in {"generate_ctp_maps"}:
         summary["input_summary"] = "基于多模态影像生成灌注图谱（CBF/CBV/Tmax）。" # AI辅助生成：GLM-5, 2026-03-12
         summary["result_summary"] = _agent_compact_value(output_ref or "灌注图谱已生成")
@@ -4758,6 +4986,55 @@ def _tool_load_patient_context(run):
     if warning:
         output["missing_flags"].append(warning)
     return True, output, None # AI辅助生成：GLM-5, 2026-04-04
+
+
+def _tool_image_quality_control(run):
+    planner_input = run.get("planner_input") or {}
+    result = planner_input.get("quality_control_result") or planner_input.get(
+        "quality_control"
+    )
+    if not isinstance(result, dict) or not result.get("qc_fingerprint"):
+        file_id = planner_input.get("file_id")
+        patient_id = planner_input.get("patient_id")
+        if not file_id:
+            return (
+                False,
+                None,
+                _tool_error_contract("TOOL_INPUT_INVALID", "Missing file_id for image QC"),
+            )
+        files = _collect_case_upload_files(file_id)
+        paths = {
+            str(key).removesuffix("_file"): item.get("path")
+            for key, item in files.items()
+            if isinstance(item, dict) and item.get("path")
+        }
+        decision = _build_path_decision(
+            planner_input.get("available_modalities") or paths.keys()
+        )
+        result = run_image_quality_control(
+            paths,
+            planner_input.get("available_modalities") or paths.keys(),
+            decision.get("imaging_path") or "",
+        )
+        _persist_quality_control_to_imaging(patient_id, file_id, result)
+
+        def _attach(state):
+            state.setdefault("planner_input", {})["quality_control_result"] = copy.deepcopy(
+                result
+            )
+            state["planner_input"]["quality_control"] = copy.deepcopy(result)
+
+        _update_agent_run(run.get("run_id"), _attach)
+
+    override = result.get("review_override") or {}
+    accepted = override.get("decision") == "accept_risk"
+    output = copy.deepcopy(result)
+    output["status"] = (
+        "waiting"
+        if result.get("qc_status") == "failed" and not accepted
+        else "completed"
+    )
+    return True, output, None
 
 
 def _tool_generate_ctp_maps(run):
@@ -5842,6 +6119,7 @@ def _build_pipeline_result(run, planner_output=None, tool_sequence=None):
         "tool_sequence": tool_sequence,
         "tool_results": run.get("tool_results", []),
         "patient_context": context.get("patient_context"),
+        "quality_control_result": context.get("quality_control_result"),
         "analysis_result": context.get("analysis_result"),
         "vessel_occlusion_result": context.get("vessel_occlusion_result"),
         "icv": context.get("icv_result"),
@@ -6108,6 +6386,9 @@ def _execute_agent_tool(run_id, tool_name):
         elif tool_name == "load_patient_context":
             ok, output, err = _tool_load_patient_context(run)
             agent_name = "Triage Planner Agent"
+        elif tool_name == "image_quality_control":
+            ok, output, err = _tool_image_quality_control(run)
+            agent_name = "Imaging Quality Agent"
         elif tool_name == "generate_ctp_maps":
             ok, output, err = _tool_generate_ctp_maps(run) # AI辅助生成：GLM-5, 2026-03-19
             agent_name = "Clinical Tool Agent"
@@ -6256,6 +6537,9 @@ def _build_context_from_completed_tools(run):
     context = {
         "path_decision": ((run.get("planner_output") or {}).get("path_decision") or {}),
         "patient_context": None,
+        "quality_control_result": copy.deepcopy(
+            (run.get("planner_input") or {}).get("quality_control_result") or {}
+        ),
         "analysis_result": None,
         "vessel_occlusion_result": planner_vessel_result,
         "icv_result": None,
@@ -6280,6 +6564,8 @@ def _build_context_from_completed_tools(run):
             continue # AI辅助生成：GLM-5, 2026-03-25
         if tool_name == "load_patient_context":
             context["patient_context"] = output
+        elif tool_name == "image_quality_control":
+            context["quality_control_result"] = output
         elif tool_name == "run_stroke_analysis":
             context["analysis_result"] = output
         elif tool_name == "vessel_occlusion":
@@ -6403,11 +6689,16 @@ def _run_agent_pipeline(run_id, start_tool=None):
         _update_agent_run(run_id, _set_stage_for_tool)
         ok, tool_result = _execute_agent_tool(run_id, tool_name)
         if ok and tool_result.get("status") == "waiting":
-            _pause_for_human_confirm(
-                run_id,
-                tool_name=tool_name,
-                tool_result=tool_result,
-            )
+            if tool_name == "image_quality_control":
+                _set_agent_quality_checkpoint(
+                    run_id, tool_result.get("structured_output") or {}
+                )
+            else:
+                _pause_for_human_confirm(
+                    run_id,
+                    tool_name=tool_name,
+                    tool_result=tool_result,
+                )
             return
         if not ok:
             if tool_name in {"icv", "ekv", "consensus_lite", "vessel_occlusion"}:
@@ -6458,6 +6749,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
         "tool_sequence": tool_sequence,
         "tool_results": run.get("tool_results", []),
         "patient_context": context.get("patient_context"),
+        "quality_control_result": context.get("quality_control_result"),
         "analysis_result": context.get("analysis_result"),
         "vessel_occlusion_result": context.get("vessel_occlusion_result"),
         "icv": context.get("icv_result"),
@@ -7578,6 +7870,15 @@ def api_generate_report(patient_id):
             run=run_state,
             imaging=imaging_data,
         )
+        quality_control_result = copy.deepcopy(
+            ((run_state or {}).get("planner_input") or {}).get(
+                "quality_control_result"
+            )
+            or ((imaging_data or {}).get("analysis_result") or {}).get(
+                "quality_control"
+            )
+            or {}
+        )
         structured_data = {
             "id": patient_data.get("id"),
             "ID": patient_data.get("id"),
@@ -7601,6 +7902,7 @@ def api_generate_report(patient_id):
             ),
             "vessel_occlusion_confidence": vessel_result.get("confidence"),
             "analysis_status": patient_data.get("analysis_status", "pending"),
+            "quality_control_result": quality_control_result,
         }
 
         if structured_data.get("admission_nihss") is None:
@@ -11149,9 +11451,6 @@ def api_upload_start():
         _update_step(
             job_id, "archive_ready", "completed", f"患者档案已建立（ID={patient_id}）"
         )
-        _update_step(
-            job_id, "modality_detect", "completed", f"识别模态: {normalized_modalities}"
-        )
 
         payload = {
             "job_id": job_id,
@@ -11343,6 +11642,285 @@ def api_review_upload_dag(job_id):
             "success": True,
             "job": response_job,
             "execution_started": payload_to_start is not None,
+        }
+    )
+
+
+def _cancel_quality_review_agent_run(run_id, reason):
+    if not run_id:
+        return None
+
+    def _mut(run):
+        if run.get("status") not in {"queued", "paused_review_required"}:
+            return
+        run["status"] = "cancelled"
+        run["stage"] = "done"
+        run["current_tool"] = None
+        run["termination_reason"] = "image_quality_control_rejected"
+        run["error"] = str(reason or "Image quality rejected; re-upload required")
+        run["human_checkpoint"] = {
+            "type": "image_quality_control",
+            "status": "rejected",
+            "reason": run["error"],
+        }
+
+    return _update_agent_run(run_id, _mut)
+
+
+@app.route("/api/upload/jobs/<job_id>/quality-review", methods=["POST"])
+def api_review_upload_quality(job_id):
+    data = request.get_json(silent=True) or {}
+    decision = str(data.get("decision") or "").strip().lower()
+    reviewer = str(data.get("reviewer") or "").strip()
+    comment = str(data.get("comment") or "").strip()
+    fingerprint = str(data.get("qc_fingerprint") or "").strip()
+    if decision not in {"accept_risk", "reject_reupload"}:
+        return jsonify({"success": False, "error": "invalid quality review decision"}), 400
+    if not reviewer or not comment or not fingerprint:
+        return jsonify(
+            {
+                "success": False,
+                "error": "reviewer, comment and qc_fingerprint are required",
+            }
+        ), 400
+
+    payload_to_start = None
+    payload_to_delete = None
+    linked_run_id = None
+    idempotent = False
+    with UPLOAD_JOBS_LOCK:
+        job = UPLOAD_JOBS.get(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "upload job not found"}), 404
+        result = job.get("quality_control_result") or {}
+        if not result or str(result.get("qc_fingerprint") or "") != fingerprint:
+            return jsonify(
+                {"success": False, "error": "quality result changed; reload before review"}
+            ), 409
+        existing = job.get("quality_review") or {}
+        existing_decision = existing.get("decision") or existing.get("review_override", {}).get("decision")
+        if existing_decision:
+            if existing_decision != decision:
+                return jsonify({"success": False, "error": "quality review decision conflicts"}), 409
+            idempotent = True
+            response_job = _safe_job_copy(job)
+        else:
+            if job.get("status") != "paused_review_required":
+                return jsonify({"success": False, "error": "quality review is not pending"}), 409
+            payload = UPLOAD_JOB_PAYLOADS.get(job_id)
+            if payload is None:
+                return jsonify(
+                    {"success": False, "error": "staged upload payload is unavailable; upload again"}
+                ), 409
+            if decision == "accept_risk" and has_non_overrideable_failure(result):
+                return jsonify(
+                    {"success": False, "error": "structural quality failure cannot be overridden"}
+                ), 409
+
+            reviewed_at = _job_now()
+            reviewed_result = apply_quality_review(
+                result,
+                decision=decision,
+                reviewer=reviewer,
+                comment=comment,
+                reviewed_at=reviewed_at,
+            )
+            review_record = copy.deepcopy(reviewed_result.get("review_override") or {})
+            review_record["status"] = "completed"
+            job["quality_control_result"] = reviewed_result
+            job["quality_review"] = review_record
+            job["human_checkpoint"] = None
+            job["updated_at"] = reviewed_at
+            linked_run_id = job.get("agent_run_id")
+            UPLOAD_JOB_PAYLOADS.pop(job_id, None)
+            if decision == "accept_risk":
+                payload["quality_control_result"] = reviewed_result
+                payload["quality_control_reviewed"] = True
+                payload_to_start = payload
+                job["status"] = "queued"
+                job["current_step"] = None
+                for step in job.get("steps") or []:
+                    if step.get("key") == "image_quality_control":
+                        step["status"] = "completed"
+                        step["message"] = "医生已接受可覆盖的图像质量风险，继续执行"
+                        step["ended_at"] = reviewed_at
+                        break
+            else:
+                payload_to_delete = payload
+                job["status"] = "review_rejected"
+                job["current_step"] = "image_quality_control"
+                for step in job.get("steps") or []:
+                    if step.get("key") == "image_quality_control":
+                        step["status"] = "failed"
+                        step["message"] = "医生退回并要求重新上传"
+                        step["ended_at"] = reviewed_at
+                        break
+            job["progress"] = _calc_job_progress(job)
+            response_job = _safe_job_copy(job)
+
+    if idempotent:
+        return jsonify(
+            {
+                "success": True,
+                "job": response_job,
+                "quality_control_result": response_job.get("quality_control_result"),
+                "quality_review": response_job.get("quality_review"),
+                "human_checkpoint": response_job.get("human_checkpoint"),
+                "execution_resumed": False,
+                "idempotent": True,
+            }
+        )
+
+    if decision == "accept_risk":
+        if linked_run_id:
+            def _resume_linked(run):
+                if run.get("status") == "paused_review_required" and (
+                    (run.get("human_checkpoint") or {}).get("type")
+                    == "image_quality_control"
+                ):
+                    run["status"] = "queued"
+                    run["stage"] = "triage"
+                    run["current_tool"] = None
+                    run["termination_reason"] = "quality_risk_accepted"
+                    run["human_checkpoint"] = None
+                    run.setdefault("planner_input", {})["quality_control_result"] = copy.deepcopy(
+                        response_job.get("quality_control_result") or {}
+                    )
+            _update_agent_run(linked_run_id, _resume_linked)
+        _start_upload_processing_thread(job_id, payload_to_start)
+    else:
+        reason = "Image quality rejected by reviewer; re-upload required"
+        _skip_upload_steps_after_quality_control(job_id, reason)
+        _cancel_quality_review_agent_run(linked_run_id, reason)
+        temp_dir = (payload_to_delete or {}).get("temp_dir")
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    final_job = _get_upload_job(job_id)
+    return jsonify(
+        {
+            "success": True,
+            "job": final_job,
+            "quality_control_result": final_job.get("quality_control_result"),
+            "quality_review": final_job.get("quality_review"),
+            "human_checkpoint": final_job.get("human_checkpoint"),
+            "execution_resumed": decision == "accept_risk",
+            "idempotent": False,
+        }
+    )
+
+
+@app.route("/api/agent/runs/<run_id>/quality-review", methods=["POST"])
+def api_review_agent_quality(run_id):
+    data = request.get_json(silent=True) or {}
+    decision = str(data.get("decision") or "").strip().lower()
+    reviewer = str(data.get("reviewer") or "").strip()
+    comment = str(data.get("comment") or "").strip()
+    fingerprint = str(data.get("qc_fingerprint") or "").strip()
+    if decision not in {"accept_risk", "reject_reupload"}:
+        return jsonify({"success": False, "error": "invalid quality review decision"}), 400
+    if not reviewer or not comment or not fingerprint:
+        return jsonify(
+            {"success": False, "error": "reviewer, comment and qc_fingerprint are required"}
+        ), 400
+
+    run = _get_agent_run(run_id)
+    if not run:
+        return jsonify({"success": False, "error": "Run not found"}), 404
+    result = (run.get("planner_input") or {}).get("quality_control_result") or {}
+    if str(result.get("qc_fingerprint") or "") != fingerprint:
+        return jsonify(
+            {"success": False, "error": "quality result changed; reload before review"}
+        ), 409
+    existing = result.get("review_override") or {}
+    if existing.get("decision"):
+        if existing.get("decision") != decision:
+            return jsonify({"success": False, "error": "quality review decision conflicts"}), 409
+        return jsonify(
+            {
+                "success": True,
+                "run": run,
+                "quality_control_result": result,
+                "quality_review": existing,
+                "human_checkpoint": run.get("human_checkpoint"),
+                "execution_resumed": False,
+                "idempotent": True,
+            }
+        )
+    if (
+        run.get("status") != "paused_review_required"
+        or (run.get("human_checkpoint") or {}).get("type") != "image_quality_control"
+    ):
+        return jsonify({"success": False, "error": "quality review is not pending"}), 409
+    if decision == "accept_risk" and has_non_overrideable_failure(result):
+        return jsonify(
+            {"success": False, "error": "structural quality failure cannot be overridden"}
+        ), 409
+
+    reviewed = apply_quality_review(
+        result,
+        decision=decision,
+        reviewer=reviewer,
+        comment=comment,
+        reviewed_at=_agent_now(),
+    )
+
+    def _apply(state):
+        state.setdefault("planner_input", {})["quality_control_result"] = copy.deepcopy(
+            reviewed
+        )
+        state["planner_input"]["quality_control"] = copy.deepcopy(reviewed)
+        for step in state.get("steps") or []:
+            if step.get("key") == "image_quality_control":
+                step["status"] = "completed" if decision == "accept_risk" else "failed"
+                step["message"] = (
+                    "Quality risk accepted by reviewer"
+                    if decision == "accept_risk"
+                    else "Rejected; re-upload required"
+                )
+                step["ended_at"] = _agent_now()
+        for item in reversed(state.get("tool_results") or []):
+            if item.get("tool_name") == "image_quality_control":
+                item["status"] = "completed" if decision == "accept_risk" else "failed"
+                item["structured_output"] = copy.deepcopy(reviewed) | {
+                    "status": "completed" if decision == "accept_risk" else "failed"
+                }
+                break
+        state["human_checkpoint"] = None
+        state["current_tool"] = None
+        if decision == "accept_risk":
+            state["status"] = "queued"
+            state["stage"] = "triage"
+            state["termination_reason"] = "quality_risk_accepted"
+            state["error"] = None
+        else:
+            state["status"] = "cancelled"
+            state["stage"] = "done"
+            state["termination_reason"] = "image_quality_control_rejected"
+            state["error"] = "Image quality rejected; re-upload required"
+
+    updated = _update_agent_run(run_id, _apply)
+    _persist_quality_control_to_imaging(
+        (updated.get("planner_input") or {}).get("patient_id"),
+        (updated.get("planner_input") or {}).get("file_id"),
+        reviewed,
+    )
+    resumed = decision == "accept_risk"
+    if resumed:
+        threading.Thread(
+            target=_run_agent_pipeline,
+            args=(run_id, "detect_modalities"),
+            daemon=True,
+        ).start()
+    return jsonify(
+        {
+            "success": True,
+            "run": updated,
+            "quality_control_result": reviewed,
+            "quality_review": reviewed.get("review_override"),
+            "human_checkpoint": updated.get("human_checkpoint"),
+            "execution_resumed": resumed,
+            "idempotent": False,
         }
     )
 

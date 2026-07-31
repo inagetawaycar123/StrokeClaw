@@ -156,6 +156,7 @@ def test_actual_agent_task_names_are_canonicalized_for_routing():
             "steps": [
                 {"key": "detect_modalities"},
                 {"key": "load_patient_context"},
+                {"key": "image_quality_control"},
                 {"key": "vessel_occlusion"},
                 {"key": "run_stroke_analysis"},
                 {"key": "generate_medgemma_report"},

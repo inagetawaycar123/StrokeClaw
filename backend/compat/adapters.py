@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from .schemas import ClinicalDecisionBundle, CockpitNodeView, CockpitTaskView, SkillInvocationView
@@ -206,6 +207,15 @@ def build_imaging_context(imaging: Optional[JsonDict], run: Optional[JsonDict]) 
 
 
 def build_quality_control(imaging: Optional[JsonDict], run: Optional[JsonDict]) -> JsonDict:
+    authoritative_candidates = [
+        _as_dict(_as_dict(run).get("planner_input")).get("quality_control_result"),
+        _as_dict(_as_dict(run).get("result")).get("quality_control_result"),
+        _as_dict(_as_dict(imaging).get("analysis_result")).get("quality_control"),
+        _as_dict(imaging).get("quality_control_result"),
+    ]
+    for candidate in authoritative_candidates:
+        if isinstance(candidate, dict) and candidate.get("qc_method"):
+            return copy.deepcopy(candidate)
     context = build_imaging_context(imaging, run)
     modalities = set(context.get("available_modalities") or [])
     missing_core = [item for item in CORE_MODALITIES if item not in modalities]

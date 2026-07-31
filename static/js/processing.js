@@ -2,6 +2,7 @@
 
 const UPLOAD_NODES = [
     { key: "archive_ready", title: "Case_Intake.parse()", subtitle: "病例接收与归档准备", chip: "Case_Intake", delegated: "" },
+    { key: "image_quality_control", title: "Image_QC.validate()", subtitle: "图像质量控制", chip: "Image_QC", delegated: "image_quality_control" },
     { key: "modality_detect", title: "Modality_Detect.route()", subtitle: "模态识别与路径判定", chip: "Modality", delegated: "" },
     { key: "three_class", title: "Three_Class.triage()", subtitle: "NCCT三分类与Grad-CAM", chip: "Three_Class", delegated: "" },
     { key: "ctp_generate", title: "CTP_Generate.run()", subtitle: "灌注图谱生成", chip: "CTP_Gen", delegated: "generate_ctp_maps" },
@@ -23,6 +24,7 @@ const TOOL_META = Object.freeze({
     triage_planner: ["Triage_Planner.plan()", "任务编排生成", "Plan"],
     detect_modalities: ["ClinicalNER.extract()", "结构化提取与复核", "NER_Extract"],
     load_patient_context: ["Patient_Context.load()", "患者上下文加载", "Context"],
+    image_quality_control: ["Image_QC.validate()", "图像质量控制", "Image_QC"],
     generate_ctp_maps: ["MRDPM_Generate.run()", "灌注图谱生成", "CTP_Gen"],
     vessel_occlusion: ["Vessel_Occlusion.classify()", "血管闭塞三分类", "Vessel_Occlusion"],
     run_stroke_analysis: ["Stroke_Analysis.segment()", "卒中区域分析", "Analysis"],
@@ -38,6 +40,7 @@ const TEMPLATES = Object.freeze({
     human_confirm: ["系统已进入人工复核节点。", "请逐段确认报告内容。", "确认完成后流程才会归档闭环。"],
     default: ["系统正在执行当前节点。", "处理节点输入并推进流程。", "形成可解释的临床链路。"],
     archive_ready: ["系统已接收病例并创建会话。", "归集 patient_id 与 file_id。", "确保全流程同一病例上下文。"],
+    image_quality_control: ["系统正在执行规则化 NIfTI 图像质控。", "检查可读性、层厚、覆盖、运动风险、疑似缺片和几何一致性。", "在任何医学模型运行前阻断不合格输入。"],
     modality_detect: ["系统正在识别可用模态。", "判断可执行分析路径。", "避免输入缺失导致误判。"],
     three_class: ["系统正在执行 NCCT 三分类。", "同步生成 Grad-CAM 解释图。", "为后续临床判读提供快速分诊参考。"],
     ctp_generate: ["系统将在三分类完成后启动 CTP 生成。", "输出 CBF/CBV/Tmax 灌注核心参数。", "支撑缺血核心与半暗带判断。"],
@@ -73,6 +76,7 @@ const state = {
     error: "", redirecting: false, awaitingReport: false,
     runTerminalAt: 0, reportResultRetryUntil: 0, lastManualScrollAt: 0, lastFocusNode: "",
     expanded: Object.create(null),
+    qualityReview: { saving: false, error: "", reviewer: "", comment: "", acknowledged: false },
     revealedNodeIds: [],
     revealPendingIds: [],
     revealTimer: null,
@@ -250,11 +254,11 @@ const MODALITY_LABELS = Object.freeze({
 const CLINICAL_NODE_CATALOG = Object.freeze({
     image_qc: {
         title: "影像质控",
-        description: "检查文件可读性、模态完整性、伪影与增强时相。",
+        description: "检查文件可读性、模态完整性、运动伪影、层厚、覆盖和疑似缺片。",
         priority: "P0",
         riskLevel: "medium",
         reviewRequired: true,
-        tools: ["detect_modalities", "load_patient_context"],
+        tools: ["image_quality_control"],
     },
     ncct_triage: {
         title: "出血 / 缺血排查",
@@ -332,7 +336,8 @@ const CLINICAL_NODE_CATALOG = Object.freeze({
 
 const SYSTEM_EXECUTION_META = Object.freeze({
     detect_modalities: { agent: "Triage Planner", skillId: "SKILL_MODALITY_ID", skillName: "modality_identification" },
-    load_patient_context: { agent: "Imaging Executor", skillId: "SKILL_IMG_QC", skillName: "image_quality_control" },
+    load_patient_context: { agent: "Triage Planner", skillId: "SKILL_CASE_CONTEXT", skillName: "case_context_loading" },
+    image_quality_control: { agent: "Imaging Quality Agent", skillId: "SKILL_IMG_QC", skillName: "image_quality_control" },
     three_class: { agent: "Imaging Executor", skillId: "SKILL_NCCT_TRIAGE", skillName: "ncct_three_class_triage" },
     vessel_occlusion: { agent: "Imaging Executor", skillId: "SKILL_VESSEL_OCCLUSION", skillName: "vessel_occlusion_three_class" },
     collateral_score: { agent: "Vascular Agent", skillId: "SKILL_COLLATERAL_SCORE", skillName: "collateral_score", capabilityStatus: "planned" },
@@ -506,6 +511,7 @@ function runtimeNodeForTool(toolName, nodes = state.nodes) {
     const aliases = {
         detect_modalities: ["detect_modalities", "modality_detect"],
         load_patient_context: ["load_patient_context", "archive_ready"],
+        image_quality_control: ["image_quality_control"],
         three_class: ["three_class", "ncct_triage"],
         vessel_occlusion: ["vessel_occlusion"],
         generate_ctp_maps: ["generate_ctp_maps", "ctp_generate"],
@@ -1359,6 +1365,9 @@ function buildNodes() {
         const h = cfg.delegated ? state.hints[cfg.delegated] : null;
         const runStep = cfg.delegated ? runSteps[cfg.delegated] : null;
         const jobStep = jobSteps[cfg.key] || null;
+        const qualityResult = cfg.key === "image_quality_control"
+            ? (state.latestJob?.quality_control_result || state.latestJob?.result?.quality_control_result || state.latestRun?.planner_input?.quality_control_result || null)
+            : null;
         const vesselResult = cfg.key === "vessel_occlusion" ? vesselOcclusionResult(jobStep, h) : null;
         const resolvedState = resolveUploadNodeState(jobStep, runStep, h);
         let status = resolvedState.status;
@@ -1385,11 +1394,13 @@ function buildNodes() {
                     ? (stepMessage || "血管闭塞三分类已完成")
                     : (stepMessage || (status === "pending" ? "等待 CTP 生成完成后启动" : fallback));
         }
-        const inputDefault = cfg.key === "archive_ready" ? { patient_id: state.patientId || "-", file_id: state.fileId || "-" } : cfg.key === "modality_detect" ? { available_modalities: modalities() } : cfg.key === "ai_report" ? { goal_question: t(state.latestRun?.planner_input?.goal_question || state.latestRun?.planner_input?.question) } : { run_id: state.runId, tool_name: cfg.delegated || cfg.key };
+        const inputDefault = cfg.key === "archive_ready" ? { patient_id: state.patientId || "-", file_id: state.fileId || "-" } : cfg.key === "image_quality_control" ? { available_modalities: modalities(), qc_method: "rule_based_nifti_qc" } : cfg.key === "modality_detect" ? { available_modalities: modalities() } : cfg.key === "ai_report" ? { goal_question: t(state.latestRun?.planner_input?.goal_question || state.latestRun?.planner_input?.question) } : { run_id: state.runId, tool_name: cfg.delegated || cfg.key };
         const detailInput = cfg.key === "vessel_occlusion"
             ? { ...VESSEL_OCCLUSION_INPUT, run_id: state.runId || "-" }
             : (h?.input ?? inputDefault); // AI辅助生成：GLM-5, 2026-03-18
-        const detailResult = cfg.key === "vessel_occlusion"
+        const detailResult = cfg.key === "image_quality_control"
+            ? (qualityResult || h?.output || fallback)
+            : cfg.key === "vessel_occlusion"
             ? (vesselResult || h?.output || jobStep?.result || jobStep?.output || (status === "issue"
                 ? { status: "failed", error_message: fallback }
                 : fallback))
@@ -1398,7 +1409,7 @@ function buildNodes() {
             id: `upload_${cfg.key}`, key: cfg.key, title: cfg.title, subtitle: cfg.subtitle, chip: cfg.chip, status, rawStatus: status, group: "upload", order: idx + 1,
             guide: templateFor(cfg.key)[0], summary: summaryTriplet(cfg.key, status, resolvedState.summaryHint, fallback),
             detailInput, detailResult,
-            riskLevel: token(h?.riskLevel || (status === "issue" ? "high" : "none")), riskItems: Array.isArray(h?.riskItems) ? h.riskItems : (status === "issue" ? [fallback] : []),
+            riskLevel: token(h?.riskLevel || (cfg.key === "image_quality_control" && qualityResult?.qc_status === "warning" ? "medium" : status === "issue" || status === "waiting" ? "high" : "none")), riskItems: cfg.key === "image_quality_control" && Array.isArray(qualityResult?.findings) ? qualityResult.findings.map((item) => t(item?.message || item?.code, "")).filter(Boolean) : Array.isArray(h?.riskItems) ? h.riskItems : (status === "issue" ? [fallback] : []),
             actionRequired: t(h?.actionRequired, status === "waiting" ? "请医生确认该节点后继续。" : ""), actionLog: t(h?.actionLog, ""),
             meta: [runStep?.attempts ? `attempt ${runStep.attempts}` : "", t(runStep?.ended_at || runStep?.started_at || h?.ts, "")].filter(Boolean),
             narrativeHint: h?.narrativeHint || "", hint: h, fallback,
@@ -1448,6 +1459,23 @@ function nodeCard(node, ctx = {}) {
     card.dataset.nodeOrder = String(node.order || 0);
     const expanded = Boolean(state.expanded[node.id]);
     const riskClass = node.riskLevel || "medium";
+    const qualityResult = node.key === "image_quality_control"
+        ? (state.latestJob?.quality_control_result || state.latestRun?.planner_input?.quality_control_result || {})
+        : {};
+    const structuralFailure = Array.isArray(qualityResult?.findings) && qualityResult.findings.some((item) => item && item.overrideable === false && ["critical", "high"].includes(token(item.severity)));
+    const qualityReviewForm = node.key === "image_quality_control" && node.status === "waiting" ? `
+      <div class="runtime-human-box runtime-quality-review">
+        <div class="runtime-human-head">图像质量复核</div>
+        <label>审阅医生<input id="qualityReviewReviewer" type="text" value="${escapeHtml(state.qualityReview.reviewer)}" placeholder="姓名或工号"></label>
+        <label>复核备注<textarea id="qualityReviewComment" rows="3" placeholder="必填：记录风险判断与处置理由">${escapeHtml(state.qualityReview.comment)}</textarea></label>
+        <label class="runtime-quality-check"><input id="qualityReviewAck" type="checkbox" ${state.qualityReview.acknowledged ? "checked" : ""}> 我已核对图像质量 findings 与受影响节点。</label>
+        ${state.qualityReview.error ? `<div class="runtime-review-error">${escapeHtml(state.qualityReview.error)}</div>` : ""}
+        <div class="runtime-quality-actions">
+          <button type="button" class="tool-btn" data-quality-decision="accept_risk" ${structuralFailure || state.qualityReview.saving ? "disabled" : ""}>接受风险继续</button>
+          <button type="button" class="tool-btn danger" data-quality-decision="reject_reupload" ${state.qualityReview.saving ? "disabled" : ""}>退回重新上传</button>
+        </div>
+        ${structuralFailure ? `<div class="runtime-review-error">结构性失败不可接受风险继续，只能退回重新上传。</div>` : ""}
+      </div>` : "";
     const detail = `
       <div class="runtime-node-detail${expanded ? " expanded" : ""}">
         <div class="runtime-node-block"><div class="runtime-node-block-label">INPUT</div><table class="runtime-detail-table"><tbody>${tableRows(node.detailInput).map((x) => `<tr><th>${x.k}</th><td>${x.v}</td></tr>`).join("")}</tbody></table><pre class="runtime-node-pre">${pretty(node.detailInput)}</pre></div>
@@ -1463,6 +1491,7 @@ function nodeCard(node, ctx = {}) {
       </div>
       ${node.riskItems.length ? `<div class="runtime-risk-box level-${riskClass}"><div class="runtime-risk-head">风险提示（${riskClass.toUpperCase()}）</div><ul class="runtime-risk-list">${node.riskItems.map((x) => `<li>${x}</li>`).join("")}</ul></div>` : ""}
       ${node.actionRequired ? `<div class="runtime-human-box"><div class="runtime-human-head">人工操作节点</div><div class="runtime-human-line">待执行动作：${node.actionRequired}</div>${node.actionLog ? `<div class="runtime-human-line">操作记录：${node.actionLog}</div>` : ""}</div>` : ""}
+      ${qualityReviewForm}
       <button class="runtime-detail-toggle" type="button" data-toggle-node="${node.id}">${expanded ? "收起详情" : "展开详情"}</button>
       ${detail}
       <div class="runtime-node-meta">${(node.meta.length ? node.meta : [node.group === "upload" ? "upload_chain" : "agent_network"]).map((m) => `<span class="runtime-node-meta-item">${m}</span>`).join("")}</div>`;
@@ -1903,6 +1932,14 @@ function render() {
 function persistUpload(job) {
     const result = job?.result || {}; const fileId = result.file_id || state.fileId || job.file_id; if (!fileId) return;
     state.fileId = String(fileId);
+    const threeClassResult = result.three_class_result && typeof result.three_class_result === "object"
+        ? result.three_class_result
+        : (result.three_class_summary && typeof result.three_class_summary === "object" ? result.three_class_summary : null);
+    const rawThreeClassConfidence = threeClassResult?.three_class_confidence ?? result.three_class_confidence;
+    const parsedThreeClassConfidence = rawThreeClassConfidence === null || rawThreeClassConfidence === undefined || rawThreeClassConfidence === ""
+        ? null
+        : Number(rawThreeClassConfidence);
+    const threeClassConfidence = Number.isFinite(parsedThreeClassConfidence) ? parsedThreeClassConfidence : null;
     const vesselResult = normalizeVesselOcclusionResult(result.vessel_occlusion_result)
         || normalizeVesselOcclusionResult(result)
         || vesselOcclusionResult();
@@ -1914,6 +1951,11 @@ function persistUpload(job) {
         available_models: result.available_models || [],
         model_configs: result.model_configs || {},
         skip_ai: result.skip_ai || false,
+        three_class_result: threeClassResult,
+        three_class_status: threeClassResult?.status || result.three_class_status || null,
+        three_class_label: threeClassResult?.three_class_label || result.three_class_label || null,
+        three_class_label_cn: threeClassResult?.three_class_label_cn || result.three_class_label_cn || null,
+        three_class_confidence: threeClassConfidence,
         vessel_occlusion_result: vesselResult,
         vessel_occlusion_status: vesselResult?.status || null,
         vessel_occlusion_class_result: vesselResult?.vessel_occlusion_class_result || null,
@@ -2117,6 +2159,43 @@ async function reviewHandleAction(action) {
     }
 }
 
+async function submitQualityReview(decision) {
+    if (state.qualityReview.saving) return;
+    state.qualityReview.error = "";
+    const reviewer = t(state.qualityReview.reviewer, "");
+    const comment = t(state.qualityReview.comment, "");
+    const result = state.latestJob?.quality_control_result || state.latestRun?.planner_input?.quality_control_result || {};
+    if (!reviewer || !comment) state.qualityReview.error = "请填写审阅医生和复核备注。";
+    else if (!state.qualityReview.acknowledged) state.qualityReview.error = "请先确认已核对图像质量风险。";
+    else if (!result.qc_fingerprint) state.qualityReview.error = "质控指纹缺失，请刷新页面后重试。";
+    if (state.qualityReview.error) { render(); return; }
+
+    const endpoint = state.jobId
+        ? `/api/upload/jobs/${encodeURIComponent(state.jobId)}/quality-review`
+        : `/api/agent/runs/${encodeURIComponent(state.runId)}/quality-review`;
+    state.qualityReview.saving = true;
+    render();
+    try {
+        const resp = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ decision, reviewer, comment, qc_fingerprint: result.qc_fingerprint }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) throw new Error(data.error || `质控复核提交失败 (${resp.status})`);
+        if (data.job) state.latestJob = data.job;
+        if (data.run) state.latestRun = data.run;
+        state.qualityReview.error = "";
+        if (decision === "accept_risk" && !state.uploadTimer && state.jobId) state.uploadTimer = setInterval(pollUpload, 1200);
+        if (decision === "reject_reupload") state.error = "图像质控已退回，请返回上传页重新上传影像。";
+    } catch (error) {
+        state.qualityReview.error = error.message;
+    } finally {
+        state.qualityReview.saving = false;
+        render();
+    }
+}
+
 async function pollUpload() {
     if (!state.jobId) return;
     try {
@@ -2166,6 +2245,11 @@ async function pollRun() {
                 clearInterval(state.runTimer); state.runTimer = null; state.awaitingReport = false;
                 state.review.required = false; state.review.visible = false;
             }
+            else if (s === "paused_review_required" && token(state.latestRun?.human_checkpoint?.type) === "image_quality_control") {
+                state.awaitingReport = false;
+                state.review.required = false;
+                state.review.visible = false;
+            }
             else if (s === "succeeded" || s === "paused_review_required") {
                 if (!state.runTerminalAt) { state.runTerminalAt = Date.now(); state.reportResultRetryUntil = state.runTerminalAt + RUN_RESULT_FETCH_MAX_WAIT_MS; }
                 await fetchRunResultOnce(); const ready = reportReady(); state.awaitingReport = !ready;
@@ -2206,7 +2290,16 @@ function bind() {
     }
     $("runtimeFeed").addEventListener("wheel", () => { state.lastManualScrollAt = Date.now(); }, { passive: true });
     $("runtimeFeed").addEventListener("touchstart", () => { state.lastManualScrollAt = Date.now(); }, { passive: true });
-    $("runtimeFeed").addEventListener("click", (ev) => { const btn = ev.target.closest("[data-toggle-node]"); if (!btn) return; const id = btn.getAttribute("data-toggle-node"); if (!id) return; state.expanded[id] = !state.expanded[id]; render(); });
+    $("runtimeFeed").addEventListener("input", (ev) => {
+        if (ev.target?.id === "qualityReviewReviewer") state.qualityReview.reviewer = ev.target.value;
+        if (ev.target?.id === "qualityReviewComment") state.qualityReview.comment = ev.target.value;
+        if (ev.target?.id === "qualityReviewAck") state.qualityReview.acknowledged = Boolean(ev.target.checked);
+    });
+    $("runtimeFeed").addEventListener("click", (ev) => {
+        const qualityButton = ev.target.closest("[data-quality-decision]");
+        if (qualityButton) { submitQualityReview(qualityButton.getAttribute("data-quality-decision")); return; }
+        const btn = ev.target.closest("[data-toggle-node]"); if (!btn) return; const id = btn.getAttribute("data-toggle-node"); if (!id) return; state.expanded[id] = !state.expanded[id]; render();
+    });
     document.addEventListener("click", (ev) => {
         const actionBtn = ev.target.closest("[data-review-action]");
         if (actionBtn) {

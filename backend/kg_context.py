@@ -7,7 +7,8 @@ from typing import Any, Callable, Dict, Iterable, List, Sequence, Tuple
 
 TASK_ALIASES = {
     "detect_modalities": ("modality_detection",),
-    "load_patient_context": ("case_intake_parse", "image_quality_control"),
+    "load_patient_context": ("case_intake_parse",),
+    "image_quality_control": ("image_quality_control",),
     "vessel_occlusion": ("vessel_occlusion_classification",),
     "generate_ctp_maps": ("generate_ctp_maps", "pseudo_ctp_generation"),
     "run_stroke_analysis": ("stroke_analysis",),

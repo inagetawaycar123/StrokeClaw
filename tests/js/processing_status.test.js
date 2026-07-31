@@ -171,9 +171,9 @@ test("approved execution cards retain Agent and Skill metadata in the sequential
     const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
     const nodes = [
         {
-            id: "upload_modality_detect",
-            key: "modality_detect",
-            subtitle: "模态识别与路径判定",
+            id: "upload_image_quality_control",
+            key: "image_quality_control",
+            subtitle: "图像质量控制",
             detailInput: { available_modalities: ["ncct", "mcta", "vcta", "dcta"] },
             meta: [],
         },
@@ -181,11 +181,68 @@ test("approved execution cards retain Agent and Skill metadata in the sequential
 
     const [decorated] = processing.decorateExecutionNodes(dag, nodes);
 
-    assert.equal(decorated.subtitle, "影像质控 · Triage Planner");
-    assert.equal(decorated.detailInput.assigned_agent, "Triage Planner");
-    assert.equal(decorated.detailInput.called_skill_id, "SKILL_MODALITY_ID");
-    assert.equal(decorated.detailInput.skill_name, "modality_identification");
-    assert.ok(decorated.meta.includes("assigned_agent · Triage Planner"));
+    assert.equal(decorated.subtitle, "影像质控 · Imaging Quality Agent");
+    assert.equal(decorated.detailInput.assigned_agent, "Imaging Quality Agent");
+    assert.equal(decorated.detailInput.called_skill_id, "SKILL_IMG_QC");
+    assert.equal(decorated.detailInput.skill_name, "image_quality_control");
+    assert.ok(decorated.meta.includes("assigned_agent · Imaging Quality Agent"));
+});
+
+test("quality control appears between case context and modality detection", () => {
+    processing.state.latestJob = {
+        status: "paused_review_required",
+        modalities: ["ncct"],
+        quality_control_result: {
+            qc_status: "failed",
+            qc_method: "rule_based_nifti_qc",
+            findings: [{ code: "motion", severity: "high", message: "疑似严重运动伪影", overrideable: true }],
+        },
+        steps: [
+            { key: "archive_ready", status: "completed" },
+            { key: "image_quality_control", status: "waiting", message: "等待医生复核" },
+            { key: "modality_detect", status: "pending" },
+            { key: "three_class", status: "pending" },
+        ],
+    };
+    processing.state.latestRun = null;
+    processing.state.hints = {};
+    const nodes = processing.buildNodes();
+    assert.deepEqual(nodes.slice(0, 3).map((node) => node.key), [
+        "archive_ready",
+        "image_quality_control",
+        "modality_detect",
+    ]);
+    assert.equal(nodes[1].status, "waiting");
+    assert.equal(nodes[2].status, "pending");
+    assert.deepEqual(nodes[1].riskItems, ["疑似严重运动伪影"]);
+});
+
+test("quality warning completes without hiding its risk findings", () => {
+    processing.state.latestJob = {
+        status: "running",
+        modalities: ["ncct"],
+        quality_control_result: {
+            qc_status: "warning",
+            qc_method: "rule_based_nifti_qc",
+            qc_input_mode: "single_slice",
+            qc_scan_coverage: "not_applicable",
+            qc_motion_artifact_level: "not_applicable",
+            qc_missing_slice_status: "not_applicable",
+            qc_not_applicable_checks: ["axial_coverage", "internal_missing_slices", "inter_slice_motion"],
+            findings: [{ code: "single_slice_limited_assessment", severity: "medium", message: "单层影像无法执行三维覆盖、疑似缺片及跨层运动评估", overrideable: true }],
+        },
+        steps: [
+            { key: "archive_ready", status: "completed" },
+            { key: "image_quality_control", status: "completed", message: "单层影像：三维质控项目不适用；可执行检查已完成，流程自动继续" },
+            { key: "modality_detect", status: "running" },
+        ],
+    };
+    const qualityNode = processing.buildNodes().find((node) => node.key === "image_quality_control");
+    assert.equal(qualityNode.status, "completed");
+    assert.equal(qualityNode.riskLevel, "medium");
+    assert.deepEqual(qualityNode.riskItems, ["单层影像无法执行三维覆盖、疑似缺片及跨层运动评估"]);
+    assert.match(qualityNode.fallback, /三维质控项目不适用/);
+    assert.equal(qualityNode.detailResult.qc_input_mode, "single_slice");
 });
 
 test("NCCT running is the only visible execution node while later steps are pending", () => {
@@ -628,8 +685,14 @@ test("an upload job failure still blocks reveal at its issue", () => {
     assert.equal(processing.isBlockingIssue(processing.state.nodes[0]), true);
 });
 
-test("persistUpload copies the vessel contract and flattened compatibility fields", () => {
+test("persistUpload copies NCCT and vessel case-level contracts", () => {
     const vesselResult = completedVesselResult();
+    const threeClassResult = {
+        status: "completed",
+        three_class_label: "normal",
+        three_class_label_cn: "正常",
+        three_class_confidence: 0.923,
+    };
     const writes = {};
     let viewerData = null;
     global.setViewerData = (value) => { viewerData = value; };
@@ -637,12 +700,21 @@ test("persistUpload copies the vessel contract and flattened compatibility field
     global.localStorage = { setItem: (key, value) => { writes[`local:${key}`] = value; }, removeItem: () => {} };
     processing.state.latestJob = {
         status: "completed",
-        result: { file_id: "case-1", vessel_occlusion_result: vesselResult },
+        result: {
+            file_id: "case-1",
+            three_class_result: threeClassResult,
+            vessel_occlusion_result: vesselResult,
+        },
     };
 
     processing.persistUpload(processing.state.latestJob);
 
     assert.equal(viewerData.file_id, "case-1");
+    assert.deepEqual(viewerData.three_class_result, threeClassResult);
+    assert.equal(viewerData.three_class_status, "completed");
+    assert.equal(viewerData.three_class_label, "normal");
+    assert.equal(viewerData.three_class_label_cn, "正常");
+    assert.equal(viewerData.three_class_confidence, 0.923);
     assert.deepEqual(viewerData.vessel_occlusion_result, processing.normalizeVesselOcclusionResult(vesselResult));
     assert.equal(viewerData.vessel_occlusion_status, "completed");
     assert.equal(viewerData.vessel_occlusion_class_result, "大血管闭塞");

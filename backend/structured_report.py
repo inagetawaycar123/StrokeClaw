@@ -1510,6 +1510,7 @@ def build_structured_report_v2(
             "hemisphere": data["hemisphere"],
             "fields": [],
         },
+        "quality_control": _as_dict(payload.get("quality_control_result")),
         "imaging_findings": imaging_findings,
         "quantitative_metrics": metrics,
         "rule_evaluations": rules,

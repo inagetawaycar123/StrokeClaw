@@ -92,6 +92,9 @@ def test_upload_job_skips_all_downstream_imaging_steps(monkeypatch):
     monkeypatch.setattr(
         app_module, "_persist_vessel_result_to_imaging", lambda *_a: True
     )
+    monkeypatch.setattr(
+        app_module, "_persist_quality_control_to_imaging", lambda *_a: True
+    )
 
     def must_not_run(*_args, **_kwargs):
         raise AssertionError("downstream imaging model must not run")
@@ -106,6 +109,14 @@ def test_upload_job_skips_all_downstream_imaging_steps(monkeypatch):
             "file_id": "case-gated",
             "modalities": ["ncct", "mcta", "vcta", "dcta"],
             "agent_run_id": "run-gated",
+            "quality_control_result": {
+                "qc_status": "passed",
+                "qc_score": 1.0,
+                "qc_method": "rule_based_nifti_qc",
+                "qc_fingerprint": "synthetic-passed-qc",
+                "findings": [],
+                "review_override": None,
+            },
         },
     )
 

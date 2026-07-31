@@ -6,6 +6,21 @@ from typing import Dict, List, Optional
 
 SKILL_REGISTRY: List[Dict[str, object]] = [
     {
+        "skill_id": "SKILL_CASE_CONTEXT",
+        "skill_name": "case_context_loading",
+        "skill_type": "context",
+        "owner_agent": "Triage Planner",
+        "clinical_task": "load_patient_case_context",
+        "required_input": ["patient_id", "case_id"],
+        "main_output": ["patient_context", "imaging_context"],
+        "confidence_method": "source_record_completeness",
+        "confidence_threshold": 1.0,
+        "failure_strategy": "block_if_case_context_missing",
+        "version": "0.1.0",
+        "status": "active",
+        "doctor_review_required": False,
+    },
+    {
         "skill_id": "SKILL_IMG_QC",
         "skill_name": "image_quality_control",
         "skill_type": "quality_control",
@@ -190,7 +205,8 @@ SKILL_REGISTRY: List[Dict[str, object]] = [
 
 TOOL_TO_SKILL_ID = {
     "detect_modalities": "SKILL_MODALITY_ID",
-    "load_patient_context": "SKILL_IMG_QC",
+    "load_patient_context": "SKILL_CASE_CONTEXT",
+    "image_quality_control": "SKILL_IMG_QC",
     "three_class": "SKILL_NCCT_TRIAGE",
     "ncct_triage": "SKILL_NCCT_TRIAGE",
     "run_ncct_classification": "SKILL_NCCT_TRIAGE",

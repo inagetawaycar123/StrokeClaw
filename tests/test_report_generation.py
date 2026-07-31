@@ -91,6 +91,112 @@ def test_baichuan_request_is_deidentified_and_contains_clinical_evidence(tmp_pat
     assert result["json_path"].startswith(str(tmp_path))
 
 
+def test_quality_control_risks_and_override_reach_prompt_and_payload(tmp_path):
+    captured = {}
+    imaging = _imaging()
+    imaging["analysis_result"]["quality_control"] = {
+        "schema_version": "1.0",
+        "qc_status": "failed",
+        "qc_score": 0.72,
+        "qc_method": "rule_based_nifti_qc",
+        "qc_input_mode": "volume",
+        "qc_not_applicable_checks": [],
+        "qc_scan_coverage": "complete",
+        "qc_slice_thickness_status": "normal",
+        "qc_motion_artifact_level": "severe",
+        "qc_missing_slice_status": "none_suspected",
+        "qc_geometry_status": "matched",
+        "findings": [
+            {
+                "code": "suspected_motion_artifact_severe",
+                "severity": "high",
+                "modality": "ncct",
+                "metric": 0.3,
+                "threshold": 0.25,
+                "message": "疑似严重运动伪影",
+                "overrideable": True,
+            }
+        ],
+        "review_override": {
+            "decision": "accept_risk",
+            "reviewer": "doctor-local",
+            "comment": "synthetic review",
+        },
+    }
+
+    def fake_post(_url, **kwargs):
+        captured.update(kwargs)
+        return FakeResponse({"choices": [{"message": {"content": "质控风险报告"}}]})
+
+    result = report_generation.generate_report(
+        _structured(),
+        imaging,
+        "case-quality",
+        results_dir=str(tmp_path),
+        api_key="test-key",
+        http_post=fake_post,
+    )
+    outbound = json.dumps(captured["json"], ensure_ascii=False)
+    assert "suspected_motion_artifact_severe" in outbound
+    assert "accept_risk" in outbound
+    assert '"qc_input_mode":"volume"' in captured["json"]["messages"][1]["content"]
+    assert "doctor-local" not in outbound
+    assert "synthetic review" not in outbound
+    assert "case-quality" not in outbound
+    assert result["report_payload"]["quality_control_result"]["qc_status"] == "failed"
+    assert result["report_payload"]["quality_control_result"]["review_override"]["decision"] == "accept_risk"
+
+
+def test_single_slice_quality_limit_is_preserved_in_prompt_and_payload(tmp_path):
+    captured = {}
+    imaging = _imaging()
+    imaging["analysis_result"]["quality_control"] = {
+        "schema_version": "1.0",
+        "qc_status": "warning",
+        "qc_score": 0.92,
+        "qc_method": "rule_based_nifti_qc",
+        "qc_input_mode": "single_slice",
+        "qc_not_applicable_checks": [
+            "axial_coverage",
+            "internal_missing_slices",
+            "inter_slice_motion",
+        ],
+        "qc_scan_coverage": "not_applicable",
+        "qc_slice_thickness_status": "normal",
+        "qc_motion_artifact_level": "not_applicable",
+        "qc_missing_slice_status": "not_applicable",
+        "qc_geometry_status": "matched",
+        "findings": [
+            {
+                "code": "single_slice_limited_assessment",
+                "severity": "medium",
+                "message": "单层影像无法执行三维覆盖、疑似缺片及跨层运动评估",
+            }
+        ],
+    }
+
+    def fake_post(_url, **kwargs):
+        captured.update(kwargs)
+        return FakeResponse({"choices": [{"message": {"content": "单层质控报告"}}]})
+
+    result = report_generation.generate_report(
+        _structured(),
+        imaging,
+        "case-single-slice",
+        results_dir=str(tmp_path),
+        api_key="test-key",
+        http_post=fake_post,
+    )
+    prompt = captured["json"]["messages"][1]["content"]
+    assert '"qc_input_mode":"single_slice"' in prompt
+    assert "single_slice_limited_assessment" in prompt
+    assert "inter_slice_motion" in prompt
+    assert (
+        result["report_payload"]["quality_control_result"]["qc_scan_coverage"]
+        == "not_applicable"
+    )
+
+
 def test_hemorrhage_gate_removes_ctp_values_from_provider_prompt(tmp_path):
     captured = {}
     structured = _structured()
