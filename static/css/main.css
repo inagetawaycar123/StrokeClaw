@@ -1206,6 +1206,19 @@ body { font-family:Arial, sans-serif; font-size:12px; background:#000; color:#ff
     line-height: 1.65;
 }
 
+.runtime-review-done-banner {
+    padding: 12px 14px;
+    border: 1px solid #49d0a4;
+    border-radius: 10px;
+    background: rgba(20, 70, 52, 0.55);
+    color: #9dffd6;
+    font-size: 16px;
+}
+
+.runtime-review-done-banner[hidden] {
+    display: none !important;
+}
+
 .runtime-finalization-card {
     padding: 15px 16px;
     border-color: #1ea06f;

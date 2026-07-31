@@ -170,6 +170,21 @@ SKILL_REGISTRY: List[Dict[str, object]] = [
         "status": "active",
         "doctor_review_required": False,
     },
+    {
+        "skill_id": "SKILL_HUMAN_REVIEW",
+        "skill_name": "human_confirm_review",
+        "skill_type": "human_in_the_loop",
+        "owner_agent": "Human Review Agent",
+        "clinical_task": "doctor_report_section_review",
+        "required_input": ["run_id", "report_result"],
+        "main_output": ["review_state", "all_confirmed", "final_report"],
+        "confidence_method": "doctor_explicit_confirmation",
+        "confidence_threshold": 1.0,
+        "failure_strategy": "block_until_doctor_confirms",
+        "version": "0.1.0",
+        "status": "active",
+        "doctor_review_required": True,
+    },
 ]
 
 
@@ -188,6 +203,8 @@ TOOL_TO_SKILL_ID = {
     "ekv": "SKILL_GUIDELINE_CHECK",
     "generate_medgemma_report": "SKILL_REPORT_GEN",
     "clinical_ai_qa": "SKILL_AI_QA",
+    "human_confirm": "SKILL_HUMAN_REVIEW",
+    "human_review": "SKILL_HUMAN_REVIEW",
 }
 
 

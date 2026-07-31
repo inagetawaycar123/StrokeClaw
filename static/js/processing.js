@@ -19,6 +19,7 @@ const VESSEL_OCCLUSION_INPUT = Object.freeze({
 const VESSEL_CLASS_KEYS = Object.freeze(["Class_0", "Class_1_LVO", "Class_2_MEVO"]);
 
 const TOOL_META = Object.freeze({
+    human_review: ["Human_Confirm.await_action()", "人工复核节点", "Human_Review"],
     triage_planner: ["Triage_Planner.plan()", "任务编排生成", "Plan"],
     detect_modalities: ["ClinicalNER.extract()", "结构化提取与复核", "NER_Extract"],
     load_patient_context: ["Patient_Context.load()", "患者上下文加载", "Context"],
@@ -34,6 +35,7 @@ const TOOL_META = Object.freeze({
 });
 
 const TEMPLATES = Object.freeze({
+    human_confirm: ["系统已进入人工复核节点。", "请逐段确认报告内容。", "确认完成后流程才会归档闭环。"],
     default: ["系统正在执行当前节点。", "处理节点输入并推进流程。", "形成可解释的临床链路。"],
     archive_ready: ["系统已接收病例并创建会话。", "归集 patient_id 与 file_id。", "确保全流程同一病例上下文。"],
     modality_detect: ["系统正在识别可用模态。", "判断可执行分析路径。", "避免输入缺失导致误判。"],
@@ -100,6 +102,8 @@ const state = {
         pendingOps: [],
         flushInFlight: false,
         inited: false,
+        serverCanEnterViewer: false,
+        runStatus: "",
     },
 };
 
@@ -1040,9 +1044,30 @@ function reviewSetState(reviewState, opts = {}) {
     reviewPersistLocal(); // AI辅助生成：GLM-5, 2026-04-12
 }
 
+function reviewApplyServerPayload(data) {
+    if (!data || typeof data !== "object") return;
+    if (data.run_status) {
+        state.review.runStatus = token(data.run_status);
+        state.latestRun = {
+            ...(state.latestRun || {}),
+            status: data.run_status,
+        };
+    }
+    if (typeof data.can_enter_viewer === "boolean") {
+        state.review.serverCanEnterViewer = data.can_enter_viewer;
+    } else if (data.run_status) {
+        state.review.serverCanEnterViewer = (
+            !!data.all_confirmed && token(data.run_status) === "succeeded"
+        );
+    }
+}
+
 function reviewCanEnterViewer() {
     if (!state.review.required) return true;
-    return !!state.review.state?.all_confirmed;
+    return (
+        !!state.review.state?.all_confirmed
+        && !!state.review.serverCanEnterViewer
+    );
 }
 
 async function reviewApiGet() {
@@ -1078,6 +1103,7 @@ async function reviewFlushPendingOps() {
             const item = state.review.pendingOps[0];
             const data = await reviewApiPost(item.action, item.payload);
             if (data?.review_state) reviewSetState(data.review_state, { keepSuggestion: true }); // AI辅助生成：GLM-5, 2026-04-14
+            reviewApplyServerPayload(data);
             state.review.pendingOps.shift();
             reviewPersistLocal();
         }
@@ -1150,6 +1176,7 @@ async function ensureReviewState(force = false) {
     try {
         const data = await reviewApiGet();
         reviewSetState(data.review_state);
+        reviewApplyServerPayload(data);
         state.review.offlineMode = false;
         state.review.error = "";
         state.review.info = "";
@@ -1165,6 +1192,7 @@ async function ensureReviewState(force = false) {
         const local = reviewLoadLocal();
         if (local?.review_state) {
             reviewSetState(local.review_state, { keepSuggestion: true });
+            state.review.serverCanEnterViewer = false;
             state.review.pendingOps = Array.isArray(local.pending_ops) ? local.pending_ops : [];
             state.review.offlineMode = true;
             state.review.error = `后端暂不可用，已切换本地兜底（${err.message}）`;
@@ -1172,6 +1200,7 @@ async function ensureReviewState(force = false) {
         }
         if (state.latestRun) {
             reviewSetState(reviewBuildLocalFromRun(state.latestRun));
+            state.review.serverCanEnterViewer = false;
             state.review.offlineMode = true;
             state.review.error = `后端暂不可用，已初始化本地审阅（${err.message}）`;
             return true;
@@ -1511,6 +1540,87 @@ function reviewIsLocked(sectionId) {
     return idx > currentIdx;
 }
 
+function reviewEditorFieldIds() {
+    return [
+        "runtimeReviewRewriteIntent",
+        "runtimeReviewDraft",
+        "runtimeReviewNote",
+    ];
+}
+
+function reviewEditorHasFocus() {
+    return reviewEditorFieldIds().includes(document.activeElement?.id || "");
+}
+
+function reviewCaptureEditorSnapshot() {
+    const active = document.activeElement;
+    const activeId = active?.id || "";
+    return {
+        draftText: $("runtimeReviewDraft")?.value,
+        doctorNote: $("runtimeReviewNote")?.value,
+        rewriteIntent: $("runtimeReviewRewriteIntent")?.value,
+        focusedId: reviewEditorFieldIds().includes(activeId) ? activeId : "",
+        selectionStart: Number.isInteger(active?.selectionStart)
+            ? active.selectionStart
+            : null,
+        selectionEnd: Number.isInteger(active?.selectionEnd)
+            ? active.selectionEnd
+            : null,
+    };
+}
+
+function reviewRestoreEditorSnapshot(snapshot) {
+    if (!snapshot) return;
+    const draft = $("runtimeReviewDraft");
+    const note = $("runtimeReviewNote");
+    const intent = $("runtimeReviewRewriteIntent");
+    if (draft && snapshot.draftText !== undefined) draft.value = snapshot.draftText;
+    if (note && snapshot.doctorNote !== undefined) note.value = snapshot.doctorNote;
+    if (intent && snapshot.rewriteIntent !== undefined) {
+        intent.value = snapshot.rewriteIntent;
+    }
+    if (!snapshot.focusedId) return;
+    const element = $(snapshot.focusedId);
+    if (!element) return;
+    element.focus({ preventScroll: true });
+    if (
+        Number.isInteger(snapshot.selectionStart)
+        && Number.isInteger(snapshot.selectionEnd)
+        && typeof element.setSelectionRange === "function"
+    ) {
+        try {
+            element.setSelectionRange(
+                snapshot.selectionStart,
+                snapshot.selectionEnd,
+            );
+        } catch (_error) {
+            // Some input types do not support selection ranges.
+        }
+    }
+}
+
+function reviewUpdatePanelChrome(reviewState, sections) {
+    const percent = reviewProgressPercent(reviewState);
+    const head = document.querySelector(".runtime-review-progress-head span");
+    const bar = document.querySelector(".runtime-review-progress-bar span");
+    const meta = document.querySelector(".runtime-review-progress-meta");
+    const doneBanner = document.querySelector(".runtime-review-done-banner");
+    const enterButton = document.querySelector(
+        '[data-review-action="enter_viewer"]',
+    );
+    if (head) {
+        head.textContent = `${reviewState.confirmed_count || 0}/${reviewState.total_sections || sections.length} 已确认`;
+    }
+    if (bar) bar.style.width = `${percent}%`;
+    if (meta) {
+        meta.textContent = `完成度 ${percent}% · 未全部确认前禁止跳转 Viewer`;
+    }
+    if (doneBanner) doneBanner.hidden = !reviewState.all_confirmed;
+    if (enterButton) {
+        enterButton.disabled = !reviewCanEnterViewer() || !!state.review.saving;
+    }
+}
+
 function renderReviewPanel() {
     const card = $("runtimeReviewCard");
     const body = $("runtimeReviewBody");
@@ -1531,6 +1641,11 @@ function renderReviewPanel() {
     const reviewState = state.review.state;
     if (!reviewState || !Array.isArray(reviewState.sections) || !reviewState.sections.length) {
         body.innerHTML = `<div class="runtime-review-note">${t(state.review.error, "暂未获取到可审阅章节。")}</div>`;
+        return;
+    }
+
+    if ($("runtimeReviewDraft") && reviewEditorHasFocus()) {
+        reviewUpdatePanelChrome(reviewState, reviewState.sections);
         return;
     }
 
@@ -1575,6 +1690,7 @@ function renderReviewPanel() {
     const noteText = noteLines.join(" ");
     const currentRisk = reviewReadableRisk(currentSection.risk_level);
     const riskClass = token(currentSection.risk_level || "low");
+    const editorSnapshot = reviewCaptureEditorSnapshot();
 
     body.innerHTML = `
         <div class="runtime-review-progress">
@@ -1623,17 +1739,20 @@ function renderReviewPanel() {
                         <textarea id="runtimeReviewNote" placeholder="可填写补充说明与修订原因">${t(currentSection.doctor_note, "")}</textarea>
                     </div>
                     ${suggestion}
-                    <div class="runtime-review-note">${noteText || "提示：高风险章节需显式确认后才可进入下一段。"} </div>
+                    <div class="runtime-review-note">${noteText || (canFinalize ? "全部章节已确认。" : "提示：高风险章节需显式确认后才可进入下一段。")} </div>
+                    <div class="runtime-review-done-banner"${canFinalize ? "" : " hidden"}>已全部确认</div>
                 </div>
                 <div class="runtime-review-actions runtime-review-actions-sticky">
-                    <button type="button" class="runtime-review-btn" data-review-action="rewrite_section"${state.review.saving ? " disabled" : ""}>AI改写此段</button>
+                    ${canFinalize
+                        ? `<button type="button" class="runtime-review-btn primary" data-review-action="enter_viewer"${(!reviewCanEnterViewer() || state.review.saving) ? " disabled" : ""}>进入 Viewer</button>`
+                        : `<button type="button" class="runtime-review-btn" data-review-action="rewrite_section"${state.review.saving ? " disabled" : ""}>AI改写此段</button>
                     <button type="button" class="runtime-review-btn" data-review-action="save_section"${state.review.saving ? " disabled" : ""}>保存编辑</button>
-                    <button type="button" class="runtime-review-btn primary" data-review-action="confirm_section"${state.review.saving ? " disabled" : ""}>确认本段并继续</button>
-                    <button type="button" class="runtime-review-btn warn" data-review-action="finalize_review"${(!canFinalize || state.review.saving) ? " disabled" : ""}>全部确认后进入 Viewer</button>
+                    <button type="button" class="runtime-review-btn primary" data-review-action="confirm_section"${state.review.saving ? " disabled" : ""}>确认本段并继续</button>`}
                 </div>
             </section>
         </div>
     `;
+    reviewRestoreEditorSnapshot(editorSnapshot);
 }
 
 function reviewReadEditorValues() {
@@ -1848,7 +1967,11 @@ function openViewerWithGate() {
 async function reviewHandleAction(action) {
     if (!state.review.state || state.review.saving) return;
     const { sectionId, draftText, doctorNote, rewriteIntent } = reviewReadEditorValues();
-    if (!sectionId && action !== "finalize_review") return;
+    if (
+        !sectionId
+        && action !== "finalize_review"
+        && action !== "enter_viewer"
+    ) return;
     const section = reviewGetCurrentSection();
     state.review.saving = true; // AI辅助生成：GLM-5, 2026-04-13
     state.review.error = "";
@@ -1927,6 +2050,7 @@ async function reviewHandleAction(action) {
                     auto_finalize: true,
                 });
                 reviewSetState(data.review_state);
+                reviewApplyServerPayload(data);
                 if (typeof data?.final_report === "string" && data.final_report.trim()) {
                     persistReport(state.fileId, {
                         report: data.final_report,
@@ -1935,7 +2059,9 @@ async function reviewHandleAction(action) {
                 }
                 state.review.offlineMode = false; // AI辅助生成：GLM-5, 2026-04-17
                 reviewClearLocalOps();
-                state.review.info = data?.all_confirmed ? "全部章节确认完成，准备进入 Viewer。" : "章节确认成功，已解锁下一段。";
+                state.review.info = data?.all_confirmed
+                    ? "已全部确认，请点击「进入 Viewer」。"
+                    : "章节确认成功，已解锁下一段。";
             } catch (err) {
                 const next = reviewLocalConfirm(sectionId, draftText, doctorNote);
                 reviewSetState(next);
@@ -1946,14 +2072,20 @@ async function reviewHandleAction(action) {
                     auto_finalize: true,
                 });
                 state.review.offlineMode = true;
+                state.review.serverCanEnterViewer = false;
                 state.review.error = `确认已转本地兜底：${err.message}`;
             }
-            if (reviewCanEnterViewer()) {
+            render();
+            return;
+        }
+
+        if (action === "enter_viewer") {
+            if (!reviewCanEnterViewer()) {
+                state.review.error = "请先完成全部章节确认并等待服务端完成复核节点。";
                 render();
-                scheduleViewer(true); // AI辅助生成：GLM-5, 2026-04-18
                 return;
             }
-            render();
+            openViewerWithGate();
             return;
         }
 
@@ -1961,6 +2093,7 @@ async function reviewHandleAction(action) {
             try {
                 const data = await reviewApiPost("finalize_review", {});
                 reviewSetState(data.review_state, { keepCurrent: true });
+                reviewApplyServerPayload(data);
                 if (typeof data?.final_report === "string" && data.final_report.trim()) {
                     persistReport(state.fileId, {
                         report: data.final_report,
@@ -1969,9 +2102,8 @@ async function reviewHandleAction(action) {
                 }
                 state.review.offlineMode = false;
                 reviewClearLocalOps(); // AI辅助生成：GLM-5, 2026-04-19
-                state.review.info = "最终确认版报告已生成。";
+                state.review.info = "最终确认版报告已生成，请点击「进入 Viewer」。";
                 render();
-                scheduleViewer(true);
                 return;
             } catch (err) {
                 state.review.error = `最终归档失败：${err.message}`;
@@ -2030,11 +2162,11 @@ async function pollRun() {
         const s = token(state.latestRun.status);
         if (!TERMINAL.has(s)) { state.awaitingReport = false; state.runTerminalAt = 0; state.reportResultRetryUntil = 0; }
         if (TERMINAL.has(s)) {
-            if (s !== "succeeded") {
+            if (s === "failed" || s === "cancelled") {
                 clearInterval(state.runTimer); state.runTimer = null; state.awaitingReport = false;
                 state.review.required = false; state.review.visible = false;
             }
-            else {
+            else if (s === "succeeded" || s === "paused_review_required") {
                 if (!state.runTerminalAt) { state.runTerminalAt = Date.now(); state.reportResultRetryUntil = state.runTerminalAt + RUN_RESULT_FETCH_MAX_WAIT_MS; }
                 await fetchRunResultOnce(); const ready = reportReady(); state.awaitingReport = !ready;
                 if (state.uploadDone) {
@@ -2043,8 +2175,10 @@ async function pollRun() {
                         state.awaitingReport = false;
                         const ok = await ensureReviewState(false);
                         if (ok) {
-                            if (state.runTimer) { clearInterval(state.runTimer); state.runTimer = null; }
-                            if (reviewCanEnterViewer()) scheduleViewer(true);
+                            if (s === "succeeded" && state.runTimer) {
+                                clearInterval(state.runTimer);
+                                state.runTimer = null;
+                            }
                         }
                     } else if (Date.now() >= state.reportResultRetryUntil) {
                         clearInterval(state.runTimer); state.runTimer = null; state.awaitingReport = false; state.error = "报告尚未就绪，已暂停自动跳转。请稍后手动进入 Viewer。";
@@ -2163,6 +2297,10 @@ if (typeof module !== "undefined" && module.exports) {
         isBlockingIssue,
         syncRevealQueue,
         clearRevealTimer,
+        reviewApplyServerPayload,
+        reviewCanEnterViewer,
+        reviewCaptureEditorSnapshot,
+        reviewRestoreEditorSnapshot,
         buildNodes,
         persistUpload,
         normalizeModalityList,

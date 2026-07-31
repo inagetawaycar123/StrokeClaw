@@ -26,6 +26,23 @@ function resetState() {
             hydratedKey: "",
             error: "",
         },
+        review: {
+            required: false,
+            visible: false,
+            loading: false,
+            saving: false,
+            offlineMode: false,
+            error: "",
+            info: "",
+            state: null,
+            currentSectionId: "",
+            rewriteSuggestion: null,
+            pendingOps: [],
+            flushInFlight: false,
+            inited: false,
+            serverCanEnterViewer: false,
+            runStatus: "",
+        },
     });
 }
 
@@ -273,6 +290,117 @@ test("skipped and waiting states are visible while review blocks later nodes", (
     assert.deepEqual(processing.state.revealedNodeIds, ["skipped-step", "review-step"]);
     assert.equal(processing.nodeStatus("skipped"), "skipped");
     assert.equal(processing.canAdvanceRevealFrom(processing.state.nodes[1]), false);
+});
+
+test("pending human confirmation stays hidden until the backend reports waiting", () => {
+    processing.state.nodes = [
+        { id: "report", key: "ai_report", group: "agent", status: "completed" },
+        { id: "human", key: "human_confirm", group: "agent", status: "pending" },
+    ];
+
+    processing.syncRevealQueue();
+    assert.deepEqual(processing.state.revealedNodeIds, ["report"]);
+
+    processing.state.nodes[1].status = "waiting";
+    processing.syncRevealQueue();
+    assert.deepEqual(processing.state.revealedNodeIds, ["report", "human"]);
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[1]).status,
+        "waiting",
+    );
+});
+
+test("human confirmation completion is driven only by the backend step status", () => {
+    processing.state.nodes = [
+        { id: "report", key: "ai_report", group: "agent", status: "completed" },
+        { id: "human", key: "human_confirm", group: "agent", status: "waiting" },
+    ];
+
+    processing.syncRevealQueue();
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[1]).status,
+        "waiting",
+    );
+
+    processing.state.nodes[1].status = "completed";
+    processing.syncRevealQueue();
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[1]).status,
+        "completed",
+    );
+});
+
+test("viewer entry requires both confirmed sections and server authorization", () => {
+    processing.state.review.required = true;
+    processing.state.review.state = { all_confirmed: true };
+    processing.state.review.serverCanEnterViewer = false;
+
+    assert.equal(processing.reviewCanEnterViewer(), false);
+
+    processing.reviewApplyServerPayload({
+        all_confirmed: true,
+        run_status: "succeeded",
+        can_enter_viewer: true,
+    });
+
+    assert.equal(processing.reviewCanEnterViewer(), true);
+    assert.equal(processing.state.latestRun.status, "succeeded");
+});
+
+test("offline confirmation cannot authorize viewer entry", () => {
+    processing.state.review.required = true;
+    processing.state.review.state = { all_confirmed: true };
+
+    processing.reviewApplyServerPayload({
+        all_confirmed: true,
+        run_status: "paused_review_required",
+        can_enter_viewer: false,
+    });
+
+    assert.equal(processing.reviewCanEnterViewer(), false);
+});
+
+test("review editor snapshot restores unsaved values, focus, and selection", () => {
+    const originalDocument = global.document;
+    const originalElements = {
+        runtimeReviewDraft: {
+            value: "unsaved draft",
+            focus() {},
+            setSelectionRange() {},
+        },
+        runtimeReviewNote: { value: "unsaved note" },
+        runtimeReviewRewriteIntent: { value: "concise" },
+    };
+    let focused = false;
+    let restoredRange = null;
+    originalElements.runtimeReviewDraft.focus = () => { focused = true; };
+    originalElements.runtimeReviewDraft.setSelectionRange = (start, end) => {
+        restoredRange = [start, end];
+    };
+    global.document = {
+        activeElement: {
+            id: "runtimeReviewDraft",
+            selectionStart: 2,
+            selectionEnd: 7,
+        },
+        getElementById(id) {
+            return originalElements[id] || null;
+        },
+    };
+
+    try {
+        const snapshot = processing.reviewCaptureEditorSnapshot();
+        originalElements.runtimeReviewDraft.value = "server render";
+        originalElements.runtimeReviewNote.value = "server note";
+        processing.reviewRestoreEditorSnapshot(snapshot);
+
+        assert.equal(originalElements.runtimeReviewDraft.value, "unsaved draft");
+        assert.equal(originalElements.runtimeReviewNote.value, "unsaved note");
+        assert.equal(focused, true);
+        assert.deepEqual(restoredRange, [2, 7]);
+    } finally {
+        global.document = originalDocument;
+    }
 });
 
 test("upload job completion cannot be overwritten by stale Agent running hints", () => {
