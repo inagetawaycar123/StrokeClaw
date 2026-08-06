@@ -18,8 +18,7 @@ static/dist/  # Vite 构建产物（由 frontend/npm run build 生成）
 # log日志
 web_system.log
 
-# MedGemma 模型文件（大型模型权重，不提交）
-MedGemma_Model/*.safetensors
+# 大型模型权重
 *.safetensors
 
 node_modules/
@@ -31,11 +30,8 @@ node_modules/
 # IDE 配置文件
 **/workspace.xml
 
-# 结果报告
-MedGemma_Model/results/
-
-# example文件（已经在群里发过）
-MedGemma_Model/example/
+# 运行时报告（包括迁移后的历史报告）
+runtime/reports/
 
 #vscode配置文件
 .vscode/
@@ -46,9 +42,62 @@ backend/three_class/best_model.pt
 # .idea
 .idea/
 
-# Local test/cache artifacts
-.pytest_cache/
+# ==============================
+# Large AI model files
+# ==============================
+*.safetensors
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.state
 
-# DINOv3 model assets are too large for ordinary Git. Keep source as a submodule.
-dinov3/*.pth
+# Training arrays and caches
+*.npy
+*.npz
+
+# Large model directories
+MedGemma_Model/
+palette/weights/
 dinov3/ckpt/
+
+# Training outputs and caches
+outputs/
+cache/
+checkpoints/
+runs/
+
+# Local datasets
+data/
+dataset/
+datasets/
+uploads/
+patients/
+dicom/
+nifti/
+
+# Medical images
+*.dcm
+*.nii
+*.nii.gz
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+
+# IDE
+.idea/
+.vscode/

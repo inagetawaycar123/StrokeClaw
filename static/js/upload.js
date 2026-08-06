@@ -195,6 +195,10 @@ function processFiles() {
     if (cbvFile) formData.append('cbv_file', cbvFile);
     if (tmaxFile) formData.append('tmax_file', tmaxFile);
     formData.append('patient_id', patientId);
+    const storedMrsClinicalRecord = localStorage.getItem(`mrs_clinical_record_${patientId}`);
+    if (storedMrsClinicalRecord) {
+        formData.append('mrs_clinical_record', storedMrsClinicalRecord);
+    }
 
     const modelType = document.getElementById('modelSelect')?.value || 'mrdpm';
     formData.append('model_type', modelType);
@@ -235,8 +239,8 @@ function processFiles() {
             if (runInfoEl) {
                 runInfoEl.style.display = 'block';
                 runInfoEl.textContent = data.agent_run_id
-                    ? `上传成功，正在生成临床任务 DAG（run_id=${data.agent_run_id}）...`
-                    : '上传成功，正在进入临床任务 DAG 审阅页...';
+                    ? `上传成功，正在进入临床 DAG 审批页（run_id=${data.agent_run_id}，尚未执行）...`
+                    : '上传成功，正在进入临床 DAG 审批页；审批前不会启动模型...';
             }
             if (data.agent_run_id) {
                 localStorage.setItem(`latest_agent_run_${data.file_id}`, data.agent_run_id);
@@ -262,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadInfo = document.querySelector('.upload-info');
     if (uploadInfo && !uploadInfo.dataset.runtimeHint) {
         uploadInfo.dataset.runtimeHint = '1';
-        uploadInfo.innerHTML += '<br>上传成功后将先进入临床任务 DAG 审阅页；医生确认后才显示 Agent 与 Skill。';
+        uploadInfo.innerHTML += '<br>上传成功后将自动进入 StrokeClaw 运行等待页，查看多节点协作过程。';
     }
 
     const uploadModeSelect = document.getElementById('uploadModeSelect');

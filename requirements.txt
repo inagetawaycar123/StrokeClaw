@@ -1,7 +1,11 @@
 Flask
+accelerate==1.13.0
 nibabel
 numpy
 Pillow
+pypdf>=6.0.0
+PyYAML>=6.0.3
+safetensors==0.7.0
 matplotlib
 torch
 torchvision
@@ -11,6 +15,7 @@ tqdm>=4.60.0
 pandas
 tensorboardX>=1.14
 opencv-python
+openpyxl>=3.1.5
 clean-fid
 dropblock
 torchviz
@@ -29,3 +34,4 @@ dropblock
 torchviz
 pydot_ng
 einops
+transformers==5.3.0

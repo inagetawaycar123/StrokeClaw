@@ -1,3 +1,6 @@
+import json
+import os
+
 import backend.app as app_module
 
 
@@ -110,3 +113,31 @@ def test_report_tool_keeps_persisted_vessel_result_when_run_has_none(monkeypatch
     assert result["status"] == "completed"
     assert result["predicted_class"] == "Class_2_MEVO"
     assert result["confidence"] == 0.81
+
+
+def test_report_result_lookup_and_notes_sync_support_current_and_legacy_files(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("REPORT_RESULTS_DIR", str(tmp_path))
+    legacy_dir = tmp_path / "legacy_medgemma"
+    legacy_dir.mkdir()
+    legacy_path = legacy_dir / "medgemma_report_case-1_20260101_000000.json"
+    current_path = tmp_path / "baichuan_report_case-1_20260102_000000.json"
+    legacy_path.write_text(json.dumps({"report_payload": {}}), encoding="utf-8")
+    current_path.write_text(json.dumps({"report_payload": {}}), encoding="utf-8")
+    os.utime(legacy_path, (1, 1))
+    os.utime(current_path, (2, 2))
+
+    assert app_module._latest_result_json_for_file("case-1") == str(current_path)
+
+    sync = app_module._sync_notes_to_result_json(
+        file_id="case-1",
+        patient_id=1,
+        notes_html="<p>复核完成</p>",
+        saved_at="2026-07-28T00:00:00Z",
+    )
+    assert set(sync["updated_files"]) == {str(legacy_path), str(current_path)}
+    for path in (legacy_path, current_path):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert payload["doctor_notes"]["text"] == "复核完成"
+        assert payload["report_payload"]["doctor_notes"]["patient_id"] == 1

@@ -24,94 +24,6 @@ _PROCESSOR = None
 _MODEL_META: Dict[str, Any] = {}
 _MODEL_LOADED_AT: Optional[str] = None # AI辅助生成：GLM-5, 2026-04-05
 
-class MedGemmaModelAssetsError(RuntimeError):
-    """Raised when the local Hugging Face checkout only contains LFS pointers."""
-
-
-def _is_git_lfs_pointer(path: str) -> bool:
-    if not os.path.isfile(path) or os.path.getsize(path) > 2048:
-        return False
-    try:
-        with open(path, "rb") as handle:
-            return handle.read(200).startswith(
-                b"version https://git-lfs.github.com/spec/v1"
-            )
-    except OSError:
-        return False
-
-
-def validate_medgemma_assets(model_dir: str) -> Dict[str, Any]:
-    """Validate the files required by ``from_pretrained`` before model loading."""
-
-    resolved_dir = os.path.abspath(model_dir)
-    missing_files: List[str] = []
-    lfs_pointers: List[str] = []
-    index_path = os.path.join(resolved_dir, "model.safetensors.index.json")
-    single_weights = os.path.join(resolved_dir, "model.safetensors")
-
-    if os.path.isfile(index_path):
-        try:
-            with open(index_path, "r", encoding="utf-8") as handle:
-                index_payload = json.load(handle)
-            shard_names = sorted(
-                {
-                    str(value)
-                    for value in (index_payload.get("weight_map") or {}).values()
-                    if value
-                }
-            )
-            if not shard_names:
-                missing_files.append("model.safetensors.index.json（权重映射为空）")
-            for shard_name in shard_names:
-                shard_path = os.path.join(resolved_dir, shard_name)
-                if not os.path.isfile(shard_path):
-                    missing_files.append(shard_name)
-                elif _is_git_lfs_pointer(shard_path):
-                    lfs_pointers.append(shard_name)
-        except (OSError, ValueError, TypeError) as exc:
-            raise MedGemmaModelAssetsError(
-                f"MEDGEMMA_MODEL_ASSETS_MISSING: 无法读取模型索引：{exc}"
-            ) from exc
-    elif not os.path.isfile(single_weights):
-        missing_files.append("model.safetensors 或 model.safetensors.index.json")
-    elif _is_git_lfs_pointer(single_weights):
-        lfs_pointers.append("model.safetensors")
-
-    for metadata_name in ("config.json", "tokenizer_config.json"):
-        metadata_path = os.path.join(resolved_dir, metadata_name)
-        if not os.path.isfile(metadata_path):
-            missing_files.append(metadata_name)
-
-    usable_tokenizer_asset = False
-    for asset_name in ("tokenizer.json", "tokenizer.model"):
-        asset_path = os.path.join(resolved_dir, asset_name)
-        if os.path.isfile(asset_path):
-            if _is_git_lfs_pointer(asset_path):
-                lfs_pointers.append(asset_name)
-            else:
-                usable_tokenizer_asset = True
-    if not usable_tokenizer_asset and not lfs_pointers:
-        missing_files.append("tokenizer.json 或 tokenizer.model")
-
-    if missing_files or lfs_pointers:
-        details: List[str] = []
-        if missing_files:
-            details.append(f"缺少文件：{', '.join(missing_files)}")
-        if lfs_pointers:
-            details.append(f"尚未下载的 Git LFS 文件：{', '.join(lfs_pointers)}")
-        raise MedGemmaModelAssetsError(
-            "MEDGEMMA_MODEL_ASSETS_MISSING: MedGemma 本地模型不完整；"
-            + "；".join(details)
-            + "。请下载 google/medgemma-1.5-4b-it 的完整模型文件。"
-        )
-
-    return {
-        "model_dir": resolved_dir,
-        "index_path": index_path if os.path.isfile(index_path) else None,
-        "status": "ready",
-    }
-
-
 _BANNED_TOKENS = {
     "negative",
     "none",
@@ -280,7 +192,6 @@ def load_medgemma(
     global _MODEL, _PROCESSOR, _MODEL_META, _MODEL_LOADED_AT
 
     resolved_model_dir = os.path.abspath(model_dir or _medgemma_dir())
-    validate_medgemma_assets(resolved_model_dir)
     resolved_device = _resolve_device(device)
     resolved_dtype = _resolve_dtype(dtype, resolved_device) # AI辅助生成：GLM-5, 2026-04-12
 
@@ -1121,119 +1032,6 @@ def _quality_check_markdown(
     }
 
 
-def _build_model_unavailable_fallback(
-    structured_data: Dict[str, Any],
-    imaging_data: Dict[str, Any],
-    file_id: str,
-    output_format: str,
-    error_message: str,
-) -> Dict[str, Any]:
-    """Return a transparent, evidence-only report when MedGemma assets are absent."""
-
-    modalities = normalize_modalities((imaging_data or {}).get("available_modalities", []))
-    if not modalities:
-        modalities = infer_modalities_from_files(file_id)
-    _, combo = resolve_modality_combo(modalities)
-    hemisphere = parse_hemisphere(
-        (imaging_data or {}).get("hemisphere")
-        or (structured_data or {}).get("hemisphere")
-    )
-    core_volume, penumbra_volume, mismatch_ratio = _ctp_values(
-        structured_data or {}, imaging_data or {}
-    )
-    vessel_result = vessel_result_from_sources(structured_data or {})
-
-    known_results: List[str] = []
-    vessel_label = vessel_result.get("vessel_occlusion_class_result")
-    if vessel_label:
-        confidence = vessel_result.get("confidence")
-        confidence_text = ""
-        if isinstance(confidence, (int, float)) and not isinstance(confidence, bool):
-            confidence_text = f"，置信度 {float(confidence):.1%}"
-        known_results.append(f"血管闭塞三分类：{vessel_label}{confidence_text}。")
-    if core_volume is not None:
-        known_results.append(f"梗死核心体积：{core_volume} mL。")
-    if penumbra_volume is not None:
-        known_results.append(f"缺血半暗带体积：{penumbra_volume} mL。")
-    if mismatch_ratio is not None:
-        known_results.append(f"Mismatch ratio：{mismatch_ratio}。")
-    if not known_results:
-        known_results.append("当前仅保留流程中已完成的结构化字段，暂无可汇总的定量结论。")
-
-    warning = (
-        "MedGemma 模型文件未完整下载，本次未执行 MedGemma 影像语言模型推理；"
-        "以下内容仅汇总既有算法结果，必须由医生结合原始影像复核。"
-    )
-    markdown_lines = [
-        "# 卒中影像结构化报告（降级模式）",
-        "",
-        f"> {warning}",
-        "",
-        "## 已有结构化结果",
-        "",
-        *[f"- {item}" for item in known_results],
-        "",
-        "## 审阅要求",
-        "",
-        "- 未执行 MedGemma 对 NCCT/CTA 原始影像的语义解读。",
-        "- 不得将本降级报告作为独立诊断依据，需由医生完成最终审阅。",
-    ]
-    markdown = "\n".join(markdown_lines)
-    report_payload = {
-        "modalities": modalities,
-        "combo": combo,
-        "hemisphere": hemisphere,
-        "generation_mode": "structured_fallback",
-        "degraded_mode": True,
-        "model_status": {
-            "available": False,
-            "error_code": "MEDGEMMA_MODEL_ASSETS_MISSING",
-            "message": error_message,
-        },
-        "sections": {
-            "ncct": None,
-            "cta": [],
-            "ctp": {
-                "enabled": any(
-                    value is not None
-                    for value in (core_volume, penumbra_volume, mismatch_ratio)
-                ),
-                "core_infarct_volume": core_volume,
-                "penumbra_volume": penumbra_volume,
-                "mismatch_ratio": mismatch_ratio,
-            },
-        },
-        "summary_findings": known_results,
-        "risk_notice": [warning],
-        "vessel_occlusion_result": vessel_result,
-        "vessel_occlusion_status": vessel_result.get("status"),
-        "vessel_occlusion_class_result": vessel_label,
-        "vessel_occlusion_confidence": vessel_result.get("confidence"),
-        "quality_checks": {
-            "passed": False,
-            "issues": ["MedGemma model assets unavailable; structured fallback used"],
-        },
-    }
-
-    report_content = (
-        json.dumps(report_payload, ensure_ascii=False, indent=2)
-        if output_format == "json"
-        else markdown
-    )
-    _log(f"Structured fallback used for file_id={file_id}: {error_message}")
-    return {
-        "success": True,
-        "format": output_format,
-        "report": report_content,
-        "json_path": None,
-        "report_payload": report_payload,
-        "is_mock": True,
-        "warning": warning,
-        "degraded_mode": True,
-        "error_code": "MEDGEMMA_MODEL_ASSETS_MISSING",
-    }
-
-
 def generate_report_with_medgemma(
     structured_data: Dict[str, Any],
     imaging_data: Dict[str, Any],
@@ -1543,14 +1341,6 @@ def generate_report_with_medgemma(
             "json_path": json_path,
             "report_payload": report_payload,
         }
-    except MedGemmaModelAssetsError as exc:
-        return _build_model_unavailable_fallback(
-            structured_data=structured_data,
-            imaging_data=imaging_data,
-            file_id=file_id,
-            output_format=output_format,
-            error_message=str(exc),
-        )
     except Exception as exc:
         _log(f"Report generation failed: {exc}")
         return {"success": False, "error": str(exc), "format": output_format}

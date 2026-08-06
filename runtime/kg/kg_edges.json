@@ -1,0 +1,61 @@
+{
+  "version": "stroke-multi-kg-v1",
+  "edges": [
+    {"id": "e_g1", "source": "guideline_rapid_assessment", "target": "guideline_ivt_window", "type": "precedes", "label": "先完成资格评估", "weight": 0.9, "source_ids": ["src_china_csa_2023", "src_aha_2026"], "review_status": "review_required"},
+    {"id": "e_g2", "source": "guideline_rapid_assessment", "target": "guideline_evt_selection", "type": "precedes", "label": "进入血管内治疗筛选", "weight": 0.9, "source_ids": ["src_canada_2025"], "review_status": "review_required"},
+    {"id": "e_g3", "source": "guideline_evt_selection", "target": "guideline_transfer_path", "type": "triggers", "label": "可能触发转诊", "weight": 0.82, "source_ids": ["src_china_evt_2025", "src_canada_2025"], "review_status": "review_required"},
+    {"id": "e_g4", "source": "guideline_ivt_window", "target": "guideline_human_review", "type": "requires", "label": "需要医生确认", "weight": 0.96, "source_ids": ["src_china_ivt", "src_eso_ivt_2021"], "review_status": "review_required"},
+    {"id": "e_g5", "source": "guideline_evt_selection", "target": "guideline_human_review", "type": "requires", "label": "需要专科复核", "weight": 0.96, "source_ids": ["src_china_evt_2025"], "review_status": "review_required"},
+
+    {"id": "e_i1", "source": "imaging_ncct_hemorrhage", "target": "imaging_early_ischemia", "type": "differentiates", "label": "初步鉴别", "weight": 0.86, "source_ids": ["src_china_prevention_2021"], "review_status": "review_required"},
+    {"id": "e_i2", "source": "imaging_dense_vessel", "target": "imaging_multiphase_collateral", "type": "requires_confirmation", "label": "需血管成像确认", "weight": 0.85, "source_ids": ["src_canada_2025"], "review_status": "review_required"},
+    {"id": "e_i3", "source": "imaging_early_ischemia", "target": "imaging_aspects", "type": "scored_by", "label": "结构化评分", "weight": 0.82, "source_ids": ["src_canada_2025"], "review_status": "review_required"},
+    {"id": "e_i4", "source": "imaging_aspects", "target": "imaging_multiphase_collateral", "type": "complements", "label": "联合影像选择", "weight": 0.72, "source_ids": ["src_china_evt_2025", "src_canada_2025"], "review_status": "review_required"},
+
+    {"id": "e_v1", "source": "vessel_ica", "target": "vessel_m1", "type": "branches_to", "label": "前循环分支", "weight": 0.95, "source_ids": ["src_china_evt_2025"], "review_status": "review_required"},
+    {"id": "e_v2", "source": "vessel_m1", "target": "vessel_m2_mevo", "type": "branches_to", "label": "远端分支", "weight": 0.92, "source_ids": ["src_china_evt_2025"], "review_status": "review_required"},
+    {"id": "e_v3", "source": "vessel_ica", "target": "vessel_collateral", "type": "flow_modified_by", "label": "受侧支代偿影响", "weight": 0.78, "source_ids": ["src_canada_2025"], "review_status": "review_required"},
+    {"id": "e_v4", "source": "vessel_basilar", "target": "vessel_collateral", "type": "flow_modified_by", "label": "后循环代偿", "weight": 0.72, "source_ids": ["src_aha_2026"], "review_status": "review_required"},
+
+    {"id": "e_p1", "source": "perfusion_cbf", "target": "perfusion_core_penumbra", "type": "supports_estimate", "label": "参与组织估计", "weight": 0.82, "source_ids": ["src_canada_2025"], "review_status": "review_required"},
+    {"id": "e_p2", "source": "perfusion_cbv", "target": "perfusion_core_penumbra", "type": "supports_estimate", "label": "联合组织评估", "weight": 0.7, "source_ids": ["src_china_prevention_2021"], "review_status": "review_required"},
+    {"id": "e_p3", "source": "perfusion_tmax", "target": "perfusion_core_penumbra", "type": "supports_estimate", "label": "提示低灌注组织", "weight": 0.88, "source_ids": ["src_canada_2025"], "review_status": "review_required"},
+    {"id": "e_p4", "source": "perfusion_core_penumbra", "target": "perfusion_mismatch", "type": "defines", "label": "形成不匹配关系", "weight": 0.94, "source_ids": ["src_aha_2026", "src_eso_ivt_2021"], "review_status": "review_required"},
+
+    {"id": "e_r1", "source": "risk_intracranial_hemorrhage", "target": "risk_anticoagulant", "type": "risk_modified_by", "label": "用药影响风险", "weight": 0.86, "source_ids": ["src_eso_ivt_2021"], "review_status": "review_required"},
+    {"id": "e_r2", "source": "risk_blood_pressure", "target": "risk_intracranial_hemorrhage", "type": "risk_modified_by", "label": "影响出血风险", "weight": 0.82, "source_ids": ["src_aha_2026"], "review_status": "review_required"},
+    {"id": "e_r3", "source": "risk_recent_surgery", "target": "risk_intracranial_hemorrhage", "type": "requires_review", "label": "需个体化评估", "weight": 0.84, "source_ids": ["src_china_ivt"], "review_status": "review_required"},
+    {"id": "e_r4", "source": "risk_glucose_and_mimic", "target": "risk_intracranial_hemorrhage", "type": "differential_check", "label": "先完成鉴别", "weight": 0.68, "source_ids": ["src_china_csa_2023"], "review_status": "review_required"},
+
+    {"id": "e_w1", "source": "workflow_case_intake", "target": "workflow_modality_quality", "type": "precedes", "label": "提交影像与问题", "weight": 1.0, "source_ids": ["src_strokeclaw_pipeline"], "review_status": "approved"},
+    {"id": "e_w2", "source": "workflow_modality_quality", "target": "workflow_model_analysis", "type": "enables", "label": "确定可执行模型", "weight": 1.0, "source_ids": ["src_strokeclaw_pipeline"], "review_status": "approved"},
+    {"id": "e_w3", "source": "workflow_model_analysis", "target": "workflow_validation", "type": "feeds", "label": "提交结果校验", "weight": 1.0, "source_ids": ["src_strokeclaw_pipeline"], "review_status": "approved"},
+    {"id": "e_w4", "source": "workflow_validation", "target": "workflow_report_review", "type": "handoffs_to", "label": "汇总并交医生", "weight": 1.0, "source_ids": ["src_strokeclaw_pipeline", "src_strokeclaw_report"], "review_status": "approved"},
+
+    {"id": "e_m1", "source": "model_ncct_three_class", "target": "model_confidence_limit", "type": "outputs_with", "label": "输出置信度", "weight": 0.95, "source_ids": ["src_strokeclaw_models"], "review_status": "approved"},
+    {"id": "e_m2", "source": "model_vessel_three_class", "target": "model_confidence_limit", "type": "outputs_with", "label": "输出置信度", "weight": 0.95, "source_ids": ["src_strokeclaw_models"], "review_status": "approved"},
+    {"id": "e_m3", "source": "model_pseudo_ctp", "target": "model_confidence_limit", "type": "limited_by", "label": "受输入与模型限制", "weight": 0.9, "source_ids": ["src_strokeclaw_models"], "review_status": "approved"},
+    {"id": "e_m4", "source": "model_confidence_limit", "target": "model_human_boundary", "type": "requires", "label": "低置信度需复核", "weight": 1.0, "source_ids": ["src_strokeclaw_pipeline"], "review_status": "approved"},
+
+    {"id": "e_e1", "source": "report_structured_finding", "target": "report_claim", "type": "supports", "label": "支持报告结论", "weight": 0.92, "source_ids": ["src_strokeclaw_report"], "review_status": "approved"},
+    {"id": "e_e2", "source": "report_evidence_reference", "target": "report_claim", "type": "supports", "label": "提供外部依据", "weight": 0.94, "source_ids": ["src_strokeclaw_report"], "review_status": "approved"},
+    {"id": "e_e3", "source": "report_claim", "target": "report_review_status", "type": "has_status", "label": "标记审核状态", "weight": 1.0, "source_ids": ["src_strokeclaw_report"], "review_status": "approved"},
+    {"id": "e_e4", "source": "report_review_status", "target": "report_doctor_confirmation", "type": "requires", "label": "医生确认后归档", "weight": 1.0, "source_ids": ["src_strokeclaw_pipeline"], "review_status": "approved"},
+
+    {"id": "e_c1", "source": "consistency_ncct_cta", "target": "consistency_vessel_perfusion", "type": "feeds", "label": "进入跨模态校验", "weight": 0.86, "source_ids": ["src_strokeclaw_pipeline"], "review_status": "review_required"},
+    {"id": "e_c2", "source": "consistency_vessel_perfusion", "target": "consistency_quantitative", "type": "requires", "label": "核对定量结果", "weight": 0.84, "source_ids": ["src_strokeclaw_pipeline"], "review_status": "review_required"},
+    {"id": "e_c3", "source": "consistency_hemorrhage_treatment", "target": "consistency_evidence_coverage", "type": "requires_review", "label": "高风险证据复核", "weight": 1.0, "source_ids": ["src_china_ivt", "src_strokeclaw_pipeline"], "review_status": "review_required"},
+    {"id": "e_c4", "source": "consistency_quantitative", "target": "consistency_evidence_coverage", "type": "downgrades", "label": "异常时降低置信度", "weight": 0.9, "source_ids": ["src_strokeclaw_report"], "review_status": "review_required"},
+
+    {"id": "e_x1", "source": "imaging_ncct_hemorrhage", "target": "risk_intracranial_hemorrhage", "type": "triggers", "label": "触发出血风险", "weight": 0.98, "source_ids": ["src_china_ivt"], "review_status": "review_required"},
+    {"id": "e_x2", "source": "imaging_dense_vessel", "target": "vessel_m1", "type": "suggests", "label": "提示近端闭塞", "weight": 0.72, "source_ids": ["src_aha_2019_local"], "review_status": "review_required"},
+    {"id": "e_x3", "source": "vessel_m1", "target": "guideline_evt_selection", "type": "supports", "label": "进入取栓筛选", "weight": 0.94, "source_ids": ["src_canada_2025"], "review_status": "review_required"},
+    {"id": "e_x4", "source": "perfusion_mismatch", "target": "guideline_evt_selection", "type": "supports", "label": "支持组织窗评估", "weight": 0.86, "source_ids": ["src_aha_2026"], "review_status": "review_required"},
+    {"id": "e_x5", "source": "model_ncct_three_class", "target": "imaging_ncct_hemorrhage", "type": "outputs", "label": "模型提示", "weight": 0.76, "source_ids": ["src_strokeclaw_models"], "review_status": "approved"},
+    {"id": "e_x6", "source": "model_vessel_three_class", "target": "vessel_m1", "type": "outputs", "label": "模型提示 LVO", "weight": 0.76, "source_ids": ["src_strokeclaw_models"], "review_status": "approved"},
+    {"id": "e_x7", "source": "model_pseudo_ctp", "target": "perfusion_tmax", "type": "outputs", "label": "生成参数图", "weight": 0.72, "source_ids": ["src_strokeclaw_models"], "review_status": "approved"},
+    {"id": "e_x8", "source": "consistency_hemorrhage_treatment", "target": "guideline_human_review", "type": "triggers", "label": "触发医生复核", "weight": 1.0, "source_ids": ["src_strokeclaw_pipeline"], "review_status": "review_required"},
+    {"id": "e_x9", "source": "consistency_evidence_coverage", "target": "report_review_status", "type": "sets", "label": "设置待审核", "weight": 1.0, "source_ids": ["src_strokeclaw_report"], "review_status": "approved"},
+    {"id": "e_x10", "source": "workflow_validation", "target": "consistency_evidence_coverage", "type": "executes", "label": "执行证据覆盖检查", "weight": 0.94, "source_ids": ["src_strokeclaw_pipeline"], "review_status": "approved"}
+  ]
+}

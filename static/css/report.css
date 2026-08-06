@@ -304,6 +304,328 @@
     color: #ff6b6b;
 }
 
+/* ==================== 结构化临床报告 v2 ==================== */
+.structured-report-v2 {
+    --report-surface: #111827;
+    --report-surface-soft: #172033;
+    --report-border: #2a364b;
+    --report-muted: #9aabc1;
+    --report-text: #e8eef7;
+    display: grid;
+    gap: 16px;
+    color: var(--report-text);
+}
+
+.report-hero,
+.report-section,
+.clinical-disclaimer,
+.legacy-banner,
+.context-warning,
+.report-source-meta {
+    border: 1px solid var(--report-border, #2a364b);
+    border-radius: 10px;
+    background: var(--report-surface, #111827);
+}
+
+.report-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 24px;
+    padding: 20px;
+    border-left: 4px solid #6b7f99;
+}
+
+.report-hero.risk-high { border-left-color: #c96e6e; }
+.report-hero.risk-medium { border-left-color: #c69457; }
+.report-hero.risk-low { border-left-color: #5c9877; }
+
+.report-hero h2 {
+    margin: 5px 0 8px;
+    font-size: 21px;
+    line-height: 1.4;
+}
+
+.report-hero p {
+    margin: 0;
+    color: #bdc9d9;
+    line-height: 1.7;
+}
+
+.eyebrow {
+    color: #8498b3;
+    font-size: 10px;
+    letter-spacing: .12em;
+}
+
+.hero-status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(88px, 1fr));
+    gap: 8px;
+}
+
+.hero-status-grid > div {
+    min-width: 88px;
+    padding: 10px;
+    border: 1px solid var(--report-border);
+    border-radius: 8px;
+    background: #0d1422;
+}
+
+.hero-status-grid span,
+.hero-status-grid strong {
+    display: block;
+}
+
+.hero-status-grid span {
+    margin-bottom: 5px;
+    color: var(--report-muted);
+    font-size: 11px;
+}
+
+.report-section {
+    padding: 18px;
+}
+
+.section-heading,
+.claim-heading,
+.finding-heading,
+.issue-title,
+.evidence-head,
+.review-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.section-heading {
+    margin-bottom: 14px;
+}
+
+.section-heading h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.section-count {
+    color: var(--report-muted);
+    font-size: 12px;
+}
+
+.metric-grid,
+.finding-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
+}
+
+.metric-card,
+.finding-card,
+.claim-card,
+.issue-card,
+.evidence-item {
+    border: 1px solid var(--report-border);
+    border-radius: 8px;
+    background: var(--report-surface-soft);
+}
+
+.metric-card {
+    display: grid;
+    gap: 7px;
+    min-height: 96px;
+    padding: 13px;
+}
+
+.metric-card.missing {
+    border-style: dashed;
+    background: #151a23;
+}
+
+.metric-name,
+.metric-card small,
+.evidence-meta,
+.claim-review {
+    color: var(--report-muted);
+    font-size: 11px;
+}
+
+.metric-value {
+    color: #f6f9fc;
+    font-size: 23px;
+    line-height: 1.1;
+}
+
+.finding-card,
+.claim-card,
+.issue-card {
+    padding: 14px;
+}
+
+.finding-card p,
+.issue-card p,
+.claim-card p {
+    margin: 8px 0 0;
+    color: #b7c3d3;
+    line-height: 1.6;
+}
+
+.finding-value {
+    margin-top: 10px;
+    font-size: 18px;
+}
+
+.finding-limit,
+.limitation-list {
+    color: #d8ac73 !important;
+}
+
+.report-status,
+.source-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border: 1px solid #526076;
+    border-radius: 999px;
+    color: #c7d2df;
+    background: #202b3a;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.report-status.ok {
+    border-color: #497760;
+    color: #9ad0b2;
+    background: #173026;
+}
+
+.report-status.attention {
+    border-color: #806844;
+    color: #ddbd88;
+    background: #342a1b;
+}
+
+.report-status.danger {
+    border-color: #875454;
+    color: #e4a2a2;
+    background: #371f22;
+}
+
+.report-status.unknown {
+    border-color: #536071;
+    color: #a8b3c1;
+    background: #222a35;
+}
+
+.rule-table-wrap {
+    overflow-x: auto;
+}
+
+.rule-table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+}
+
+.rule-table th,
+.rule-table td {
+    padding: 11px 10px;
+    border-bottom: 1px solid var(--report-border);
+    text-align: left;
+    vertical-align: top;
+}
+
+.rule-table th {
+    color: var(--report-muted);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.rule-table td {
+    font-size: 12px;
+}
+
+.rule-table td small {
+    display: block;
+    margin-top: 4px;
+    color: var(--report-muted);
+}
+
+.claim-list,
+.issue-list,
+.evidence-list {
+    display: grid;
+    gap: 10px;
+}
+
+.evidence-details {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--report-border);
+}
+
+.evidence-details summary,
+.legacy-text-details summary {
+    cursor: pointer;
+    color: #8eb6e8;
+}
+
+.evidence-list {
+    margin-top: 10px;
+}
+
+.evidence-item {
+    padding: 11px;
+    background: #111a29;
+}
+
+.evidence-item strong,
+.evidence-value,
+.evidence-meta {
+    display: block;
+    margin-top: 6px;
+}
+
+.source-tag {
+    border-color: #4d6285;
+    color: #a8c4ec;
+    background: #182840;
+}
+
+.issue-section.danger { border-color: #654145; }
+.issue-section.unknown { border-color: #4b5665; }
+.issue-section.attention { border-color: #66583f; }
+
+.ai-supplement-note,
+.legacy-banner,
+.context-warning,
+.report-source-meta,
+.clinical-disclaimer {
+    padding: 11px 14px;
+    color: #b8c5d5;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.ai-supplement-note {
+    margin-bottom: 8px;
+    border-left: 3px solid #697fab;
+    background: #18243a;
+}
+
+.review-summary {
+    flex-wrap: wrap;
+}
+
+.review-link {
+    text-decoration: none;
+}
+
+.clinical-disclaimer {
+    border-color: #64563e;
+    color: #d4ba8e;
+    background: #282318;
+}
+
 /* 旋转动画 */
 @keyframes spin {
     0% { transform: rotate(0deg); }
@@ -342,5 +664,76 @@
 
     .field-label {
         min-width: auto;
+    }
+
+    .report-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-status-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .metric-grid,
+    .finding-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .metric-value {
+        font-size: 19px;
+    }
+}
+
+@media (max-width: 480px) {
+    .metric-grid,
+    .finding-grid,
+    .hero-status-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media print {
+    body {
+        background: #fff !important;
+        color: #111 !important;
+    }
+
+    .report-actions,
+    .review-link,
+    .doctor-notes-module {
+        display: none !important;
+    }
+
+    .report-hero,
+    .report-section,
+    .clinical-disclaimer,
+    .metric-card,
+    .finding-card,
+    .claim-card,
+    .issue-card,
+    .evidence-item {
+        break-inside: avoid;
+        border-color: #c9ced6 !important;
+        background: #fff !important;
+        color: #111 !important;
+        box-shadow: none !important;
+    }
+
+    .report-hero p,
+    .finding-card p,
+    .issue-card p,
+    .metric-name,
+    .metric-card small,
+    .evidence-meta,
+    .claim-review {
+        color: #333 !important;
+    }
+
+    details {
+        display: block;
+    }
+
+    details > :not(summary) {
+        display: block !important;
     }
 }

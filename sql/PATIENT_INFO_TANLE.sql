@@ -17,6 +17,8 @@ CREATE TABLE patient_info (
   admission_time timestamp with time zone,
   surgery_time text,
   admission_nihss int check(admission_nihss >=0 and admission_nihss <=42),
+  nihss_24h int check(nihss_24h >=0 and nihss_24h <=42),
+  onset_to_ct_hours FLOAT8 check(onset_to_ct_hours >=0),
   
   -- AI 置信度与体积分析字段
   core_infarct_volume FLOAT8,

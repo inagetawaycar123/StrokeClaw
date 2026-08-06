@@ -1,0 +1,72 @@
+schema_version: mrs-cv-training-1.0
+cohort_schema_version: mrs-v0.2
+onset_to_ct_schema_version: mrs-v0.2
+output_dir: outputs/mrs_training
+
+data:
+  manifest: outputs/mrs_patient_manifest.csv
+  cohort_summary: outputs/mrs_v0_cohort_summary.json
+  image_root: data/mrs_images
+  expected_patients: 315
+  expected_labels:
+    "0": 201
+    "1": 114
+
+cross_validation:
+  outer_folds: 5
+  fold_assignment_seed: 20260806
+  inner_validation_fraction: 0.20
+  seeds: [20260806, 20260807, 20260808]
+  sensitivity_seeds: [20260806]
+
+image:
+  image_size: [128, 128]
+  max_ncct_files: null
+  internal_channel_index: 0
+  internal_channel_interpretation: NCCT
+  deterministic_resize_cache: true
+
+model:
+  embedding_dim: 64
+  attention_dim: 32
+  base_channels: 16
+  fusion_dim: 64
+  dropout: 0.20
+
+training:
+  device: auto
+  max_epochs: 100
+  early_stopping_patience: 12
+  clinical_batch_size: 32
+  image_batch_size: 4
+  learning_rate:
+    clinical_only: 0.001
+    ncct_only: 0.0003
+    ncct_clinical: 0.0003
+  minimum_learning_rate: 0.000001
+  weight_decay: 0.0001
+  gradient_clip_norm: 1.0
+  mixed_precision: true
+  num_workers: 0
+  pin_memory: false
+  auc_min_delta: 0.0001
+  scheduler_factor: 0.5
+  scheduler_patience: 4
+  use_pos_weight: true
+  weighted_random_sampler: false
+
+evaluation:
+  ece_bins: 10
+  threshold_selection: validation_youden
+  calibration: validation_temperature_scaling
+
+sensitivity_analysis:
+  exclusion: onset_time_unwitnessed_or_wakeup
+  model_modes: [baseline, update_24h]
+  models: [clinical_only, ncct_clinical]
+
+safety:
+  artifact_role: CV_EVAL_ONLY
+  production_approved: false
+  is_real_inference: false
+  online_loading_permitted: false

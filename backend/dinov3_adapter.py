@@ -21,6 +21,11 @@ import torch.nn as nn
 from PIL import Image
 from torchvision import transforms
 
+try:
+    from torch._dynamo import config as _TORCH_DYNAMO_CONFIG
+except (AttributeError, ImportError):
+    _TORCH_DYNAMO_CONFIG = None
+
 
 DEFAULT_CLASS_NAMES: Tuple[str, ...] = (
     "Class_0",
@@ -42,34 +47,64 @@ def _ensure_dynamo_config_compat(config_module=None) -> None:
     """
 
     if config_module is None:
-        try:
-            config_module = torch._dynamo.config
-        except (AttributeError, ImportError):
+        # Resolve this before any DINO import hook is installed.  Torch exposes
+        # ``_dynamo.config`` lazily, and resolving it here otherwise lets an
+        # importlib hook intended for ``dinov3.hub.backbones`` intercept it.
+        config_module = _TORCH_DYNAMO_CONFIG
+        if config_module is None:
             return
-
-    try:
-        getattr(config_module, "accumulated_cache_size_limit")
-        return
-    except AttributeError:
-        pass
 
     key = "accumulated_cache_size_limit"
     default_value = 1024
     config = getattr(config_module, "_config", None)
+    # Modern PyTorch implements this setting as an alias. Calling getattr on
+    # the alias performs another importlib lookup, so check the installed entry
+    # directly before any DINO-specific import hook is active.
+    if isinstance(config, dict) and key in config:
+        entry = config[key]
+        if not bool(getattr(entry, "hide", False)):
+            return
+
+    try:
+        getattr(config_module, key)
+        return
+    except AttributeError:
+        pass
+
     defaults = getattr(config_module, "_default", None)
     allowed_keys = getattr(config_module, "_allowed_keys", None)
 
-    # PyTorch 2.1 installs a strict ConfigModule backed by these containers.
+    # PyTorch 2.1 stores plain values in ``_config``.  PyTorch 2.10 switched
+    # that container to private ``_ConfigEntry`` objects; inserting an int in
+    # the newer container corrupts ConfigModule and makes ``setattr`` fail.
     if isinstance(config, dict):
-        config[key] = default_value
+        sample_entry = next(iter(config.values()), None)
+        if sample_entry is not None and hasattr(sample_entry, "alias"):
+            try:
+                from torch.utils._config_module import _Config, _ConfigEntry
+
+                config[key] = _ConfigEntry(
+                    _Config(default=default_value, value_type=int)
+                )
+            except (ImportError, TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    "Unable to register DINOv3's PyTorch Dynamo compatibility "
+                    "setting for this PyTorch version"
+                ) from exc
+        else:
+            config[key] = default_value
     if isinstance(defaults, dict):
         defaults[key] = default_value
     if isinstance(allowed_keys, set):
         allowed_keys.add(key)
 
     try:
-        setattr(config_module, key, default_value)
-    except AttributeError as exc:
+        # Modern ConfigModule entries already expose their default after the
+        # registration above.  The assignment remains necessary for the
+        # PyTorch 2.1-style strict module (and its compatibility test double).
+        if not hasattr(config_module, key):
+            setattr(config_module, key, default_value)
+    except (AttributeError, TypeError) as exc:
         raise RuntimeError(
             "Unable to register DINOv3's PyTorch Dynamo compatibility setting"
         ) from exc

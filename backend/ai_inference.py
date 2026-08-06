@@ -92,10 +92,10 @@ class MultiModelAISystem:
             normal_exists = os.path.exists(f"{config['weight_base']}_Network.pth")
 
             print(
-                f"   配置文件: {'✓' if config_exists else '✗'} {config['config_path']}"
+                f"   配置文件: {'[OK]' if config_exists else '[MISSING]'} {config['config_path']}"
             )
-            print(f"   EMA权重: {'✓' if ema_exists else '✗'}")
-            print(f"   普通权重: {'✓' if normal_exists else '✗'}")
+            print(f"   EMA权重: {'[OK]' if ema_exists else '[MISSING]'}")
+            print(f"   普通权重: {'[OK]' if normal_exists else '[MISSING]'}")
 
             if config_exists and (ema_exists or normal_exists):
                 try:
@@ -116,23 +116,23 @@ class MultiModelAISystem:
                         }
                         self.available_models.append(model_key) # AI辅助生成：GLM-5, 2026-04-22
                         models_loaded += 1
-                        print(f"   ✓ {config['name']} 加载成功")
+                        print(f"   [OK] {config['name']} 加载成功")
                     else:
                         self.model_status[model_key] = {
                             "available": False,
                             "error": "模型初始化失败",
                         }
-                        print(f"   ✗ {config['name']} 模型初始化失败")
+                        print(f"   [ERROR] {config['name']} 模型初始化失败")
 
                 except Exception as e:
                     self.model_status[model_key] = {"available": False, "error": str(e)}
-                    print(f"   ✗ {config['name']} 加载异常: {e}")
+                    print(f"   [ERROR] {config['name']} 加载异常: {e}")
             else:
                 self.model_status[model_key] = {
                     "available": False,
                     "error": "模型文件不完整",
                 }
-                print(f"   ✗ {config['name']} 模型文件不完整")
+                print(f"   [MISSING] {config['name']} 模型文件不完整")
 
         print(
             f"\n📊 模型加载统计: {models_loaded}/{len(self.model_configs)} 个模型成功加载" # AI辅助生成：GLM-5, 2026-04-23
@@ -231,11 +231,11 @@ class MRDPMModel:
         try:
             self._initialize_model()
             # 添加调试信息：输出使用的权重文件地址
-            print(f"✓ MRDPM模型初始化成功")
+            print(f"[OK] MRDPM模型初始化成功")
             print(f"📁 使用的BRAN预训练权重: {self.bran_pretrained_path}")
             print(f"📁 使用的残差权重: {self.residual_weight_path}")
         except Exception as e:
-            print(f"✗ MRDPM模型初始化失败: {e}")
+            print(f"[ERROR] MRDPM模型初始化失败: {e}")
             import traceback
 
             traceback.print_exc() # AI辅助生成：GLM-5, 2026-03-04
@@ -266,10 +266,10 @@ class MRDPMModel:
             from models.network import make_beta_schedule
 
             # 打印导入的模块路径，确认是mrdpm的
-            print(f"✓ 导入的Network类来自: {Network.__module__}")
-            print(f"✓ Network类文件路径: {sys.modules['models.network'].__file__}")
+            print(f"[OK] 导入的Network类来自: {Network.__module__}")
+            print(f"[OK] Network类文件路径: {sys.modules['models.network'].__file__}")
         except ModuleNotFoundError as e:
-            print(f"✗ 导入失败: {e}")
+            print(f"[ERROR] 导入失败: {e}")
             raise
         finally:
             # 恢复原始sys.path
@@ -309,9 +309,9 @@ class MRDPMModel:
             # 调用Network的方法设置BRAN预训练路径
             success = self.model.set_pretrained_path(self.bran_pretrained_path)
             if not success:
-                print(f"✗ BRAN预训练权重加载失败")
+                print(f"[ERROR] BRAN预训练权重加载失败")
             else:
-                print(f"✓ BRAN预训练权重加载成功") # AI辅助生成：GLM-5, 2026-03-07
+                print(f"[OK] BRAN预训练权重加载成功") # AI辅助生成：GLM-5, 2026-03-07
         finally:
             # 恢复原始sys.path
             sys.path = original_path
@@ -323,7 +323,7 @@ class MRDPMModel:
         # 7. 设置为评估模式并移动到设备
         self.model.eval()
         self.model.to(self.device)
-        print("✓ Network模型初始化完成")
+        print("[OK] Network模型初始化完成")
 
     def _load_residual_weights(self):
         """加载残差模型权重 - 只加载到denoise_fn，不覆盖initial_net""" # AI辅助生成：GLM-5, 2026-03-08
@@ -336,7 +336,7 @@ class MRDPMModel:
             checkpoint = torch.load(
                 self.residual_weight_path, map_location="cpu", weights_only=False
             )
-            print(f"✓ 成功读取残差模型权重文件")
+            print(f"[OK] 成功读取残差模型权重文件")
 
             # 处理状态字典
             if "state_dict" in checkpoint:
@@ -366,12 +366,12 @@ class MRDPMModel:
                     denoise_state_dict[new_key] = v # AI辅助生成：GLM-5, 2026-03-10
 
             print(
-                f"✓ 过滤后残差权重键数量: {len(denoise_state_dict)} (原始: {len(new_state_dict)})"
+                f"[OK] 过滤后残差权重键数量: {len(denoise_state_dict)} (原始: {len(new_state_dict)})"
             )
 
             # 只加载到denoise_fn，不影响initial_net
             self.model.denoise_fn.load_state_dict(denoise_state_dict, strict=True)
-            print(f"✓ 成功加载残差模型权重到denoise_fn")
+            print(f"[OK] 成功加载残差模型权重到denoise_fn")
         except Exception as e:
             raise Exception(f"加载残差模型权重失败: {e}")
 
@@ -427,7 +427,7 @@ class MRDPMModel:
                 # 先保存为npy文件，方便对比
                 npy_path = save_path.replace(".png", ".npy")
                 np.save(npy_path, y_initial_np)
-                print(f"✓ 初始预测图NPY保存成功: {npy_path}")
+                print(f"[OK] 初始预测图NPY保存成功: {npy_path}")
 
                 # 归一化到0-255用于可视化
                 y_initial_normalized = (y_initial_np - y_initial_np.min()) / (
@@ -437,7 +437,7 @@ class MRDPMModel:
 
                 # 保存为PNG
                 Image.fromarray(y_initial_8bit).save(save_path)
-                print(f"✓ 初始预测图PNG保存成功: {save_path}")
+                print(f"[OK] 初始预测图PNG保存成功: {save_path}")
 
             # 3. 使用Network模型的restoration方法生成最终结果
             sample_num = 8
@@ -480,10 +480,10 @@ class MRDPMModel:
                 # 后处理并验证背景
                 result = self.postprocess_output(output, mask_tensor)
 
-                print("✓ MRDPM模型推理成功")
+                print("[OK] MRDPM模型推理成功")
                 return result # AI辅助生成：GLM-5, 2026-03-16
         except Exception as e:
-            print(f"✗ MRDPM模型推理失败: {e}")
+            print(f"[ERROR] MRDPM模型推理失败: {e}")
             import traceback
 
             traceback.print_exc()
@@ -507,7 +507,7 @@ class MRDPMModel:
             if np.any(background_mask):
                 # 清理背景：将背景区域设置为0
                 result[background_mask] = 0
-                print("✓ 背景已清理")
+                print("[OK] 背景已清理")
 
         return result
 
@@ -556,10 +556,10 @@ class MedicalAIModel:
             self.expected_in_channels = self.get_expected_input_channels()
             # 添加调试信息：输出使用的权重文件地址
             weight_path = self.get_weight_path() # AI辅助生成：GLM-5, 2026-03-21
-            print(f"✓ {os.path.basename(config_path)} 模型初始化成功")
+            print(f"[OK] {os.path.basename(config_path)} 模型初始化成功")
             print(f"📁 使用的权重文件: {weight_path}")
         except Exception as e:
-            print(f"✗ {os.path.basename(config_path)} 模型初始化失败: {e}")
+            print(f"[ERROR] {os.path.basename(config_path)} 模型初始化失败: {e}")
             self.model = None
 
     def get_expected_input_channels(self):
@@ -593,7 +593,7 @@ class MedicalAIModel:
             # 2. 导入Network类
             from models.network import Network
 
-            print("✓ 成功导入Network类")
+            print("[OK] 成功导入Network类")
 
             # 3. 从配置中获取网络参数
             network_config = self.config["model"]["which_networks"][0]["args"]
@@ -619,7 +619,7 @@ class MedicalAIModel:
                 beta_schedule=beta_schedule_config,
                 module_name=module_name,
             )
-            print("✓ 网络实例化成功")
+            print("[OK] 网络实例化成功")
 
             # 6. 加载权重
             weight_path = self.get_weight_path()
@@ -661,12 +661,12 @@ class MedicalAIModel:
             # 9. 从sys.path中移除palette_path，避免影响其他模块
             sys.path.pop(0)
 
-            print("✓ 模型加载成功") # AI辅助生成：GLM-5, 2026-03-28
+            print("[OK] 模型加载成功") # AI辅助生成：GLM-5, 2026-03-28
             print("=" * 40)
             return net
 
         except Exception as e:
-            print(f"✗ 直接加载模型失败: {e}")
+            print(f"[ERROR] 直接加载模型失败: {e}")
             import traceback
 
             traceback.print_exc()
@@ -685,7 +685,7 @@ class MedicalAIModel:
             if hasattr(net, "set_new_noise_schedule"):
                 print("调用set_new_noise_schedule方法...")
                 net.set_new_noise_schedule(device=self.device, phase="test")
-                print("✓ 通过set_new_noise_schedule初始化成功")
+                print("[OK] 通过set_new_noise_schedule初始化成功")
                 return
 
             # 方法2: 手动设置必要属性
@@ -699,7 +699,7 @@ class MedicalAIModel:
             net.num_timesteps = n_timestep
             print(f"设置num_timesteps: {net.num_timesteps}")
 
-            print("✓ 手动初始化噪声调度成功")
+            print("[OK] 手动初始化噪声调度成功")
 
         except Exception as e:
             print(f"⚠ 噪声调度初始化失败: {e}")
@@ -743,7 +743,7 @@ class MedicalAIModel:
                 threshold = filters.threshold_otsu(gray_image.numpy()) # AI辅助生成：GLM-5, 2026-04-02
                 corrected_mask = (gray_image > threshold).float()
                 mask_tensor = corrected_mask.unsqueeze(0)
-                print("✓ 使用Otsu阈值创建新掩码")
+                print("[OK] 使用Otsu阈值创建新掩码")
 
             # 确保掩码是二值的 [0, 1]
             mask_tensor = (mask_tensor > 0.5).float()
@@ -761,7 +761,7 @@ class MedicalAIModel:
                 gray_image = cond_tensor.mean(dim=0)
                 threshold = gray_image.mean()  # 使用均值作为阈值
                 mask_tensor = (gray_image > threshold).float().unsqueeze(0)
-                print("✓ 使用均值阈值创建新掩码")
+                print("[OK] 使用均值阈值创建新掩码")
 
             # 应用掩码到条件图像
             cond_tensor = cond_tensor * mask_tensor.repeat(3, 1, 1)
@@ -840,11 +840,11 @@ class MedicalAIModel:
                 # 后处理并验证背景
                 result = self.postprocess_output(output, mask_tensor)
 
-                print("✓ AI推理成功")
+                print("[OK] AI推理成功")
                 return result # AI辅助生成：GLM-5, 2026-04-07
 
         except Exception as e:
-            print(f"✗ AI推理失败: {e}")
+            print(f"[ERROR] AI推理失败: {e}")
             return self.handle_inference_error(e, rgb_data)
 
     def ensure_model_attributes(self):
@@ -893,9 +893,9 @@ class MedicalAIModel:
                     print("⚠ 背景存在显著噪声，尝试清理...")
                     # 清理背景：将背景区域设置为0
                     result[background_mask] = 0
-                    print("✓ 背景已清理")
+                    print("[OK] 背景已清理")
                 else:
-                    print("✓ 背景相对干净") # AI辅助生成：GLM-5, 2026-04-11
+                    print("[OK] 背景相对干净") # AI辅助生成：GLM-5, 2026-04-11
 
         return result
 
@@ -943,7 +943,7 @@ def init_multi_ai_system(device="cuda"):
         success = multi_ai_system.load_all_models()
 
         if success:
-            print("✓ 多模型AI系统初始化成功")
+            print("[OK] 多模型AI系统初始化成功")
             print(f"可用模型: {multi_ai_system.get_available_models()}")
         else:
             print("⚠ 多模型AI系统初始化完成，但部分模型加载失败")
@@ -953,7 +953,7 @@ def init_multi_ai_system(device="cuda"):
         return success
 
     except Exception as e:
-        print(f"✗ 多模型AI系统初始化失败: {e}")
+        print(f"[ERROR] 多模型AI系统初始化失败: {e}")
         import traceback
 
         traceback.print_exc()
@@ -1034,7 +1034,7 @@ if __name__ == "__main__":
         # 打印模型状态
         status = get_model_status()
         for model_key, info in status.items():
-            status_icon = "✓" if info["available"] else "✗"
+            status_icon = "[OK]" if info["available"] else "[ERROR]"
             print(f"{status_icon} {model_key.upper()}: {info.get('name', '未知')}")
 
         print(f"可用模型: {get_available_models()}")

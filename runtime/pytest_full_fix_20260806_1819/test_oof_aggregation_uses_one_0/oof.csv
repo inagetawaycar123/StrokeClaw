@@ -1,0 +1,13 @@
+patient_key,true_label,analysis,model_mode,model_name,fold,seed,raw_logit
+p0,0,main,baseline,clinical_only,0,10,-2.0
+p0,0,main,baseline,clinical_only,0,11,-1.8
+p0,0,main,baseline,clinical_only,0,12,-2.2
+p1,0,main,baseline,clinical_only,1,10,-1.0
+p1,0,main,baseline,clinical_only,1,11,-0.8
+p1,0,main,baseline,clinical_only,1,12,-1.2
+p2,1,main,baseline,clinical_only,2,10,1.0
+p2,1,main,baseline,clinical_only,2,11,0.8
+p2,1,main,baseline,clinical_only,2,12,1.2
+p3,1,main,baseline,clinical_only,3,10,2.0
+p3,1,main,baseline,clinical_only,3,11,1.8
+p3,1,main,baseline,clinical_only,3,12,2.2

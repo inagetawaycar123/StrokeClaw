@@ -1,0 +1,104 @@
+{
+  "version": "stroke-multi-kg-v1",
+  "routes": [
+    {
+      "route_id": "route_treatment",
+      "question_type": "治疗适应性",
+      "keywords": ["溶栓", "取栓", "治疗", "适合", "时间窗", "ivt", "evt", "禁忌"],
+      "modalities": ["ncct", "mcta", "vcta", "dcta"],
+      "task_keys": ["ekv", "consensus_lite"],
+      "kg_types": ["guideline", "risk_contraindication", "consistency_check"],
+      "keyword_weight": 3.0,
+      "modality_weight": 0.8,
+      "task_weight": 1.5
+    },
+    {
+      "route_id": "route_hemorrhage",
+      "question_type": "出血与安全风险",
+      "keywords": ["出血", "脑出血", "高密度", "出血转化", "hemorrhage", "bleeding"],
+      "modalities": ["ncct"],
+      "task_keys": ["ncct_classification", "doctor_review"],
+      "kg_types": ["imaging_sign", "risk_contraindication", "consistency_check"],
+      "keyword_weight": 3.2,
+      "modality_weight": 1.4,
+      "task_weight": 1.8
+    },
+    {
+      "route_id": "route_vessel",
+      "question_type": "血管闭塞解释",
+      "keywords": ["大血管", "中血管", "闭塞", "堵塞", "lvo", "mevo", "m1", "m2", "ica", "基底动脉"],
+      "modalities": ["cta", "mcta", "vcta", "dcta"],
+      "task_keys": ["vessel_occlusion_classification"],
+      "kg_types": ["vessel_anatomy", "guideline", "model_explanation"],
+      "keyword_weight": 3.2,
+      "modality_weight": 1.8,
+      "task_weight": 2.0
+    },
+    {
+      "route_id": "route_perfusion",
+      "question_type": "灌注与组织状态解释",
+      "keywords": ["灌注", "半暗带", "核心区", "tmax", "cbf", "cbv", "mismatch", "低灌注"],
+      "modalities": ["cbf", "cbv", "tmax"],
+      "task_keys": ["pseudo_ctp_generation", "generate_ctp_maps", "stroke_analysis"],
+      "kg_types": ["perfusion", "guideline", "consistency_check"],
+      "keyword_weight": 3.2,
+      "modality_weight": 1.8,
+      "task_weight": 1.8
+    },
+    {
+      "route_id": "route_imaging",
+      "question_type": "影像征象解释",
+      "keywords": ["征象", "aspects", "致密血管", "早期缺血", "影像", "ncct", "cta", "侧支"],
+      "modalities": ["ncct", "mcta", "vcta", "dcta"],
+      "task_keys": ["ncct_classification", "image_quality_control"],
+      "kg_types": ["imaging_sign", "vessel_anatomy", "model_explanation"],
+      "keyword_weight": 2.8,
+      "modality_weight": 1.2,
+      "task_weight": 1.6
+    },
+    {
+      "route_id": "route_conflict",
+      "question_type": "冲突与复核",
+      "keywords": ["冲突", "不一致", "矛盾", "复核", "为什么需要复核", "低置信度"],
+      "modalities": [],
+      "task_keys": ["icv", "ekv", "consensus_lite", "doctor_review"],
+      "kg_types": ["consistency_check", "risk_contraindication", "report_evidence"],
+      "keyword_weight": 3.2,
+      "modality_weight": 0.0,
+      "task_weight": 1.8
+    },
+    {
+      "route_id": "route_referral",
+      "question_type": "诊疗流程与转诊",
+      "keywords": ["转诊", "上转", "会诊", "卒中中心", "流程", "任务", "下一步"],
+      "modalities": [],
+      "task_keys": ["case_intake_parse", "report_generation", "doctor_review"],
+      "kg_types": ["workflow", "guideline", "risk_contraindication"],
+      "keyword_weight": 3.0,
+      "modality_weight": 0.0,
+      "task_weight": 1.4
+    },
+    {
+      "route_id": "route_report",
+      "question_type": "报告与证据解释",
+      "keywords": ["报告", "结论", "引用", "证据", "为什么这么写", "来源", "页码"],
+      "modalities": [],
+      "task_keys": ["report_generation", "ekv", "doctor_review"],
+      "kg_types": ["report_evidence", "guideline", "consistency_check"],
+      "keyword_weight": 3.0,
+      "modality_weight": 0.0,
+      "task_weight": 1.8
+    },
+    {
+      "route_id": "route_model",
+      "question_type": "模型输出解释",
+      "keywords": ["模型", "三分类", "置信度", "gradcam", "类ctp", "mrdpm", "为什么判断"],
+      "modalities": [],
+      "task_keys": ["ncct_classification", "vessel_occlusion_classification", "pseudo_ctp_generation"],
+      "kg_types": ["model_explanation", "imaging_sign", "perfusion"],
+      "keyword_weight": 3.0,
+      "modality_weight": 0.0,
+      "task_weight": 1.8
+    }
+  ]
+}

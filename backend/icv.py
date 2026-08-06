@@ -32,6 +32,50 @@ def _safe_float(x: Any) -> Optional[float]:
         return None
 
 
+def _first_float(mapping: Dict[str, Any], keys: tuple[str, ...]) -> Optional[float]:
+    """Return the first present numeric value, preserving valid zeroes."""
+
+    for key in keys:
+        if key in mapping:
+            value = _safe_float(mapping.get(key))
+            if value is not None:
+                return value
+    return None
+
+
+def _iter_metric_containers(payload: Any):
+    """Yield known nested result containers without assuming one report shape."""
+
+    if not isinstance(payload, dict):
+        return
+
+    queue = [payload]
+    seen = set()
+    nested_keys = (
+        "report",
+        "summary",
+        "report_result",
+        "report_payload",
+        "analysis_result",
+        "structured_output",
+        "ctp",
+        "metrics",
+        "quantitative",
+        "quantitative_metrics",
+    )
+    while queue:
+        candidate = queue.pop(0)
+        identity = id(candidate)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        yield candidate
+        for key in nested_keys:
+            child = candidate.get(key)
+            if isinstance(child, dict):
+                queue.append(child)
+
+
 def _normalize_finding_status(value: Any) -> str:
     raw = str(value or "").strip().lower()
     if raw in {"pass", "warn", "fail", "not_applicable", "unavailable"}:
@@ -101,6 +145,184 @@ def _compute_confidence_delta(findings: list) -> float:
     return round(max(-1.0, min(0.0, delta)), 4)
 
 
+def _mrs_prognosis_findings(
+    tool_results: Optional[list],
+    patient_context: Optional[Dict],
+    planner_output: Optional[Dict],
+) -> list[dict[str, Any]]:
+    """Validate the mRS contract without changing any model output."""
+
+    payload = None
+    for item in reversed(tool_results or []):
+        if item.get("tool_name") != "run_mrs_prognosis_prediction":
+            continue
+        candidate = item.get("structured_output")
+        if isinstance(candidate, dict):
+            payload = candidate
+            break
+    if payload is None:
+        expected_sequence = (planner_output or {}).get("tool_sequence") or []
+        if "run_mrs_prognosis_prediction" not in expected_sequence:
+            return []
+        return [
+            {
+                "id": "MRS_presence",
+                "status": "warn",
+                "message": "90-day mRS prognosis result is absent from the current run.",
+            }
+        ]
+
+    findings: list[dict[str, Any]] = []
+    expected = (patient_context or {}).get("expected_identifiers") or {}
+    identifier_details = {}
+    identifier_ok = True
+    for key in ("patient_id", "file_id", "run_id"):
+        expected_value = expected.get(key)
+        observed_value = payload.get(key)
+        identifier_details[key] = {
+            "expected": expected_value,
+            "observed": observed_value,
+        }
+        if expected_value not in (None, "") and str(expected_value) != str(observed_value):
+            identifier_ok = False
+    findings.append(
+        {
+            "id": "MRS_identifiers",
+            "status": "pass" if identifier_ok else "fail",
+            "message": "mRS patient_id/file_id/run_id are consistent."
+            if identifier_ok
+            else "mRS patient_id/file_id/run_id do not match the current run.",
+            "details": identifier_details,
+        }
+    )
+
+    prediction = payload.get("prediction") if isinstance(payload.get("prediction"), dict) else None
+    completed = payload.get("status") == "completed" and prediction is not None
+    if not completed:
+        findings.extend(
+            [
+                {
+                    "id": "MRS_probability_range",
+                    "status": "not_applicable",
+                    "message": "mRS probability is unavailable; no probability was fabricated.",
+                },
+                {
+                    "id": "MRS_probability_sum",
+                    "status": "not_applicable",
+                    "message": "mRS probability sum is unavailable.",
+                },
+                {
+                    "id": "MRS_class_threshold",
+                    "status": "not_applicable",
+                    "message": "mRS class/threshold consistency is unavailable.",
+                },
+            ]
+        )
+    else:
+        poor = _safe_float(prediction.get("poor_prognosis_risk"))
+        good = _safe_float(prediction.get("good_prognosis_probability"))
+        threshold = _safe_float(prediction.get("decision_threshold"))
+        predicted_class = prediction.get("predicted_class")
+        in_range = poor is not None and good is not None and 0.0 <= poor <= 1.0 and 0.0 <= good <= 1.0
+        findings.append(
+            {
+                "id": "MRS_probability_range",
+                "status": "pass" if in_range else "fail",
+                "message": "mRS probabilities are within [0, 1]."
+                if in_range
+                else "mRS probabilities are outside [0, 1] or missing.",
+            }
+        )
+        sum_ok = in_range and abs((poor or 0.0) + (good or 0.0) - 1.0) <= 1e-5
+        findings.append(
+            {
+                "id": "MRS_probability_sum",
+                "status": "pass" if sum_ok else "fail",
+                "message": "Good and poor prognosis probabilities sum to one."
+                if sum_ok
+                else "Good and poor prognosis probabilities do not sum to one.",
+            }
+        )
+        class_ok = False
+        if poor is not None and threshold is not None and 0.0 <= threshold <= 1.0:
+            try:
+                class_ok = int(predicted_class) == int(poor >= threshold)
+            except Exception:
+                class_ok = False
+        findings.append(
+            {
+                "id": "MRS_class_threshold",
+                "status": "pass" if class_ok else "fail",
+                "message": "mRS predicted_class is consistent with the stored threshold."
+                if class_ok
+                else "mRS predicted_class is inconsistent with the stored threshold.",
+            }
+        )
+
+    provenance = payload.get("input_provenance") if isinstance(payload.get("input_provenance"), dict) else {}
+    observed_24h = bool(provenance.get("nihss_24h_observed"))
+    result_mode = str(payload.get("result_mode") or "")
+    fallback_used = payload.get("fallback_used") is True
+    expected_mode = "update_24h" if observed_24h else "baseline"
+    route_ok = result_mode == expected_mode or (
+        expected_mode == "update_24h" and result_mode == "baseline" and fallback_used
+    )
+    findings.append(
+        {
+            "id": "MRS_mode_route",
+            "status": "pass" if route_ok else "fail",
+            "message": "mRS result_mode is consistent with observed 24-hour NIHSS and fallback state."
+            if route_ok
+            else "mRS result_mode conflicts with observed 24-hour NIHSS availability.",
+        }
+    )
+
+    fallback_reason = str(payload.get("fallback_reason") or "").strip()
+    fallback_ok = (not fallback_used and not fallback_reason) or (
+        fallback_used
+        and bool(fallback_reason)
+        and expected_mode == "update_24h"
+        and result_mode == "baseline"
+    )
+    findings.append(
+        {
+            "id": "MRS_fallback_trace",
+            "status": "pass" if fallback_ok else "fail",
+            "message": "mRS fallback state is traceable."
+            if fallback_ok
+            else "mRS fallback state is incomplete or contradictory.",
+        }
+    )
+
+    model = payload.get("model") if isinstance(payload.get("model"), dict) else {}
+    loading_allowed = model.get("online_loading_permitted") is True
+    findings.append(
+        {
+            "id": "MRS_bundle_permission",
+            "status": "pass" if loading_allowed else "fail",
+            "message": "mRS bundle permits online loading."
+            if loading_allowed
+            else "mRS bundle does not permit online loading or could not be verified.",
+        }
+    )
+
+    quality = payload.get("data_quality") if isinstance(payload.get("data_quality"), dict) else {}
+    confidence = payload.get("confidence") if isinstance(payload.get("confidence"), dict) else {}
+    has_missing = bool(quality.get("missing_clinical_fields"))
+    has_warnings = bool(quality.get("image_quality_warnings"))
+    contradiction = (has_missing or has_warnings) and str(confidence.get("level") or "").lower() == "high"
+    findings.append(
+        {
+            "id": "MRS_missing_confidence_consistency",
+            "status": "warn" if contradiction else "pass",
+            "message": "mRS missing information is inconsistent with high confidence."
+            if contradiction
+            else "mRS missing information and confidence are not contradictory.",
+        }
+    )
+    return findings
+
+
 def evaluate_icv(
     planner_output: Optional[Dict] = None,
     tool_results: Optional[list] = None,
@@ -123,9 +345,28 @@ def evaluate_icv(
         modalities = path_decision.get("canonical_modalities") or [] # AI辅助生成：GLM-5, 2026-03-19
 
     # Try to extract volumes / mismatch from multiple possible locations in analysis_result
-    core_vol = _safe_float((analysis_result or {}).get("core_infarct_volume") or (analysis_result or {}).get("core_volume_ml"))
-    penumbra_vol = _safe_float((analysis_result or {}).get("penumbra_volume") or (analysis_result or {}).get("penumbra_volume_ml"))
-    mismatch_ratio = _safe_float((analysis_result or {}).get("mismatch_ratio"))
+    core_vol = None
+    penumbra_vol = None
+    mismatch_ratio = None
+    for metric_container in _iter_metric_containers(analysis_result):
+        if core_vol is None:
+            core_vol = _first_float(
+                metric_container,
+                ("core_infarct_volume", "core_volume_ml", "core"),
+            )
+        if penumbra_vol is None:
+            penumbra_vol = _first_float(
+                metric_container,
+                ("penumbra_volume", "penumbra_volume_ml", "penumbra"),
+            )
+        if mismatch_ratio is None:
+            mismatch_ratio = _first_float(metric_container, ("mismatch_ratio",))
+        if (
+            core_vol is not None
+            and penumbra_vol is not None
+            and mismatch_ratio is not None
+        ):
+            break
 
     # Fallback: try nested report / report_result -> report_payload structures
     if (core_vol is None or penumbra_vol is None or mismatch_ratio is None) and analysis_result:
@@ -195,15 +436,16 @@ def evaluate_icv(
                 break
 
     # R1: CTP availability
-    has_ctp = False
+    has_ctp_images = False
     try:
         if modalities and isinstance(modalities, (list, tuple)):
             joined = " ".join([str(m).lower() for m in modalities])
-            has_ctp = "tmax" in joined or "cbf" in joined or "cbv" in joined or "ctp" in joined # AI辅助生成：GLM-5, 2026-03-24
+            has_ctp_images = "tmax" in joined or "cbf" in joined or "cbv" in joined or "ctp" in joined # AI辅助生成：GLM-5, 2026-03-24
     except Exception:
-        has_ctp = False
+        has_ctp_images = False
 
     # If volumetric CTP-derived numbers are present (core/penumbra/mismatch), treat as CTP evidence
+    has_ctp = has_ctp_images
     if not has_ctp and (core_vol is not None or penumbra_vol is not None or mismatch_ratio is not None):
         has_ctp = True
 
@@ -344,7 +586,7 @@ def evaluate_icv(
         findings.append({"id": "R5_tool_presence", "status": "pass", "message": "已完成卒中分析（run_stroke_analysis）"})
 
     # If CTP maps were generated but analysis/plan reports no CTP images, warn
-    if gen_ctp and not has_ctp:
+    if gen_ctp and not has_ctp_images:
         findings.append({
             "id": "R5_ctp_generated_no_images",
             "status": "warn",
@@ -594,6 +836,13 @@ def evaluate_icv(
     except Exception:
         findings.append({"id": "R5_status_consistency", "status": "not_applicable", "message": "无法评估分析状态与报告语气/内容的一致性"})
 
+    findings.extend(
+        _mrs_prognosis_findings(tool_results, patient_context, planner_output)
+    )
+    if any(item.get("status") == "fail" for item in findings):
+        overall = "fail"
+    elif overall != "fail" and any(item.get("status") == "warn" for item in findings):
+        overall = "warn"
     normalized_findings = _normalize_findings(findings)
     return {
         "success": True,

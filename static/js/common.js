@@ -74,9 +74,9 @@ function openReport() {
         return;
     }
 
-    // Viewer 顶栏“生成报告”优先触发 MedGemma，兼容旧逻辑兜底
+    // Viewer 顶栏“生成报告”触发统一报告生成接口，兼容旧逻辑兜底
     if (typeof window.triggerGenerateReportFromTopBar === 'function') {
-        console.log(`[MedGemma][Viewer] topbar generate clicked patient_id=${patientId} file_id=${fileId}`);
+        console.log(`[Report][Viewer] topbar generate clicked patient_id=${patientId} file_id=${fileId}`);
         window.triggerGenerateReportFromTopBar();
         return;
     }

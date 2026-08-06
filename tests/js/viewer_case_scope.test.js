@@ -2,14 +2,119 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const {
     agentRunMatchesCase,
+    formatNcctConfidence,
+    ncctConfidenceColor,
+    normalizeNcctConfidence,
     normalizeViewerVesselOcclusionResult,
+    resolveViewerThreeClassResult,
     toggleAnalysisPanel,
     validateAgentRunForCase,
     viewerDataMatchesFileId,
+    buildStructuredViewerSummaryHtml,
 } = require("../../static/js/viewer.js");
+
+test("Viewer template exposes the NCCT confidence target beside the class result", () => {
+    const template = fs.readFileSync(
+        path.join(__dirname, "../../backend/templates/patient/upload/viewer/index.html"),
+        "utf8"
+    );
+    assert.match(template, /id="value-ncct-class"/);
+    assert.match(template, /id="value-ncct-confidence"/);
+    assert.equal((template.match(/id="value-ncct-confidence"/g) || []).length, 1);
+});
+
+test("NCCT confidence accepts probability, percent number, and percent text", () => {
+    assert.equal(normalizeNcctConfidence(0.519), 0.519);
+    assert.equal(normalizeNcctConfidence(51.9), 0.519);
+    assert.equal(normalizeNcctConfidence("51.9%"), 0.519);
+    assert.equal(formatNcctConfidence(0.519), "51.9%");
+    assert.equal(normalizeNcctConfidence(null), null);
+    assert.equal(normalizeNcctConfidence("invalid"), null);
+    assert.equal(normalizeNcctConfidence(101), null);
+});
+
+test("Viewer prefers the canonical case-level NCCT result over slices", () => {
+    const viewerData = {
+        three_class_result: {
+            status: "completed",
+            three_class_label: "normal",
+            three_class_label_cn: "正常",
+            three_class_confidence: 0.519,
+        },
+    };
+    const slices = [
+        { three_class_label_cn: "脑缺血", three_class_confidence: 0.99 },
+        { three_class_label_cn: "正常", three_class_confidence: 0.72 },
+    ];
+    const result = resolveViewerThreeClassResult(viewerData, {}, slices);
+
+    assert.equal(result.status, "completed");
+    assert.equal(result.label, "正常");
+    assert.equal(result.confidence, 0.519);
+    assert.deepEqual(
+        resolveViewerThreeClassResult(viewerData, {}, slices.slice().reverse()),
+        result
+    );
+});
+
+test("Viewer restores NCCT confidence from database and legacy fields", () => {
+    const dbResult = resolveViewerThreeClassResult({}, {
+        three_class_result: {
+            status: "completed",
+            three_class_label: "infarct",
+            three_class_confidence: "73.4%",
+        },
+    });
+    const legacyResult = resolveViewerThreeClassResult({
+        three_class_label_cn: "正常",
+        three_class_confidence: 88.2,
+    });
+
+    assert.equal(dbResult.label, "脑缺血");
+    assert.ok(Math.abs(dbResult.confidence - 0.734) < 1e-12);
+    assert.equal(legacyResult.status, "completed");
+    assert.equal(legacyResult.confidence, 0.882);
+});
+
+test("an unrelated analysis status does not suppress the legacy slice fallback", () => {
+    const result = resolveViewerThreeClassResult(
+        {},
+        { status: "completed", report: { summary: {} } },
+        [{ three_class_label: "normal", three_class_confidence: 0.81 }]
+    );
+
+    assert.equal(result.status, "completed");
+    assert.equal(result.label, "正常");
+    assert.equal(result.confidence, 0.81);
+});
+
+test("failed or unavailable NCCT results never render a fake zero confidence", () => {
+    for (const status of ["failed", "unavailable"]) {
+        const result = resolveViewerThreeClassResult({
+            three_class_result: {
+                status,
+                three_class_label_cn: "正常",
+                three_class_confidence: 0,
+            },
+        });
+        assert.equal(result.status, status);
+        assert.equal(result.label, null);
+        assert.equal(result.confidence, null);
+        assert.equal(formatNcctConfidence(result.confidence), "--");
+    }
+});
+
+test("NCCT confidence uses the same visual thresholds as vessel confidence", () => {
+    assert.equal(ncctConfidenceColor(0.70), "#51cf66");
+    assert.equal(ncctConfidenceColor(0.519), "#ffd43b");
+    assert.equal(ncctConfidenceColor(0.499), "#ff6b6b");
+    assert.equal(ncctConfidenceColor(null), "");
+});
 
 test("viewer_data must match the file requested by the URL", () => {
     assert.equal(viewerDataMatchesFileId({ file_id: "case-a" }, "case-a"), true);
@@ -120,4 +225,36 @@ test("stroke analysis panel opens and closes", () => {
     } finally {
         delete global.document;
     }
+});
+
+test("Viewer renders only a compact structured report summary", () => {
+    const html = buildStructuredViewerSummaryHtml(
+        {
+            report_meta: { risk_level: "high", urgency: "urgent" },
+            clinician_review: { overall_status: "pending" },
+            patient_summary: {
+                fields: [
+                    { field_id: "age", display_name: "年龄", value: 89, unit: "岁" },
+                    { field_id: "admission_nihss", display_name: "NIHSS", value: 9, unit: "分" },
+                ],
+            },
+            quantitative_metrics: [
+                {
+                    metric_id: "core_infarct_volume",
+                    display_name: "核心梗死体积",
+                    value: 6.14,
+                    unit: "mL",
+                },
+            ],
+            missing_information: [{ issue_id: "missing-vessel" }],
+            warnings: [{ status: "conflict" }],
+        },
+        "/report/909?file_id=file-a"
+    );
+
+    assert.match(html, /StrokeClaw 结构化报告/);
+    assert.match(html, /6\.14 mL/);
+    assert.match(html, /缺失项 1 · 冲突 1/);
+    assert.match(html, /查看完整报告/);
+    assert.doesNotMatch(html, /自然语言总结/);
 });

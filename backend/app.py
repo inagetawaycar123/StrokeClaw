@@ -10,6 +10,7 @@ import threading
 import shutil
 import os
 import unicodedata
+from typing import Any
 from urllib.parse import quote, urlencode
 import requests  # 添加 requests 导入，用于调用百川 M3 API
 from flask import (
@@ -24,10 +25,17 @@ from flask import (
 )
 try:
     from .ai_inference import get_ai_model
+    from .clinical_dag import build_clinical_dag, normalize_modalities
     from .compat.adapters import build_clinical_decision_bundle
-    from .compat.skill_registry import get_skill_registry
+    from .compat.skill_registry import get_skill_by_id, get_skill_registry, skill_id_for_tool
     from .extensions import NumpyJSONEncoder
+    from .image_quality_control import (
+        apply_quality_review,
+        has_non_overrideable_failure,
+        run_image_quality_control,
+    )
     from .summary_assembler import build_summary_artifacts
+    from .structured_report import ensure_structured_report_v2
     from .vessel_context import (
         VESSEL_OCCLUSION_CLASS_RESULT,
         VESSEL_OCCLUSION_UNAVAILABLE_TEXT,
@@ -40,10 +48,17 @@ try:
 except ImportError:
     # 兼容直接运行 backend/app.py 的场景
     from ai_inference import get_ai_model
+    from clinical_dag import build_clinical_dag, normalize_modalities
     from compat.adapters import build_clinical_decision_bundle
-    from compat.skill_registry import get_skill_registry
+    from compat.skill_registry import get_skill_by_id, get_skill_registry, skill_id_for_tool
     from extensions import NumpyJSONEncoder
+    from image_quality_control import (
+        apply_quality_review,
+        has_non_overrideable_failure,
+        run_image_quality_control,
+    )
     from summary_assembler import build_summary_artifacts
+    from structured_report import ensure_structured_report_v2
     from vessel_context import (
         VESSEL_OCCLUSION_CLASS_RESULT,
         VESSEL_OCCLUSION_UNAVAILABLE_TEXT,
@@ -147,16 +162,40 @@ def insert_patient_info(patient_data: dict):
     """
     if not SUPABASE_AVAILABLE:
         return (False, "Supabase unavailable")
+    payload = dict(patient_data or {})
+    payload.pop("create_time", None)
+    mrs_fields = {
+        key: payload.get(key)
+        for key in ("nihss_24h", "onset_to_ct_hours")
+        if key in payload
+    }
     try:
-        if "create_time" in patient_data:
-            del patient_data["create_time"]
-        response = supabase.table("patient_info").insert([patient_data]).execute() # AI辅助生成：GLM-5, 2026-04-20
+        response = supabase.table("patient_info").insert([payload]).execute() # AI辅助生成：GLM-5, 2026-04-20
         if response.data and len(response.data) > 0:
             return (True, response.data[0])
         else:
             return (False, "Insert failed: empty response from Supabase")
     except Exception as e:
-        return (False, f"Insert failed: {str(e)}")
+        missing_mrs_column = any(
+            _is_missing_column_error(e, field_name) for field_name in mrs_fields
+        )
+        if not missing_mrs_column:
+            return (False, f"Insert failed: {str(e)}")
+        legacy_payload = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"nihss_24h", "onset_to_ct_hours"}
+        }
+        try:
+            response = supabase.table("patient_info").insert([legacy_payload]).execute()
+            if not response.data:
+                return (False, "Insert failed: empty legacy-schema response from Supabase")
+            inserted = dict(response.data[0])
+            inserted.update(mrs_fields)
+            inserted["_clinical_schema_fallback"] = True
+            return (True, inserted)
+        except Exception as retry_exc:
+            return (False, f"Insert failed after legacy-schema retry: {str(retry_exc)}")
 
 
 def update_analysis_result(patient_id: int, analysis_data: dict):
@@ -376,9 +415,24 @@ def _strip_html_to_text(raw_html: str) -> str:
     return "\n".join(lines)
 
 
-def _medgemma_results_dir() -> str:
+def _report_results_dir() -> str:
+    configured = str(os.environ.get("REPORT_RESULTS_DIR") or "").strip()
+    if configured:
+        return os.path.abspath(os.path.expanduser(configured))
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    return os.path.join(project_root, "MedGemma_Model", "results")
+    return os.path.join(project_root, "runtime", "reports")
+
+
+def _report_result_patterns(file_id: str):
+    """Return current and migrated legacy report patterns for a case."""
+    if not file_id:
+        return []
+    results_dir = _report_results_dir()
+    legacy_dir = os.path.join(results_dir, "legacy_medgemma")
+    return [
+        os.path.join(results_dir, f"baichuan_report_{file_id}_*.json"),
+        os.path.join(legacy_dir, f"medgemma_report_{file_id}_*.json"),
+    ]
 
 
 def _sync_notes_to_result_json(
@@ -389,12 +443,13 @@ def _sync_notes_to_result_json(
         "updated_files": [],
         "failed_files": [],
     }
-    results_dir = _medgemma_results_dir()
-    if not os.path.isdir(results_dir):
-        return sync_result
-
-    pattern = os.path.join(results_dir, f"medgemma_report_{file_id}_*.json")
-    matched_files = sorted(glob.glob(pattern))
+    matched_files = sorted(
+        {
+            path
+            for pattern in _report_result_patterns(file_id)
+            for path in glob.glob(pattern)
+        }
+    )
     sync_result["matched_files"] = matched_files
     if not matched_files:
         return sync_result # AI辅助生成：GLM-5, 2026-03-15
@@ -428,6 +483,66 @@ def _sync_notes_to_result_json(
             sync_result["failed_files"].append({"path": path, "error": str(e)})
 
     return sync_result
+
+
+def _sync_report_payload_to_result_json(json_path: str, report_payload: dict):
+    """Best-effort sync of the post-assembly payload into the generated result JSON."""
+    result = {"success": False, "path": json_path or None, "error": None}
+    if not json_path or not isinstance(report_payload, dict):
+        result["error"] = "Missing json_path or report_payload"
+        return result
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            document = json.load(f)
+        if not isinstance(document, dict):
+            raise ValueError("report json root is not an object")
+        document["report_payload"] = report_payload
+        document["structured_report_v2"] = report_payload.get(
+            "structured_report_v2"
+        )
+        temp_path = f"{json_path}.tmp"
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(document, f, ensure_ascii=False, indent=2)
+        os.replace(temp_path, json_path)
+        result["success"] = True
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+def _persist_report_payload_best_effort(
+    patient_id: Any, file_id: str, report_payload: dict
+):
+    result = {"success": False, "mode": "none", "error": None}
+    if not SUPABASE_AVAILABLE:
+        result["error"] = "Supabase unavailable"
+        return result
+    if not file_id or not isinstance(report_payload, dict):
+        result["error"] = "Missing file_id or report_payload"
+        return result
+    try:
+        def _persist_once():
+            query = (
+                supabase.table("patient_imaging")
+                .update({"report_payload": report_payload})
+                .eq("case_id", file_id)
+            )
+            if patient_id not in (None, ""):
+                query = query.eq("patient_id", patient_id)
+            response = query.execute()
+            return response
+
+        response = _run_with_supabase_retry(
+            "persist_structured_report_payload", _persist_once
+        )
+        if response.data and len(response.data) > 0:
+            result["success"] = True
+            result["mode"] = "updated"
+        else:
+            result["error"] = "patient_imaging row not found"
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
 
 
 def save_report_notes(patient_id: int, file_id: str, payload: dict):
@@ -589,9 +704,7 @@ def _get_baichuan_api_base() -> str:
 
 
 print(f"百川 API URL: {BAICHUAN_API_URL}") # AI辅助生成：GLM-5, 2026-03-27
-print(
-        f"百川 API Key: {'***' + BAICHUAN_API_KEY[-4:] if BAICHUAN_API_KEY else '未配置'}"
-)
+print(f"百川 API Key: {'已配置' if BAICHUAN_API_KEY else '未配置'}")
 print(f"百川模型: {BAICHUAN_MODEL}")
 print(f"百川对话模型: {BAICHUAN_CHAT_MODEL}")
 print(f"知识库 ID 数量: {len(BAICHUAN_KB_IDS)}")
@@ -966,13 +1079,11 @@ def generate_report_with_baichuan(
         }
 
         print(f"调用百川 M3 API... format={output_format}")
-        print(f"Payload: {json.dumps(payload, ensure_ascii=False)[:500]}...") # AI辅助生成：GLM-5, 2026-04-12
         response = requests.post(
             BAICHUAN_API_URL, headers=headers, json=payload, timeout=60
         )
 
         print(f"响应状态码: {response.status_code}")
-        print(f"响应内容: {response.text[:1000]}...")
 
         if response.status_code == 200:
             result = response.json()
@@ -1006,7 +1117,7 @@ def generate_report_with_baichuan(
                 "is_mock": False,
             }
         else:
-            error_msg = f"API 调用失败: {response.status_code} - {response.text}"
+            error_msg = f"API 调用失败: HTTP {response.status_code}"
             print(error_msg)
             return {"success": False, "error": error_msg, "format": output_format}
 
@@ -1086,6 +1197,26 @@ def generate_mock_report(structured_data: dict, output_format: str = "markdown")
 
     return mock_report # AI辅助生成：GLM-5, 2026-04-17
 
+
+def generate_report_with_baichuan(
+    structured_data: dict, output_format: str = "markdown"
+) -> dict:
+    """Compatibility wrapper for callers of the former in-module helper."""
+    file_id = str(
+        structured_data.get("file_id")
+        or structured_data.get("case_id")
+        or structured_data.get("id")
+        or structured_data.get("ID")
+        or "report"
+    )
+    return generate_report(
+        structured_data=structured_data,
+        imaging_data={},
+        file_id=file_id,
+        output_format=output_format,
+    )
+
+
 import os
 import numpy as np
 from PIL import Image
@@ -1099,14 +1230,22 @@ import matplotlib as mpl
 # 在 app.py 的导入部分添加业务相关模块
 try:
     from .stroke_analysis import analyze_stroke_case
-    from .medgemma_report import generate_report_with_medgemma
+    from .report_generation import generate_report
     from .three_class.predict_three_class import predict_three_class
     from .three_class.generate_gradcam import generate_gradcam
+    from .three_class.result import (
+        aggregate_three_class_predictions,
+        unavailable_three_class_result,
+    )
 except ImportError:
     from stroke_analysis import analyze_stroke_case
-    from medgemma_report import generate_report_with_medgemma
+    from report_generation import generate_report
     from three_class.predict_three_class import predict_three_class
     from three_class.generate_gradcam import generate_gradcam
+    from three_class.result import (
+        aggregate_three_class_predictions,
+        unavailable_three_class_result,
+    )
 
 # 尝试导入 nibabel（用于 NIfTI 等医学影像格式）
 try:
@@ -1161,6 +1300,7 @@ print(f"处理目录: {app.config['PROCESSED_FOLDER']}")
 # ==================== Upload Job Center (for /processing) ====================
 UPLOAD_JOB_STEP_DEFS = [
     {"key": "archive_ready", "title": "建立患者档案"},
+    {"key": "image_quality_control", "title": "图像质量控制"},
     {"key": "modality_detect", "title": "识别上传模态"},
     {"key": "three_class", "title": "NCCT三分类与Grad-CAM"},
     {"key": "ctp_generate", "title": "生成CTP灌注图"},
@@ -1224,7 +1364,7 @@ def _calc_job_progress(job):
     return max(0, min(100, progress))
 
 
-def _create_upload_job(job_id, patient_id, file_id, modalities):
+def _create_upload_job(job_id, patient_id, file_id, modalities, clinical_dag=None):
     steps = [] # AI辅助生成：GLM-5, 2026-03-02
     for spec in UPLOAD_JOB_STEP_DEFS:
         steps.append(
@@ -1238,6 +1378,7 @@ def _create_upload_job(job_id, patient_id, file_id, modalities):
             }
         )
 
+    dag = copy.deepcopy(clinical_dag or build_clinical_dag(modalities))
     job = {
         "job_id": job_id,
         "status": "queued",
@@ -1250,13 +1391,14 @@ def _create_upload_job(job_id, patient_id, file_id, modalities):
         "result": None,
         "error": None,
         "warnings": [],
+        "clinical_dag": dag,
         "dag_review": {
             "review_status": "pending",
             "doctor_final_decision": "pending",
             "reviewer": None,
             "reviewed_at": None,
-            "dag_id": None,
-            "available_modalities": list(modalities or []),
+            "dag_id": dag.get("dag_id"),
+            "available_modalities": list(dag.get("available_modalities") or []),
         },
         "execution_authorized": False,
         "created_at": _job_now(),
@@ -1296,22 +1438,33 @@ def _set_job_status(job_id, status, error=None):
     return _update_upload_job(job_id, _mut)
 
 
+_TERMINAL_UPLOAD_STEP_STATUSES = frozenset({"completed", "failed", "skipped"})
+
+
 def _update_step(job_id, step_key, status, message=""):
     def _mut(job):
         for step in job["steps"]:
             if step["key"] != step_key:
                 continue # AI辅助生成：GLM-5, 2026-03-04
-            step["status"] = status
+            previous_status = str(step.get("status") or "pending").strip().lower()
+            requested_status = str(status or "pending").strip().lower()
+            if (
+                previous_status in _TERMINAL_UPLOAD_STEP_STATUSES
+                and requested_status != previous_status
+            ):
+                return
+            step["status"] = requested_status
             if message:
                 step["message"] = message
             now = _job_now()
-            if status == "running":
+            if requested_status in {"running", "waiting"}:
                 step["started_at"] = step["started_at"] or now
                 step["ended_at"] = None
                 job["current_step"] = step_key # AI辅助生成：GLM-5, 2026-03-05
-            elif status in ("completed", "failed", "skipped"):
+            elif requested_status in _TERMINAL_UPLOAD_STEP_STATUSES:
                 step["started_at"] = step["started_at"] or now
-                step["ended_at"] = now
+                if previous_status not in _TERMINAL_UPLOAD_STEP_STATUSES:
+                    step["ended_at"] = now
                 if job.get("current_step") == step_key:
                     job["current_step"] = None
             _upload_log(
@@ -1319,13 +1472,118 @@ def _update_step(job_id, step_key, status, message=""):
                 file_id=job.get("file_id"),
                 patient_id=job.get("patient_id"),
                 step=step_key,
-                status=status,
+                status=requested_status,
                 message=message or "",
                 linked_run_id=job.get("agent_run_id"),
             )
             break
 
     return _update_upload_job(job_id, _mut)
+
+
+def _make_ctp_progress_callback(upload_job_id):
+    """Translate per-model/per-slice inference callbacks into upload-job progress."""
+
+    job_id = str(upload_job_id or "").strip()
+
+    def report_ctp_progress(
+        slice_number, total_slices, model_key="", phase="model_running"
+    ):
+        if not job_id:
+            return
+        model_keys = list(REQUIRED_CTP_MODELS)
+        safe_total = max(1, int(total_slices or 1))
+        safe_slice = max(1, min(safe_total, int(slice_number or 1)))
+        units_per_slice = max(1, len(model_keys))
+        total_units = safe_total * units_per_slice
+        if phase == "slice_completed":
+            completed_units = safe_slice * units_per_slice
+            progress_text = f"切片 {safe_slice}/{safe_total} 已完成"
+        else:
+            try:
+                model_offset = model_keys.index(model_key)
+            except ValueError:
+                model_offset = 0
+            completed_units = (safe_slice - 1) * units_per_slice + model_offset
+            model_label = str(model_key or "CTP").upper()
+            progress_text = f"{model_label} · 切片 {safe_slice}/{safe_total}"
+        percent = min(99, max(0, int((completed_units / total_units) * 100)))
+        _update_step(
+            job_id,
+            "ctp_generate",
+            "running",
+            f"正在生成 CTP 灌注图：{progress_text} · {percent}%",
+        )
+
+    return report_ctp_progress
+
+
+def _three_class_step_outcome(three_class_summary, three_class_result, rgb_files=None):
+    summary = three_class_summary if isinstance(three_class_summary, dict) else {}
+    result = three_class_result if isinstance(three_class_result, dict) else {}
+    display = str(summary.get("display") or "").strip()
+    counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else {}
+    has_counts = bool(
+        sum(int(counts.get(key) or 0) for key in ("normal", "hemo", "infarct"))
+    )
+    has_output = bool(
+        isinstance(summary.get("output"), dict) and summary.get("output")
+    )
+    has_slice_result = any(
+        str((item or {}).get("three_class_label") or "").strip()
+        for item in (rgb_files or [])
+    )
+    display_is_valid = bool(
+        display and "失败" not in display and "异常" not in display
+    )
+    completed = result.get("status") == "completed" and (
+        bool((summary.get("gradcam") or {}).get("success"))
+        or has_counts
+        or has_output
+        or has_slice_result
+        or display_is_valid
+    )
+    if completed:
+        return "completed", display or "三分类与 Grad-CAM 完成"
+
+    gradcam_error = str((summary.get("gradcam") or {}).get("error") or "").strip()
+    return "failed", gradcam_error or display or "三分类或 Grad-CAM 未生成"
+
+
+def _publish_three_class_step(
+    upload_job_id, three_class_summary, three_class_result, rgb_files=None
+):
+    job_id = str(upload_job_id or "").strip()
+    status, message = _three_class_step_outcome(
+        three_class_summary, three_class_result, rgb_files
+    )
+    if job_id:
+        _update_step(job_id, "three_class", status, message)
+    return status, message
+
+
+def _start_ctp_generation_step(upload_job_id):
+    job_id = str(upload_job_id or "").strip()
+    if not job_id:
+        return True
+    job = _get_upload_job(job_id)
+    three_class_step = next(
+        (
+            step
+            for step in (job or {}).get("steps", [])
+            if step.get("key") == "three_class"
+        ),
+        None,
+    )
+    if str((three_class_step or {}).get("status") or "") != "completed":
+        return False
+    _update_step(
+        job_id,
+        "ctp_generate",
+        "running",
+        "三分类完成，开始基于 mCTA 生成 CTP 灌注图",
+    )
+    return True
 
 
 def _add_job_warning(job_id, warning):
@@ -1341,26 +1599,150 @@ def _get_upload_job(job_id):
         return _safe_job_copy(UPLOAD_JOBS.get(job_id))
 
 
-def _get_upload_step_status(job_id, step_key):
-    job = _get_upload_job(job_id) or {}
-    for step in job.get("steps") or []:
-        if step.get("key") == step_key:
-            return str(step.get("status") or "pending").strip().lower()
-    return "pending"
+def _stage_upload_for_dag_review(job_id, payload, clinical_dag):
+    """Stage a validated upload without starting any model or Agent execution."""
+
+    with UPLOAD_JOBS_LOCK:
+        job = UPLOAD_JOBS.get(job_id)
+        if not job:
+            return None
+        if job.get("status") != "queued" or job_id in UPLOAD_JOB_PAYLOADS:
+            return None
+        UPLOAD_JOB_PAYLOADS[job_id] = payload
+        job["clinical_dag"] = copy.deepcopy(clinical_dag)
+        job["dag_review"] = {
+            "review_status": "pending",
+            "doctor_final_decision": "pending",
+            "reviewer": None,
+            "reviewed_at": None,
+            "dag_id": clinical_dag.get("dag_id"),
+            "available_modalities": list(
+                clinical_dag.get("available_modalities") or []
+            ),
+        }
+        job["execution_authorized"] = False
+        job["agent_run_id"] = payload.get("agent_run_id")
+        job["status"] = "awaiting_review"
+        job["current_step"] = "dag_review"
+        job["updated_at"] = _job_now()
+        job["progress"] = _calc_job_progress(job)
+        return _safe_job_copy(job)
+
+
+def _start_upload_processing_thread(job_id, payload):
+    worker = threading.Thread(
+        target=_run_upload_processing_job,
+        args=(job_id, payload),
+        daemon=True,
+    )
+    worker.start()
+    return worker
 
 
 def _normalize_uploaded_modalities(modalities):
-    alias = {
-        "mcat": "mcta",
-        "vcat": "vcta",
-        "dcat": "dcta",
+    return normalize_modalities(modalities) # AI辅助生成：GLM-5, 2026-03-07
+
+
+def _quality_control_paths(payload):
+    paths = {}
+    for field_name, item in (payload.get("files") or {}).items():
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        modality = str(field_name or "").removesuffix("_file").strip().lower()
+        if modality:
+            paths[modality] = item["path"]
+    return paths
+
+
+def _quality_control_message(result):
+    status = str((result or {}).get("qc_status") or "unknown")
+    score = (result or {}).get("qc_score")
+    finding_count = len((result or {}).get("findings") or [])
+    score_text = f"{float(score):.2f}" if isinstance(score, (int, float)) else "--"
+    if status == "warning" and (result or {}).get("qc_input_mode") == "single_slice":
+        return (
+            "单层影像：三维质控项目不适用；可执行检查已完成，流程自动继续"
+            f"（score={score_text}, findings={finding_count}）"
+        )
+    labels = {
+        "passed": "图像质控通过",
+        "warning": "图像质控完成，存在可继续的质量风险",
+        "failed": "图像质控未通过，等待医生复核",
     }
-    normalized = []
-    for item in modalities or []:
-        key = alias.get(str(item).strip().lower(), str(item).strip().lower())
-        if key and key not in normalized:
-            normalized.append(key)
-    return normalized # AI辅助生成：GLM-5, 2026-03-07
+    return f"{labels.get(status, '图像质控状态未知')}（score={score_text}, findings={finding_count}）"
+
+
+def _attach_quality_control_to_agent_run(run_id, quality_control_result):
+    if not run_id:
+        return False
+
+    def _mut(run):
+        planner_input = run.setdefault("planner_input", {})
+        planner_input["quality_control_result"] = copy.deepcopy(
+            quality_control_result or {}
+        )
+        planner_input["quality_control"] = copy.deepcopy(
+            quality_control_result or {}
+        )
+
+    return bool(_update_agent_run(run_id, _mut))
+
+
+def _set_agent_quality_checkpoint(run_id, result, *, status="waiting"):
+    if not run_id:
+        return None
+
+    def _mut(run):
+        run["status"] = "paused_review_required"
+        run["stage"] = "review"
+        run["current_tool"] = "image_quality_control"
+        run["termination_reason"] = "image_quality_control_review_required"
+        run["human_checkpoint"] = {
+            "type": "image_quality_control",
+            "status": status,
+            "action_required": "quality_review",
+            "qc_fingerprint": (result or {}).get("qc_fingerprint"),
+            "quality_control_result": copy.deepcopy(result or {}),
+        }
+
+    return _update_agent_run(run_id, _mut)
+
+
+def _persist_quality_control_to_imaging(patient_id, file_id, result):
+    """Merge QC into analysis_result; never replace other model output."""
+    if not SUPABASE_AVAILABLE or not patient_id or not file_id:
+        return False
+    try:
+        imaging = get_imaging_by_case(patient_id, file_id) or {}
+        analysis_result = imaging.get("analysis_result")
+        merged = dict(analysis_result) if isinstance(analysis_result, dict) else {}
+        merged["quality_control"] = copy.deepcopy(result or {})
+
+        def _update_once():
+            return (
+                supabase.table("patient_imaging")
+                .update({"analysis_result": merged})
+                .eq("patient_id", patient_id)
+                .eq("case_id", file_id)
+                .execute()
+            )
+
+        _run_with_supabase_retry("patient_imaging.update_quality_control", _update_once)
+        return True
+    except Exception as exc:
+        print(f"[WARN] patient_imaging quality control update failed: {type(exc).__name__}")
+        return False
+
+
+def _skip_upload_steps_after_quality_control(job_id, reason):
+    started = False
+    for spec in UPLOAD_JOB_STEP_DEFS:
+        key = spec["key"]
+        if key == "image_quality_control":
+            started = True
+            continue
+        if started:
+            _update_step(job_id, key, "skipped", reason)
 
 
 def _build_path_decision(modalities):
@@ -1370,48 +1752,20 @@ def _build_path_decision(modalities):
         if value:
             raw_modalities.append(value)
 
+    dag = build_clinical_dag(raw_modalities)
     canonical_modalities = _normalize_uploaded_modalities(raw_modalities)
-    modality_set = set(canonical_modalities)
-    valid_keys = {"ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"} # AI辅助生成：GLM-5, 2026-03-08
-    unknown_modalities = sorted([m for m in modality_set if m not in valid_keys])
 
     decision = {
         "raw_modalities": raw_modalities,
         "canonical_modalities": canonical_modalities,
-        "imaging_path": None,
-        "should_generate_ctp": False,
-        "should_run_stroke_analysis": False,
-        "unknown_modalities": unknown_modalities,
-        "valid": False,
-        "error": None,
+        "imaging_path": dag.get("path"),
+        "should_generate_ctp": dag.get("path") == "ncct_mcta",
+        "should_run_stroke_analysis": dag.get("path")
+        in {"ncct_mcta", "ncct_mcta_ctp"},
+        "unknown_modalities": list(dag.get("unknown_modalities") or []),
+        "valid": bool(dag.get("valid")),
+        "error": dag.get("error"),
     }
-
-    # Fixed priority: ncct_mcta_ctp -> ncct_mcta -> ncct_single_phase_cta -> ncct_only
-    if {"ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"}.issubset(modality_set):
-        decision["imaging_path"] = "ncct_mcta_ctp"
-        decision["should_run_stroke_analysis"] = True
-        decision["valid"] = True
-        return decision
-
-    if {"ncct", "mcta", "vcta", "dcta"}.issubset(modality_set):
-        decision["imaging_path"] = "ncct_mcta" # AI辅助生成：GLM-5, 2026-03-09
-        decision["should_generate_ctp"] = True
-        decision["should_run_stroke_analysis"] = True
-        decision["valid"] = True
-        return decision
-
-    single_phase_hits = modality_set.intersection({"mcta", "vcta", "dcta"})
-    if "ncct" in modality_set and len(single_phase_hits) == 1 and len(modality_set) == 2:
-        decision["imaging_path"] = "ncct_single_phase_cta" # AI辅助生成：GLM-5, 2026-03-10
-        decision["valid"] = True
-        return decision
-
-    if modality_set == {"ncct"}:
-        decision["imaging_path"] = "ncct_only"
-        decision["valid"] = True
-        return decision
-
-    decision["error"] = "Invalid or unsupported modality combination" # AI辅助生成：GLM-5, 2026-03-11
     return decision
 
 
@@ -1490,10 +1844,19 @@ def _build_three_class_view(file_id, rgb_files):
         )
         if not inference or not inference.get("success"):
             payload["error"] = (inference or {}).get("error", "three_class failed")
+            payload["three_class_result"] = unavailable_three_class_result(
+                reason=payload["error"]
+            )
+            payload["summary"].update(payload["three_class_result"])
             payload["summary"]["display"] = "三分类失败"
             return payload
 
         predictions = inference.get("predictions") or []
+        three_class_result = inference.get("three_class_result")
+        if not isinstance(three_class_result, dict):
+            three_class_result = aggregate_three_class_predictions(
+                predictions, inference.get("class_names")
+            )
         by_index = {}
         for item in predictions:
             idx = _slice_index_from_name(item.get("slice_file")) # AI辅助生成：GLM-5, 2026-03-15
@@ -1526,19 +1889,27 @@ def _build_three_class_view(file_id, rgb_files):
         for key in ("normal", "hemo", "infarct"):
             display_parts.append(f"{_THREE_CLASS_LABEL_CN[key]} {counts[key]}")
 
+        gradcam_summary = dict(payload["summary"].get("gradcam") or {})
         payload["success"] = True # AI辅助生成：GLM-5, 2026-03-18
         payload["predictions"] = predictions
+        payload["three_class_result"] = three_class_result
         payload["summary"] = {
             "display": " | ".join(display_parts),
             "counts": counts,
+            "gradcam": gradcam_summary,
             "total_slices": int(
                 inference.get("total_slices") or len(predictions) or len(rgb_files or [])
             ),
             "output": inference.get("output") or {},
+            **three_class_result,
         }
         return payload
     except Exception as exc:
         payload["error"] = str(exc)
+        payload["three_class_result"] = unavailable_three_class_result(
+            reason=str(exc)
+        )
+        payload["summary"].update(payload["three_class_result"])
         payload["summary"]["display"] = "三分类异常"
         return payload # AI辅助生成：GLM-5, 2026-03-19
 
@@ -1549,11 +1920,11 @@ def _invoke_internal_upload(payload):
     form = {
         "patient_id": str(payload["patient_id"]),
         "file_id": payload["file_id"],
+        "upload_job_id": str(payload.get("job_id") or ""),
         "hemisphere": payload.get("hemisphere", "both"),
         "model_type": payload.get("model_type", "mrdpm"),
         "upload_mode": payload.get("upload_mode", "ncct"),
         "defer_stroke_analysis": "true",
-        "upload_job_id": str(payload.get("job_id") or ""),
     }
     if payload.get("cta_phase"):
         form["cta_phase"] = payload["cta_phase"]
@@ -1609,9 +1980,6 @@ def _invoke_internal_generate_report(patient_id, file_id, run_id=None):
         resp = client.get(url)
         data = resp.get_json(silent=True) or {} # AI辅助生成：GLM-5, 2026-03-23
         if resp.status_code != 200:
-            detail = data.get("message") or data.get("error")
-            if detail:
-                return False, str(detail), data
             return False, f"鎶ュ憡鎺ュ彛杩斿洖 {resp.status_code}", data
         if data.get("status") != "success":
             return False, data.get("message", "鎶ュ憡鐢熸垚澶辫触"), data
@@ -1645,6 +2013,21 @@ def _attach_vessel_result_to_agent_run(run_id, vessel_result):
     return bool(_update_agent_run(run_id, _mut))
 
 
+def _attach_three_class_to_agent_run(run_id, three_class_result):
+    if not run_id:
+        return False
+    normalized = _resolve_ncct_classification(structured=three_class_result)
+
+    def _mut(run):
+        planner_input = run.setdefault("planner_input", {})
+        planner_input["three_class_result"] = copy.deepcopy(normalized)
+        planner_input["safety_gate"] = copy.deepcopy(
+            normalized.get("safety_gate") or {}
+        )
+
+    return bool(_update_agent_run(run_id, _mut))
+
+
 def _persist_vessel_result_to_imaging(patient_id, file_id, vessel_result):
     """Merge the vessel result into the existing analysis_result JSONB."""
     if not SUPABASE_AVAILABLE or not patient_id or not file_id:
@@ -1674,6 +2057,39 @@ def _persist_vessel_result_to_imaging(patient_id, file_id, vessel_result):
         return False
 
 
+def _persist_three_class_result_to_imaging(
+    patient_id, file_id, three_class_result
+):
+    """Merge the NCCT result into analysis_result without replacing other models."""
+    if not SUPABASE_AVAILABLE or not patient_id or not file_id:
+        return False
+    normalized = _resolve_ncct_classification(structured=three_class_result)
+    try:
+        imaging = get_imaging_by_case(patient_id, file_id) or {}
+        analysis_result = imaging.get("analysis_result")
+        if not isinstance(analysis_result, dict):
+            analysis_result = {}
+        merged = dict(analysis_result)
+        merged["three_class_result"] = normalized
+
+        def _update_once():
+            return (
+                supabase.table("patient_imaging")
+                .update({"analysis_result": merged})
+                .eq("patient_id", patient_id)
+                .eq("case_id", file_id)
+                .execute()
+            )
+
+        _run_with_supabase_retry(
+            "patient_imaging.update_three_class_result", _update_once
+        )
+        return True
+    except Exception as exc:
+        print(f"[WARN] patient_imaging NCCT result update failed: {type(exc).__name__}")
+        return False
+
+
 def _resolve_vessel_result(run=None, imaging=None, structured=None):
     sources = []
     if isinstance(run, dict):
@@ -1689,6 +2105,137 @@ def _resolve_vessel_result(run=None, imaging=None, structured=None):
     if isinstance(structured, dict):
         sources.append(structured)
     return vessel_result_from_sources(*sources)
+
+
+def _resolve_ncct_classification(run=None, imaging=None, structured=None):
+    """Resolve a real NCCT classifier result without inventing an ischemia default."""
+    sources = []
+    if isinstance(run, dict):
+        sources.extend(
+            [
+                run.get("planner_input") or {},
+                run.get("result") or {},
+            ]
+        )
+        for item in reversed(run.get("tool_results") or []):
+            if not isinstance(item, dict):
+                continue
+            if item.get("tool_name") in {"three_class", "ncct_three_class"}:
+                sources.append(item.get("structured_output") or {})
+    if isinstance(imaging, dict):
+        sources.extend(
+            [
+                imaging.get("analysis_result") or {},
+                imaging.get("three_class_summary") or {},
+                imaging,
+            ]
+        )
+    if isinstance(structured, dict):
+        sources.append(structured)
+
+    label = None
+    label_cn = None
+    confidence = None
+    status = None
+    class_counts = None
+    total_slices = None
+    safety_gate = None
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        nested_candidates = [
+            source,
+            source.get("three_class_summary") or {},
+            source.get("three_class_result") or {},
+            source.get("output") or {},
+        ]
+        for candidate in nested_candidates:
+            if not isinstance(candidate, dict):
+                continue
+            if not label:
+                label = (
+                    candidate.get("three_class_label")
+                    or candidate.get("predicted_label")
+                    or candidate.get("pred_label")
+                )
+            if not label_cn:
+                label_cn = (
+                    candidate.get("three_class_label_cn")
+                    or candidate.get("predicted_label_cn")
+                    or candidate.get("label_cn")
+                )
+            if confidence is None:
+                raw_confidence = (
+                    candidate.get("three_class_confidence")
+                    if candidate.get("three_class_confidence") is not None
+                    else candidate.get("confidence")
+                )
+                try:
+                    parsed_confidence = float(raw_confidence)
+                    if 0.0 <= parsed_confidence <= 1.0:
+                        confidence = parsed_confidence
+                except (TypeError, ValueError):
+                    pass
+            if status is None and candidate.get("status"):
+                status = str(candidate.get("status") or "").strip().lower()
+            if class_counts is None and isinstance(
+                candidate.get("class_counts"), dict
+            ):
+                class_counts = {
+                    key: int(candidate.get("class_counts", {}).get(key) or 0)
+                    for key in ("normal", "hemo", "infarct")
+                }
+            if total_slices is None:
+                try:
+                    parsed_total = int(candidate.get("total_slices"))
+                    if parsed_total >= 0:
+                        total_slices = parsed_total
+                except (TypeError, ValueError):
+                    pass
+            if safety_gate is None and isinstance(
+                candidate.get("safety_gate"), dict
+            ):
+                safety_gate = copy.deepcopy(candidate.get("safety_gate"))
+        if label or label_cn:
+            break
+
+    normalized_label = str(label or "").strip().lower() or None
+    normalized_label_cn = str(label_cn or "").strip() or None
+    if normalized_label and not normalized_label_cn:
+        normalized_label_cn = _THREE_CLASS_LABEL_CN.get(
+            normalized_label, normalized_label
+        )
+    completed = bool(normalized_label or normalized_label_cn)
+    if not isinstance(safety_gate, dict):
+        blocked = normalized_label == "hemo" or not completed
+        safety_gate = {
+            "blocked": blocked,
+            "reason_code": (
+                "NCCT_SUSPECTED_HEMORRHAGE"
+                if normalized_label == "hemo"
+                else ("NCCT_CLASSIFICATION_UNAVAILABLE" if not completed else None)
+            ),
+            "reason": (
+                "NCCT 三分类提示疑似脑出血，已阻断后续 AIS/灌注分析"
+                if normalized_label == "hemo"
+                else (
+                    "NCCT 三分类没有产生有效结果"
+                    if not completed
+                    else None
+                )
+            ),
+            "requires_clinician_review": blocked,
+        }
+    return {
+        "status": "completed" if completed else (status or "unavailable"),
+        "three_class_label": normalized_label,
+        "three_class_label_cn": normalized_label_cn,
+        "three_class_confidence": confidence,
+        "class_counts": class_counts
+        or {key: 0 for key in ("normal", "hemo", "infarct")},
+        "total_slices": total_slices or 0,
+        "safety_gate": safety_gate,
+    }
 
 
 def _vessel_result_from_run(run):
@@ -1720,8 +2267,91 @@ def _is_infra_stroke_analysis_error(error_message):
 def _run_upload_processing_job(job_id, payload):
     temp_dir = payload.get("temp_dir") # AI辅助生成：GLM-5, 2026-03-26
     warnings = []
+    preserve_temp_dir = False
     try:
         _set_job_status(job_id, "running")
+
+        quality_control_result = payload.get("quality_control_result")
+        quality_reviewed = bool(payload.get("quality_control_reviewed"))
+        if not isinstance(quality_control_result, dict):
+            _update_step(
+                job_id,
+                "image_quality_control",
+                "running",
+                "正在检查文件完整性、层厚、覆盖、运动伪影、疑似缺片和几何一致性",
+            )
+            path_decision = _build_path_decision(payload.get("modalities"))
+            quality_control_result = run_image_quality_control(
+                _quality_control_paths(payload),
+                payload.get("modalities"),
+                path_decision.get("imaging_path") or "",
+            )
+            payload["quality_control_result"] = copy.deepcopy(quality_control_result)
+            payload["quality_control_reviewed"] = False
+
+        quality_message = _quality_control_message(quality_control_result)
+        _attach_quality_control_to_agent_run(
+            payload.get("agent_run_id"), quality_control_result
+        )
+
+        if (
+            quality_control_result.get("qc_status") == "failed"
+            and not quality_reviewed
+        ):
+            _update_step(job_id, "image_quality_control", "waiting", quality_message)
+
+            def _pause(job):
+                job["status"] = "paused_review_required"
+                job["current_step"] = "image_quality_control"
+                job["quality_control_result"] = copy.deepcopy(quality_control_result)
+                job["quality_review"] = {
+                    "status": "pending",
+                    "decision": None,
+                    "reviewer": None,
+                    "comment": None,
+                    "reviewed_at": None,
+                }
+                job["human_checkpoint"] = {
+                    "type": "image_quality_control",
+                    "status": "waiting",
+                    "action_required": "quality_review",
+                    "qc_fingerprint": quality_control_result.get("qc_fingerprint"),
+                }
+
+            _update_upload_job(job_id, _pause)
+            with UPLOAD_JOBS_LOCK:
+                UPLOAD_JOB_PAYLOADS[job_id] = payload
+            _set_agent_quality_checkpoint(
+                payload.get("agent_run_id"), quality_control_result
+            )
+            preserve_temp_dir = True
+            return
+
+        _update_step(job_id, "image_quality_control", "completed", quality_message)
+        if quality_control_result.get("qc_status") == "warning":
+            _add_job_warning(
+                job_id,
+                quality_control_result.get("qc_warning_message")
+                or "image_quality_control_warning",
+            )
+
+        def _store_quality(job):
+            job["quality_control_result"] = copy.deepcopy(quality_control_result)
+            job["quality_review"] = copy.deepcopy(
+                quality_control_result.get("review_override")
+            )
+            job["human_checkpoint"] = None
+
+        _update_upload_job(job_id, _store_quality)
+        _update_step(job_id, "modality_detect", "running", "正在核验可用影像模态")
+        actual_modalities = sorted(_quality_control_paths(payload))
+        payload["modalities"] = _normalize_uploaded_modalities(actual_modalities)
+        _update_step(
+            job_id,
+            "modality_detect",
+            "completed",
+            f"已核验模态: {payload['modalities']}",
+        )
 
         can_mcta = _is_mcta_combo(payload.get("modalities"))
         has_real_ctp = _has_real_ctp(payload.get("modalities"))
@@ -1732,8 +2362,7 @@ def _run_upload_processing_job(job_id, payload):
 
         ok, upload_msg, upload_result = _invoke_internal_upload(payload)
         if not ok:
-            if _get_upload_step_status(job_id, "three_class") != "completed":
-                _update_step(job_id, "three_class", "failed", upload_msg)
+            _update_step(job_id, "three_class", "failed", upload_msg)
             if should_ctp_generate:
                 _update_step(job_id, "ctp_generate", "failed", upload_msg)
             else:
@@ -1746,63 +2375,42 @@ def _run_upload_processing_job(job_id, payload):
             _set_job_status(job_id, "failed", upload_msg)
             return
 
-        three_class_summary = (upload_result or {}).get("three_class_summary") or {}
-        rgb_files = (upload_result or {}).get("rgb_files") or []
-        gradcam_status = (
-            (three_class_summary.get("gradcam") or {}).get("success") # AI辅助生成：GLM-5, 2026-03-29
-            if isinstance(three_class_summary, dict)
-            else False
+        upload_result["quality_control_result"] = copy.deepcopy(
+            quality_control_result
         )
-        three_class_display = (
-            str(three_class_summary.get("display") or "").strip()
-            if isinstance(three_class_summary, dict)
-            else ""
-        )
-        three_class_counts = (
-            three_class_summary.get("counts")
-            if isinstance(three_class_summary, dict)
-            and isinstance(three_class_summary.get("counts"), dict)
-            else {} # AI辅助生成：GLM-5, 2026-03-30
-        )
-        summary_has_counts = bool(
-            sum(int(three_class_counts.get(k) or 0) for k in ("normal", "hemo", "infarct"))
-        )
-        summary_has_output = bool(
-            isinstance(three_class_summary, dict)
-            and isinstance(three_class_summary.get("output"), dict)
-            and three_class_summary.get("output")
-        )
-        rgb_has_three_class = any(
-            str((item or {}).get("three_class_label") or "").strip() for item in rgb_files
-        )
-        display_is_ok = bool(
-            three_class_display # AI辅助生成：GLM-5, 2026-03-31
-            and "失败" not in three_class_display
-            and "异常" not in three_class_display
+        upload_result["quality_control"] = copy.deepcopy(quality_control_result)
+        _persist_quality_control_to_imaging(
+            payload.get("patient_id"), payload.get("file_id"), quality_control_result
         )
 
-        three_class_already_completed = (
-            _get_upload_step_status(job_id, "three_class") == "completed"
+        three_class_summary = (upload_result or {}).get("three_class_summary") or {}
+        three_class_result = _resolve_ncct_classification(
+            structured=(upload_result or {}).get("three_class_result")
+            or three_class_summary
         )
-        if three_class_already_completed:
-            pass
-        elif gradcam_status or summary_has_counts or summary_has_output or rgb_has_three_class or display_is_ok:
-            done_msg = three_class_display or "三分类与 Grad-CAM 完成"
-            _update_step(job_id, "three_class", "completed", done_msg)
-        else:
-            tc_err = (
-                str((three_class_summary.get("gradcam") or {}).get("error") or "").strip()
-                if isinstance(three_class_summary, dict)
-                else "" # AI辅助生成：GLM-5, 2026-04-01
+        safety_gate = three_class_result.get("safety_gate") or {}
+        safety_blocked = bool(safety_gate.get("blocked"))
+        upload_result["three_class_result"] = three_class_result
+        upload_result["safety_gate"] = safety_gate
+        upload_result["analysis_blocked"] = safety_blocked
+        if safety_blocked:
+            should_ctp_generate = False
+            should_stroke = False
+        if payload.get("agent_run_id"):
+            _attach_three_class_to_agent_run(
+                payload.get("agent_run_id"), three_class_result
             )
-            fail_msg = tc_err or three_class_display or "三分类或 Grad-CAM 未生成"
-            _update_step(job_id, "three_class", "failed", fail_msg)
+        rgb_files = (upload_result or {}).get("rgb_files") or []
+        three_class_step_status, three_class_step_message = (
+            _publish_three_class_step(
+                job_id, three_class_summary, three_class_result, rgb_files
+            )
+        )
+        if three_class_step_status == "failed":
+            fail_msg = three_class_step_message
             _add_job_warning(job_id, f"three_class degraded: {fail_msg}")
 
         if should_ctp_generate:
-            _update_step(
-                job_id, "ctp_generate", "running", "三分类完成，开始基于 mCTA 生成 CTP 灌注图"
-            )
             has_complete_ctp = _result_has_ctp_images(upload_result)
             if not has_complete_ctp:
                 ctp_error = (
@@ -1814,9 +2422,13 @@ def _run_upload_processing_job(job_id, payload):
             _update_step(job_id, "ctp_generate", "completed", "CTP 灌注图生成完成")
         else:
             reason = (
-                "已上传真实 CTP 数据，无需生成"
-                if has_real_ctp
-                else "当前模态不支持 CTP 生成" # AI辅助生成：GLM-5, 2026-04-03
+                safety_gate.get("reason")
+                if safety_blocked
+                else (
+                    "已上传真实 CTP 数据，无需生成"
+                    if has_real_ctp
+                    else "当前模态不支持 CTP 生成"
+                ) # AI辅助生成：GLM-5, 2026-04-03
             )
             _update_step(job_id, "ctp_generate", "skipped", reason)
 
@@ -1826,42 +2438,59 @@ def _run_upload_processing_job(job_id, payload):
             error_code="NOT_RUN",
             error_message="Vessel classification has not run",
         )
-        _update_step(job_id, "vessel_occlusion", "running", "正在执行血管闭塞三分类")
-        try:
-            vessel_ok, vessel_result, vessel_err = _run_vessel_occlusion_on_file(
-                payload["file_id"]
-            )
-            vessel_result = normalize_vessel_occlusion_result(vessel_result)
-            if vessel_ok and vessel_result:
-                label = vessel_result_display_label(vessel_result)
-                conf = vessel_result.get("confidence")
-                counts = vessel_result.get("class_counts", {})
-                confidence_text = f"{conf:.2%}" if isinstance(conf, (int, float)) else "--"
-                msg = (
-                    f"{label} (置信度 {confidence_text}) | "
-                    f"LVO={counts.get('Class_1_LVO', 0)} "
-                    f"MeVO={counts.get('Class_2_MEVO', 0)} "
-                    f"Normal={counts.get('Class_0', 0)}"
-                )
-                _update_step(job_id, "vessel_occlusion", "completed", msg)
-            else:
-                err_text = vessel_err or "血管闭塞三分类失败"
-                if vessel_result.get("error_code") == "CTA_INPUT_MISSING":
-                    _update_step(job_id, "vessel_occlusion", "skipped", err_text)
-                else:
-                    _update_step(job_id, "vessel_occlusion", "failed", err_text)
-                    warnings.append(err_text)
-                    _add_job_warning(job_id, err_text)
-        except Exception as vessel_exc:
-            err_text = f"血管闭塞三分类异常: {vessel_exc}"
+        if safety_blocked:
             vessel_result = empty_vessel_occlusion_result(
-                "failed",
-                error_code="MODEL_INFERENCE_EXCEPTION",
-                error_message=err_text,
+                "unavailable",
+                error_code="NCCT_SAFETY_GATE_BLOCKED",
+                error_message=str(
+                    safety_gate.get("reason") or "Blocked by NCCT safety gate"
+                ),
             )
-            _update_step(job_id, "vessel_occlusion", "failed", err_text)
-            warnings.append(err_text)
-            _add_job_warning(job_id, err_text)
+            _update_step(
+                job_id,
+                "vessel_occlusion",
+                "skipped",
+                str(safety_gate.get("reason") or "已由 NCCT 安全门控阻断"),
+            )
+        else:
+            _update_step(job_id, "vessel_occlusion", "running", "正在执行血管闭塞三分类")
+            try:
+                vessel_ok, vessel_result, vessel_err = _run_vessel_occlusion_on_file(
+                    payload["file_id"]
+                )
+                vessel_result = normalize_vessel_occlusion_result(vessel_result)
+                if vessel_ok and vessel_result:
+                    label = vessel_result_display_label(vessel_result)
+                    conf = vessel_result.get("confidence")
+                    counts = vessel_result.get("class_counts", {})
+                    confidence_text = (
+                        f"{conf:.2%}" if isinstance(conf, (int, float)) else "--"
+                    )
+                    msg = (
+                        f"{label} (置信度 {confidence_text}) | "
+                        f"LVO={counts.get('Class_1_LVO', 0)} "
+                        f"MeVO={counts.get('Class_2_MEVO', 0)} "
+                        f"Normal={counts.get('Class_0', 0)}"
+                    )
+                    _update_step(job_id, "vessel_occlusion", "completed", msg)
+                else:
+                    err_text = vessel_err or "血管闭塞三分类失败"
+                    if vessel_result.get("error_code") == "CTA_INPUT_MISSING":
+                        _update_step(job_id, "vessel_occlusion", "skipped", err_text)
+                    else:
+                        _update_step(job_id, "vessel_occlusion", "failed", err_text)
+                        warnings.append(err_text)
+                        _add_job_warning(job_id, err_text)
+            except Exception as vessel_exc:
+                err_text = f"血管闭塞三分类异常: {vessel_exc}"
+                vessel_result = empty_vessel_occlusion_result(
+                    "failed",
+                    error_code="MODEL_INFERENCE_EXCEPTION",
+                    error_message=err_text,
+                )
+                _update_step(job_id, "vessel_occlusion", "failed", err_text)
+                warnings.append(err_text)
+                _add_job_warning(job_id, err_text)
 
         upload_result["vessel_occlusion_result"] = vessel_result
         upload_result["vessel_occlusion_status"] = vessel_result.get("status")
@@ -1900,6 +2529,11 @@ def _run_upload_processing_job(job_id, payload):
                             payload.get("file_id"),
                             vessel_result,
                         )
+                        _persist_three_class_result_to_imaging(
+                            payload.get("patient_id"),
+                            payload.get("file_id"),
+                            three_class_result,
+                        )
                         _set_job_status(job_id, "failed", err)
                         return
             except Exception as e:
@@ -1915,18 +2549,29 @@ def _run_upload_processing_job(job_id, payload):
                         payload.get("file_id"),
                         vessel_result,
                     )
+                    _persist_three_class_result_to_imaging(
+                        payload.get("patient_id"),
+                        payload.get("file_id"),
+                        three_class_result,
+                    )
                     _set_job_status(job_id, "failed", err)
                     return # AI辅助生成：GLM-5, 2026-04-06
         else:
             _update_step(
-                job_id, "stroke_analysis", "skipped", "当前模态组合不触发脑卒中自动分析"
+                job_id,
+                "stroke_analysis",
+                "skipped",
+                str(safety_gate.get("reason") or "当前模态组合不触发脑卒中自动分析"),
             )
 
         _persist_vessel_result_to_imaging(
             payload.get("patient_id"), payload.get("file_id"), vessel_result
         )
+        _persist_three_class_result_to_imaging(
+            payload.get("patient_id"), payload.get("file_id"), three_class_result
+        )
 
-        if _result_has_ctp_images(upload_result):
+        if _result_has_ctp_images(upload_result) and not safety_blocked:
             _update_step(job_id, "pseudocolor", "running", "正在生成医学标准伪彩图")
             try:
                 ok, msg = _generate_pseudocolor_for_result(
@@ -1945,7 +2590,13 @@ def _run_upload_processing_job(job_id, payload):
                 _add_job_warning(job_id, msg)
         else:
             _update_step(
-                job_id, "pseudocolor", "skipped", "无可用 CTP 图像，跳过伪彩图生成" # AI辅助生成：GLM-5, 2026-04-08
+                job_id,
+                "pseudocolor",
+                "skipped",
+                str(
+                    safety_gate.get("reason")
+                    or "无可用 CTP 图像，跳过伪彩图生成"
+                ), # AI辅助生成：GLM-5, 2026-04-08
             )
 
         if payload.get("agent_run_id"):
@@ -2002,65 +2653,103 @@ def _run_upload_processing_job(job_id, payload):
     except Exception as e:
         _set_job_status(job_id, "failed", f"浠诲姟寮傚父: {e}")
     finally:
-        if temp_dir and os.path.exists(temp_dir):
+        if not preserve_temp_dir and temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 # AI妯″瀷閰嶇疆 - 鎵╁睍涓轰笁涓ā鍨?
 # ==================== Agent Runtime (Week3 Phase 1) ====================
-CANONICAL_RUN_STATUSES = {"queued", "running", "succeeded", "failed", "cancelled"}
-CANONICAL_STEP_STATUSES = {"pending", "running", "completed", "failed", "skipped"}
-CANONICAL_STAGES = {"triage", "tooling", "icv", "ekv", "consensus", "summary", "done"}
+CANONICAL_RUN_STATUSES = {
+    "queued",
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "paused_review_required",
+}
+CANONICAL_STEP_STATUSES = {
+    "pending",
+    "running",
+    "completed",
+    "failed",
+    "skipped",
+    "waiting",
+}
+CANONICAL_STAGES = {
+    "triage",
+    "tooling",
+    "icv",
+    "ekv",
+    "consensus",
+    "summary",
+    "review",
+    "done",
+}
 
 AGENT_TOOL_SEQUENCE_MAP = {
     "ncct_only": [
-        "detect_modalities",
         "load_patient_context",
+        "image_quality_control",
+        "detect_modalities",
+        "run_mrs_prognosis_prediction",
         "icv",
         "ekv",
         "consensus_lite",
         "generate_medgemma_report",
+        "human_confirm",
     ],
     "ncct_single_phase_cta": [
-        "detect_modalities",
         "load_patient_context",
+        "image_quality_control",
+        "detect_modalities",
         "vessel_occlusion",
+        "run_mrs_prognosis_prediction",
         "icv",
         "ekv",
         "consensus_lite",
         "generate_medgemma_report",
+        "human_confirm",
     ],
     "ncct_mcta": [
-        "detect_modalities",
         "load_patient_context",
+        "image_quality_control",
+        "detect_modalities",
         "vessel_occlusion",
         "generate_ctp_maps",
         "run_stroke_analysis",
+        "run_mrs_prognosis_prediction",
         "icv",
         "ekv",
         "consensus_lite",
         "generate_medgemma_report",
+        "human_confirm",
     ],
     "ncct_mcta_ctp": [
-        "detect_modalities",
         "load_patient_context",
+        "image_quality_control",
+        "detect_modalities",
         "vessel_occlusion",
         "run_stroke_analysis",
+        "run_mrs_prognosis_prediction",
         "icv",
         "ekv",
         "consensus_lite",
         "generate_medgemma_report",
+        "human_confirm",
     ],
 }
 
 POST_UPLOAD_SUMMARY_TOOL_SEQUENCE = [
-    "detect_modalities",
     "load_patient_context",
+    "image_quality_control",
+    "detect_modalities",
     "run_stroke_analysis",
+    "run_mrs_prognosis_prediction",
     "icv",
     "ekv",
     "consensus_lite",
     "generate_medgemma_report",
+    "human_confirm",
 ]
 
 AGENT_TOOL_RETRY_LIMITS = {
@@ -2072,35 +2761,46 @@ AGENT_TOOL_RETRY_LIMITS = {
 }
 
 AGENT_TOOL_STAGE_MAP = {
+    "load_patient_context": "triage",
+    "image_quality_control": "triage",
+    "detect_modalities": "triage",
     "vessel_occlusion": "tooling",
+    "run_mrs_prognosis_prediction": "tooling",
     "icv": "icv",
     "ekv": "ekv",
     "consensus_lite": "consensus",
     "generate_medgemma_report": "summary",
+    "human_confirm": "review",
 }
 
 AGENT_TOOL_LABELS = {
-    "detect_modalities": "Case_Intake.parse()",
-    "load_patient_context": "Image_QC.validate()",
+    "load_patient_context": "Case_Context.load()",
+    "image_quality_control": "Image_QC.validate()",
+    "detect_modalities": "Modality_Detect.route()",
     "vessel_occlusion": "Vessel_Occlusion.classify()",
     "generate_ctp_maps": "MRDPM_Generate.run()",
     "run_stroke_analysis": "Stroke_Analysis.segment()",
+    "run_mrs_prognosis_prediction": "90天功能预后评估",
     "icv": "Evidence_Check.icv()",
     "ekv": "Evidence_Check.ekv()",
     "consensus_lite": "Evidence_Check.consensus()",
     "generate_medgemma_report": "Report_Generate.compose()",
+    "human_confirm": "Human_Confirm.await_action()",
 }
 
 AGENT_TOOL_DESCRIPTIONS = {
-    "detect_modalities": "识别病例模态组合并确定任务路径",
-    "load_patient_context": "加载病例上下文并完成输入校验",
+    "load_patient_context": "加载患者与本次影像病例上下文",
+    "image_quality_control": "检查影像完整性、层厚、覆盖、运动风险、疑似缺片与几何一致性",
+    "detect_modalities": "核验病例模态组合并确定任务路径",
     "vessel_occlusion": "DINOv3 血管闭塞三分类（正常/LVO/MeVO）",
     "generate_ctp_maps": "按需生成 CTP 灌注图谱",
     "run_stroke_analysis": "执行卒中定量分析并产出关键指标",
+    "run_mrs_prognosis_prediction": "加载真实MVP bundle并评估90天功能预后",
     "icv": "执行内在一致性校验",
     "ekv": "执行外部证据与指南核验",
     "consensus_lite": "聚合校验结果形成一致性结论",
     "generate_medgemma_report": "生成结构化结论与最终摘要",
+    "human_confirm": "人工复核报告分段，确认后完成闭环",
 }
 
 TOOL_ERROR_SUGGESTIONS = {
@@ -2151,11 +2851,13 @@ DEMO_SCENARIOS = {
 }
 
 W0_TOOL_TITLE_MAP = {
-    "detect_modalities": "Case_Intake.parse()",
-    "load_patient_context": "Image_QC.validate()",
+    "load_patient_context": "Case_Context.load()",
+    "image_quality_control": "Image_QC.validate()",
+    "detect_modalities": "Modality_Detect.route()",
     "vessel_occlusion": "Vessel_Occlusion.classify()",
     "generate_ctp_maps": "MRDPM_Generate.run()",
     "run_stroke_analysis": "Stroke_Analysis.segment()",
+    "run_mrs_prognosis_prediction": "90天功能预后评估",
     "icv": "Evidence_Check.icv()",
     "ekv": "Evidence_Check.ekv()",
     "consensus_lite": "Evidence_Check.consensus()",
@@ -2409,7 +3111,9 @@ def _w0_mock_public_run(run):
     payload.pop("created_epoch", None)
     payload.pop("script", None)
     payload.pop("script_cursor", None)
-    return _ensure_w0_run_fields(payload)
+    run_id = str(payload.get("run_id") or "").strip()
+    events = copy.deepcopy(W0_MOCK_EVENTS.get(run_id, [])) if run_id else []
+    return _ensure_w0_run_fields(payload, events=events)
 
 
 def _w0_mock_refresh_run(run_id):
@@ -2527,6 +3231,252 @@ def _safe_agent_copy(obj):
     return copy.deepcopy(obj) if obj is not None else None
 
 
+_NODE_INFO_TOOL_ALIASES = {
+    "ctp_generate": "generate_ctp_maps",
+}
+
+
+def _node_info_tool_name(value):
+    key = str(value or "").strip()
+    return _NODE_INFO_TOOL_ALIASES.get(key, key)
+
+
+def _node_info_first(*values):
+    for value in values:
+        if value not in (None, "", [], {}):
+            return value
+    return None
+
+
+def _node_info_confidence(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        score = float(value)
+    except Exception:
+        return None
+    if score > 1.0 and score <= 100.0:
+        score = score / 100.0
+    if score < 0.0 or score > 1.0:
+        return None
+    return round(score, 4)
+
+
+def _node_info_evidence_refs(*payloads):
+    refs = []
+    seen = set()
+
+    def _append(value):
+        if isinstance(value, dict):
+            value = _node_info_first(
+                value.get("evidence_id"),
+                value.get("id"),
+                value.get("source_ref"),
+            )
+        token = str(value or "").strip()
+        if not token or token in seen:
+            return
+        seen.add(token)
+        refs.append(token)
+
+    def _scan(payload, depth=0):
+        if depth > 2:
+            return
+        if isinstance(payload, (list, tuple, set)):
+            for item in payload:
+                if isinstance(item, (dict, list, tuple, set)):
+                    _scan(item, depth + 1)
+                else:
+                    _append(item)
+            return
+        if not isinstance(payload, dict):
+            return
+        for key in (
+            "evidence_refs",
+            "evidence_ids",
+            "evidence_used",
+            "citations",
+            "evidence",
+        ):
+            value = payload.get(key)
+            if isinstance(value, (list, tuple, set)):
+                for item in value:
+                    _append(item)
+        for key in ("claims", "findings", "evidence_items"):
+            _scan(payload.get(key), depth + 1)
+
+    for payload in payloads:
+        _scan(payload)
+    return refs
+
+
+def _node_info_conflict_status(*payloads):
+    explicit_values = []
+    has_explicit_zero = False
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        explicit_values.extend(
+            [payload.get("conflict_status"), payload.get("consistency_status")]
+        )
+        if payload.get("severe_conflict_exists") is True:
+            return "conflict"
+        conflicts = payload.get("conflicts")
+        if isinstance(conflicts, list) and conflicts:
+            return "conflict"
+        count = payload.get("conflict_count")
+        if count not in (None, ""):
+            try:
+                if int(count) > 0:
+                    return "conflict"
+                has_explicit_zero = True
+            except Exception:
+                pass
+
+    for value in explicit_values:
+        if isinstance(value, bool):
+            return "conflict" if value else "no_conflict"
+        token = str(value or "").strip().lower()
+        if token in {"conflict", "conflicted", "inconsistent", "has_conflict"}:
+            return "conflict"
+        if token in {"no_conflict", "none", "consistent", "passed", "pass"}:
+            return "no_conflict"
+    return "no_conflict" if has_explicit_zero else "unknown"
+
+
+def _build_cockpit_node_info(*, tool_name, step=None, event=None, tool_result=None):
+    step = step if isinstance(step, dict) else {}
+    event = event if isinstance(event, dict) else {}
+    tool_result = tool_result if isinstance(tool_result, dict) else {}
+    output_ref = (
+        event.get("output_ref") if isinstance(event.get("output_ref"), dict) else {}
+    )
+    structured_output = (
+        tool_result.get("structured_output")
+        if isinstance(tool_result.get("structured_output"), dict)
+        else {}
+    )
+    input_ref = (
+        event.get("input_ref") if isinstance(event.get("input_ref"), dict) else {}
+    )
+    canonical_tool = _node_info_tool_name(
+        _node_info_first(tool_name, event.get("tool_name"), step.get("key"))
+    )
+    skill_id = skill_id_for_tool(canonical_tool) if canonical_tool else "SKILL_UNKNOWN"
+    skill = get_skill_by_id(skill_id) or {}
+    confidence_score = _node_info_confidence(
+        _node_info_first(
+            event.get("confidence"),
+            event.get("confidence_score"),
+            output_ref.get("confidence"),
+            output_ref.get("confidence_score"),
+            output_ref.get("support_rate"),
+            tool_result.get("confidence"),
+            tool_result.get("confidence_score"),
+            structured_output.get("confidence"),
+            structured_output.get("confidence_score"),
+            structured_output.get("support_rate"),
+            step.get("confidence"),
+            step.get("confidence_score"),
+        )
+    )
+    input_summary = _node_info_first(
+        event.get("input_summary"),
+        step.get("input_summary"),
+        _agent_compact_value(input_ref) if input_ref else None,
+    )
+    output_summary = _node_info_first(
+        event.get("result_summary"),
+        event.get("output_summary"),
+        step.get("output_summary"),
+        _agent_compact_value(output_ref) if output_ref else None,
+        _agent_compact_value(structured_output) if structured_output else None,
+        step.get("message"),
+    )
+    return {
+        "node_id": canonical_tool,
+        "node_name": _agent_tool_title(canonical_tool) if canonical_tool else "-",
+        "agent_name": str(
+            _node_info_first(
+                event.get("agent_name"),
+                step.get("agent_name"),
+                tool_result.get("agent_name"),
+                skill.get("owner_agent"),
+            )
+            or ""
+        ),
+        "skill_id": skill_id,
+        "skill_name": str(skill.get("skill_name") or ""),
+        "tool_name": canonical_tool,
+        "input_summary": str(input_summary or ""),
+        "output_summary": str(output_summary or ""),
+        "confidence_score": confidence_score,
+        "confidence_method": str(
+            _node_info_first(
+                event.get("confidence_method"),
+                output_ref.get("confidence_method"),
+                structured_output.get("confidence_method"),
+                skill.get("confidence_method"),
+            )
+            or ""
+        ),
+        "evidence_refs": _node_info_evidence_refs(
+            event, output_ref, tool_result, structured_output
+        ),
+        "conflict_status": _node_info_conflict_status(
+            event, output_ref, tool_result, structured_output
+        ),
+    }
+
+
+def _enrich_agent_run_node_info(run, events=None):
+    if not isinstance(run, dict):
+        return run
+    event_by_tool = {}
+    for event in events or []:
+        if not isinstance(event, dict):
+            continue
+        key = _node_info_tool_name(event.get("tool_name") or event.get("node_name"))
+        if key:
+            event_by_tool[key] = event
+
+    result_by_tool = {}
+    for result in run.get("tool_results") or []:
+        if not isinstance(result, dict):
+            continue
+        key = _node_info_tool_name(
+            result.get("tool_name") or result.get("name") or result.get("step_key")
+        )
+        if key:
+            result_by_tool[key] = result
+
+    step_by_tool = {}
+    for step in run.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        key = _node_info_tool_name(
+            step.get("key") or step.get("tool_name") or step.get("node_name")
+        )
+        if not key:
+            continue
+        step_by_tool[key] = step
+        step["node_info"] = _build_cockpit_node_info(
+            tool_name=key,
+            step=step,
+            event=event_by_tool.get(key),
+            tool_result=result_by_tool.get(key),
+        )
+
+    for key, result in result_by_tool.items():
+        result["node_info"] = _build_cockpit_node_info(
+            tool_name=key,
+            step=step_by_tool.get(key),
+            event=event_by_tool.get(key),
+            tool_result=result,
+        )
+    return run
+
+
 def _build_w0_plan_frame(
     tool_sequence,
     imaging_path="",
@@ -2573,7 +3523,7 @@ def _infer_w0_termination_reason(run):
     return "unknown"
 
 
-def _ensure_w0_run_fields(run):
+def _ensure_w0_run_fields(run, events=None):
     if not isinstance(run, dict):
         return run
 
@@ -2630,7 +3580,7 @@ def _ensure_w0_run_fields(run):
         else:
             run["finalization"] = None
 
-    return run
+    return _enrich_agent_run_node_info(run, events=events)
 
 
 REVIEW_SECTION_SPECS = [
@@ -3075,6 +4025,38 @@ def _review_compose_final_report(review_state):
     return "\n".join(lines).strip() # AI辅助生成：GLM-5, 2026-04-07
 
 
+def _review_refresh_structured_report(report_payload, run):
+    if not isinstance(report_payload, dict):
+        return report_payload
+    run = run if isinstance(run, dict) else {}
+    result = run.get("result") if isinstance(run.get("result"), dict) else {}
+    patient_context = (
+        copy.deepcopy(result.get("patient_context"))
+        if isinstance(result.get("patient_context"), dict)
+        else {}
+    )
+    analysis_result = (
+        result.get("analysis_result")
+        if isinstance(result.get("analysis_result"), dict)
+        else {}
+    )
+    patient_context.update(
+        {key: value for key, value in analysis_result.items() if value is not None}
+    )
+    planner_input = (
+        run.get("planner_input")
+        if isinstance(run.get("planner_input"), dict)
+        else {}
+    )
+    return ensure_structured_report_v2(
+        report_payload,
+        run_id=str(run.get("run_id") or ""),
+        file_id=str(run.get("file_id") or planner_input.get("file_id") or ""),
+        patient_context=patient_context,
+        legacy_report_text=str(report_payload.get("final_confirmed_report") or ""),
+    )
+
+
 def _review_attach_to_run_state(state, review_state, final_report_text=None):
     state["review_state"] = copy.deepcopy(_review_recompute_state(review_state))
 
@@ -3095,6 +4077,7 @@ def _review_attach_to_run_state(state, review_state, final_report_text=None):
         report_payload["review_finalized_at"] = _review_now_iso()
         report_result["report"] = str(final_report_text) # AI辅助生成：GLM-5, 2026-04-09
 
+    report_payload = _review_refresh_structured_report(report_payload, state)
     report_result["report_payload"] = report_payload
     run_result["report_result"] = report_result
     state["result"] = run_result
@@ -3144,6 +4127,7 @@ def _persist_review_state_best_effort(
         if final_report_text:
             report_payload["final_confirmed_report"] = str(final_report_text)
             report_payload["review_finalized_at"] = _review_now_iso() # AI辅助生成：GLM-5, 2026-04-13
+        report_payload = _review_refresh_structured_report(report_payload, run)
 
         def _upsert_once():
             update_query = (
@@ -3184,7 +4168,12 @@ def _classify_agent_event_type(event):
         return "plan_created" # AI辅助生成：GLM-5, 2026-04-16
     if status == "running":
         return "step_started"
-    if status in {"paused_review_required", "review_required", "await_review"}:
+    if status in {
+        "paused_review_required",
+        "review_required",
+        "await_review",
+        "waiting",
+    }:
         return "human_review_required"
     if status in {"failed", "warn", "warning"}:
         if "human_review" in tool_name or "human_confirm" in tool_name:
@@ -3261,6 +4250,7 @@ def _create_agent_run(
     execution_mode="default",
     trigger_source="api",
     question=None,
+    mrs_clinical_record=None,
 ):
     normalized_hemisphere, warning = _canonicalize_hemisphere(hemisphere)
     planner_input = {
@@ -3277,6 +4267,8 @@ def _create_agent_run(
         normalized_question = str(question).strip()
         planner_input["question"] = normalized_question
         planner_input["goal_question"] = normalized_question
+    if isinstance(mrs_clinical_record, dict) and mrs_clinical_record:
+        planner_input["mrs_clinical_record"] = copy.deepcopy(mrs_clinical_record)
     run = {
         "run_id": run_id,
         "patient_id": patient_id,
@@ -3498,6 +4490,19 @@ def _build_agent_event_clinical_fields(event):
         summary["input_summary"] = "加载患者基础信息、病史及影像上下文。"
         summary["result_summary"] = _agent_compact_value(output_ref or "病例上下文已加载")
         summary["clinical_impact"] = "为后续卒中分割与证据核验提供临床背景。"
+    elif tool_name == "image_quality_control":
+        summary["input_summary"] = "检查影像可读性、层厚、覆盖、运动风险、疑似缺片与几何一致性。"
+        summary["result_summary"] = _quality_control_message(output_ref)
+        summary["clinical_impact"] = "在医学模型运行前识别输入质量风险并执行人工门控。"
+        findings = output_ref.get("findings") if isinstance(output_ref, dict) else []
+        summary["risk_items"] = [
+            str(item.get("message") or item.get("code"))
+            for item in (findings or [])
+            if isinstance(item, dict)
+        ][:5]
+        if (output_ref or {}).get("qc_status") == "failed":
+            summary["risk_level"] = "high"
+            summary["action_required"] = "医生接受可覆盖风险或退回重新上传"
     elif tool_name in {"generate_ctp_maps"}:
         summary["input_summary"] = "基于多模态影像生成灌注图谱（CBF/CBV/Tmax）。" # AI辅助生成：GLM-5, 2026-03-12
         summary["result_summary"] = _agent_compact_value(output_ref or "灌注图谱已生成")
@@ -3506,6 +4511,15 @@ def _build_agent_event_clinical_fields(event):
         summary["input_summary"] = "执行卒中区域分割与体积测量。"
         summary["result_summary"] = _agent_compact_value(output_ref or "卒中分析已完成")
         summary["clinical_impact"] = "为治疗决策提供病灶侧别与体积证据。"
+    elif tool_name in {"run_mrs_prognosis_prediction"}:
+        prediction = output_ref.get("prediction") if isinstance(output_ref, dict) else {}
+        mode = output_ref.get("display_mode") if isinstance(output_ref, dict) else None
+        risk = prediction.get("poor_prognosis_risk") if isinstance(prediction, dict) else None
+        confidence_level = ((output_ref.get("confidence") or {}).get("level")) if isinstance(output_ref, dict) else None
+        risk_text = f"{float(risk):.1%}" if isinstance(risk, (int, float)) else "-"
+        summary["input_summary"] = "读取当前病例结构化临床字段及所需NCCT输入，加载真实MVP bundle。"
+        summary["result_summary"] = f"{mode or '90天功能预后评估'}；不良预后风险 {risk_text}；置信度 {confidence_level or '-'}"
+        summary["clinical_impact"] = "提供研究型MVP的90天功能预后辅助风险分层，尚未完成外部验证。"
     elif tool_name in {"icv"}:
         summary["input_summary"] = "对院内关键指标进行一致性核验。" # AI辅助生成：GLM-5, 2026-03-13
         summary["result_summary"] = _agent_compact_value(output_ref or "ICV 校验完成")
@@ -3575,6 +4589,53 @@ def _build_agent_event_clinical_fields(event):
         summary["risk_level"] = "none"
 
     return summary
+
+
+def _normalize_agent_events_for_api(run, events):
+    run = run if isinstance(run, dict) else {}
+    step_by_tool = {}
+    for step in run.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        key = _node_info_tool_name(
+            step.get("key") or step.get("tool_name") or step.get("node_name")
+        )
+        if key:
+            step_by_tool[key] = step
+
+    result_by_tool = {}
+    for result in run.get("tool_results") or []:
+        if not isinstance(result, dict):
+            continue
+        key = _node_info_tool_name(
+            result.get("tool_name") or result.get("name") or result.get("step_key")
+        )
+        if key:
+            result_by_tool[key] = result
+
+    normalized = []
+    for item in sorted(events or [], key=lambda x: int((x or {}).get("event_seq") or 0)):
+        event = dict(item or {})
+        event["event_type"] = str(
+            event.get("event_type") or _classify_agent_event_type(event)
+        )
+        event["phase"] = str(event.get("phase") or event.get("stage") or "")
+        event["node_name"] = str(
+            event.get("node_name") or event.get("tool_name") or ""
+        )
+        enrich = _build_agent_event_clinical_fields(event)
+        for field_name, field_value in enrich.items():
+            if field_name not in event or event.get(field_name) in (None, "", [], {}):
+                event[field_name] = field_value
+        key = _node_info_tool_name(event.get("tool_name") or event.get("node_name"))
+        event["node_info"] = _build_cockpit_node_info(
+            tool_name=key,
+            step=step_by_tool.get(key),
+            event=event,
+            tool_result=result_by_tool.get(key),
+        )
+        normalized.append(event)
+    return normalized
 
 
 def _append_agent_event(
@@ -3650,7 +4711,7 @@ def _upsert_agent_step(run_id, tool_name, status, message="", retryable=False, a
         step["message"] = str(message or "") # AI辅助生成：GLM-5, 2026-03-22
         step["retryable"] = bool(retryable)
         step["attempts"] = max(int(step.get("attempts", 0)), int(attempt))
-        if status == "running":
+        if status in {"running", "waiting"}:
             step["started_at"] = step["started_at"] or now
             step["ended_at"] = None
             run["current_tool"] = tool_name
@@ -3949,6 +5010,12 @@ def _tool_load_patient_context(run):
                 "patient_age": patient_data.get("patient_age"),
                 "patient_sex": patient_data.get("patient_sex"),
                 "admission_nihss": patient_data.get("admission_nihss"),
+                "nihss_24h": (
+                    patient_data.get("nihss_24h")
+                    if patient_data.get("nihss_24h") is not None
+                    else patient_data.get("NIHSS 24 HOURS")
+                ),
+                "onset_to_ct_hours": patient_data.get("onset_to_ct_hours"),
                 "onset_to_admission_hours": onset_to_admission_hours,
             },
             "imaging": {
@@ -3972,6 +5039,55 @@ def _tool_load_patient_context(run):
     return True, output, None # AI辅助生成：GLM-5, 2026-04-04
 
 
+def _tool_image_quality_control(run):
+    planner_input = run.get("planner_input") or {}
+    result = planner_input.get("quality_control_result") or planner_input.get(
+        "quality_control"
+    )
+    if not isinstance(result, dict) or not result.get("qc_fingerprint"):
+        file_id = planner_input.get("file_id")
+        patient_id = planner_input.get("patient_id")
+        if not file_id:
+            return (
+                False,
+                None,
+                _tool_error_contract("TOOL_INPUT_INVALID", "Missing file_id for image QC"),
+            )
+        files = _collect_case_upload_files(file_id)
+        paths = {
+            str(key).removesuffix("_file"): item.get("path")
+            for key, item in files.items()
+            if isinstance(item, dict) and item.get("path")
+        }
+        decision = _build_path_decision(
+            planner_input.get("available_modalities") or paths.keys()
+        )
+        result = run_image_quality_control(
+            paths,
+            planner_input.get("available_modalities") or paths.keys(),
+            decision.get("imaging_path") or "",
+        )
+        _persist_quality_control_to_imaging(patient_id, file_id, result)
+
+        def _attach(state):
+            state.setdefault("planner_input", {})["quality_control_result"] = copy.deepcopy(
+                result
+            )
+            state["planner_input"]["quality_control"] = copy.deepcopy(result)
+
+        _update_agent_run(run.get("run_id"), _attach)
+
+    override = result.get("review_override") or {}
+    accepted = override.get("decision") == "accept_risk"
+    output = copy.deepcopy(result)
+    output["status"] = (
+        "waiting"
+        if result.get("qc_status") == "failed" and not accepted
+        else "completed"
+    )
+    return True, output, None
+
+
 def _tool_generate_ctp_maps(run):
     planner_input = run.get("planner_input") or {}
     file_id = planner_input.get("file_id")
@@ -3982,6 +5098,19 @@ def _tool_generate_ctp_maps(run):
             False,
             None,
             _tool_error_contract("TOOL_INPUT_INVALID", "Missing patient_id or file_id"),
+        )
+    gate = (_resolve_ncct_classification(run=run).get("safety_gate") or {})
+    if gate.get("blocked"):
+        return (
+            True,
+            {
+                "status": "skipped",
+                "reason_code": gate.get("reason_code"),
+                "reason": gate.get("reason"),
+                "ctp_generated": False,
+                "generated_modalities": [],
+            },
+            None,
         )
 
     files = _collect_case_upload_files(file_id)
@@ -4252,7 +5381,27 @@ def _tool_vessel_occlusion(run):
         return (
             False,
             None,
-            _tool_error_contract("TOOL_INPUT_INVALID", "Missing file_id for vessel occlusion"),
+            _tool_error_contract(
+                "TOOL_INPUT_INVALID", "Missing file_id for vessel occlusion"
+            ),
+        )
+    gate = (_resolve_ncct_classification(run=run).get("safety_gate") or {})
+    if gate.get("blocked"):
+        return (
+            True,
+            {
+                "status": "skipped",
+                "reason_code": gate.get("reason_code"),
+                "reason": gate.get("reason"),
+                "vessel_occlusion_result": empty_vessel_occlusion_result(
+                    "unavailable",
+                    error_code="NCCT_SAFETY_GATE_BLOCKED",
+                    error_message=str(
+                        gate.get("reason") or "Blocked by NCCT safety gate"
+                    ),
+                ),
+            },
+            None,
         )
 
     ok, result, err_msg = _run_vessel_occlusion_on_file(file_id)
@@ -4281,6 +5430,18 @@ def _tool_run_stroke_analysis(run):
             False,
             None,
             _tool_error_contract("TOOL_INPUT_INVALID", "Missing file_id"),
+        )
+    gate = (_resolve_ncct_classification(run=run).get("safety_gate") or {})
+    if gate.get("blocked"):
+        return (
+            True,
+            {
+                "status": "skipped",
+                "reason_code": gate.get("reason_code"),
+                "reason": gate.get("reason"),
+                "analysis_status": "skipped",
+            },
+            None,
         )
 
     analysis = analyze_stroke_case(file_id, hemisphere)
@@ -4330,6 +5491,56 @@ def _tool_run_stroke_analysis(run):
     )
 
 
+def _tool_run_mrs_prognosis_prediction(run):
+    """Execute the fixed 90-day mRS MVP route for the current Agent case."""
+
+    planner_input = run.get("planner_input") or {}
+    patient_id = planner_input.get("patient_id") or run.get("patient_id")
+    file_id = planner_input.get("file_id") or run.get("file_id")
+    if not patient_id or not file_id:
+        return (
+            False,
+            None,
+            _tool_error_contract("TOOL_INPUT_INVALID", "Missing patient_id or file_id"),
+        )
+    try:
+        try:
+            from .mrs_prognosis import run_mrs_prognosis_prediction
+        except ImportError:
+            from mrs_prognosis import run_mrs_prognosis_prediction
+
+        patient_data = get_patient_by_id(patient_id) or {}
+        files = _collect_case_upload_files(file_id)
+        ncct_path = ((files.get("ncct_file") or {}).get("path"))
+        output = run_mrs_prognosis_prediction(
+            run=run,
+            patient_data=patient_data,
+            ncct_path=ncct_path,
+            baseline_bundle=os.getenv("MRS_BASELINE_BUNDLE_PATH")
+            or os.path.join(PROJECT_ROOT, "outputs", "mrs_model", "mrs_baseline_mvp.pt"),
+            update24h_bundle=os.getenv("MRS_UPDATE24H_BUNDLE_PATH")
+            or os.path.join(PROJECT_ROOT, "outputs", "mrs_model", "mrs_update24h_mvp.pt"),
+        )
+    except Exception as exc:
+        return (
+            False,
+            None,
+            _tool_error_contract("TOOL_EXECUTION_FAILED", f"mRS prediction exception: {exc}"),
+        )
+    if output.get("status") != "completed":
+        return (
+            False,
+            output,
+            _tool_error_contract(
+                "TOOL_DEPENDENCY_MISSING"
+                if "BUNDLE" in str(output.get("error_code") or "")
+                else "TOOL_EXECUTION_FAILED",
+                str(output.get("message") or "mRS prognosis result unavailable"),
+            ),
+        )
+    return True, output, None
+
+
 def _tool_icv(run):
     try:
         run_id = run.get("run_id") or run.get("id") or "unknown"
@@ -4363,10 +5574,16 @@ def _tool_icv(run):
                 if tr.get("tool_name") == "run_stroke_analysis" and tr.get("status") == "completed":
                     analysis_ctx = tr.get("structured_output") or {}
                     break
+        icv_patient_context = copy.deepcopy(context.get("patient_context") or {})
+        icv_patient_context["expected_identifiers"] = {
+            "patient_id": (run.get("planner_input") or {}).get("patient_id") or run.get("patient_id"),
+            "file_id": (run.get("planner_input") or {}).get("file_id") or run.get("file_id"),
+            "run_id": run.get("run_id") or run.get("id"),
+        }
         icv_out = evaluate_icv(
             planner_output=planner_output,
             tool_results=tool_results,
-            patient_context=context.get("patient_context"),
+            patient_context=icv_patient_context,
             analysis_result=analysis_ctx,
         )
         if not icv_out or not icv_out.get("success"):
@@ -4702,7 +5919,7 @@ def _tool_consensus_lite(run):
         return False, None, _tool_error_contract("TOOL_EXECUTION_FAILED", str(exc))
 
 
-def _tool_generate_medgemma_report(run):
+def _tool_generate_report(run):
     planner_input = run.get("planner_input") or {}
     patient_id = planner_input.get("patient_id")
     file_id = planner_input.get("file_id") # AI辅助生成：GLM-5, 2026-03-07
@@ -4729,6 +5946,10 @@ def _tool_generate_medgemma_report(run):
         run=run,
         structured=(data.get("report_payload") or data),
     )
+    three_class_result = _resolve_ncct_classification(
+        run=run,
+        structured=(data.get("report_payload") or data),
+    )
     # Attach verification outputs into report_payload for frontend rendering.
     run = run or {}
     icv_payload = None
@@ -4737,6 +5958,7 @@ def _tool_generate_medgemma_report(run):
     ekv_failed_result = None # AI辅助生成：GLM-5, 2026-03-08
     consensus_payload = None
     consensus_failed_result = None
+    mrs_prognosis_payload = None
     try:
         run_results = run.get("tool_results") or []
         for r in run_results:
@@ -4752,6 +5974,10 @@ def _tool_generate_medgemma_report(run):
                 consensus_payload = r.get("structured_output") or r.get("raw_ref")
             if r.get("tool_name") == "consensus_lite" and r.get("status") == "failed":
                 consensus_failed_result = r
+            if r.get("tool_name") == "run_mrs_prognosis_prediction":
+                candidate = r.get("structured_output")
+                if isinstance(candidate, dict):
+                    mrs_prognosis_payload = candidate
     except Exception:
         icv_payload = None
         icv_failed_result = None
@@ -4759,6 +5985,7 @@ def _tool_generate_medgemma_report(run):
         ekv_failed_result = None
         consensus_payload = None
         consensus_failed_result = None
+        mrs_prognosis_payload = None
 
     report_payload = data.get("report_payload") or {}
     if isinstance(report_payload, dict):
@@ -4769,6 +5996,23 @@ def _tool_generate_medgemma_report(run):
             "vessel_occlusion_class_result"
         )
         report_payload["vessel_occlusion_confidence"] = vessel_result.get("confidence")
+        report_payload["three_class_result"] = three_class_result
+        report_payload.update(
+            {
+                key: three_class_result.get(key)
+                for key in (
+                    "status",
+                    "three_class_label",
+                    "three_class_label_cn",
+                    "three_class_confidence",
+                    "class_counts",
+                    "total_slices",
+                    "safety_gate",
+                )
+                if key != "status"
+            }
+        )
+        report_payload["three_class_status"] = three_class_result.get("status")
     if icv_payload is None and icv_failed_result is not None:
         icv_payload = {
             "status": "unavailable",
@@ -4828,6 +6072,12 @@ def _tool_generate_medgemma_report(run):
             report_payload["consensus"] = consensus_payload
         except Exception:
             pass
+    if mrs_prognosis_payload is not None:
+        try:
+            report_payload = dict(report_payload)
+            report_payload["mrs_prognosis_result"] = mrs_prognosis_payload
+        except Exception:
+            pass
 
     # 从 planner_input 中获取用户原始问题
     user_question = str((run.get("planner_input") or {}).get("question") or "").strip()
@@ -4877,6 +6127,7 @@ def _tool_generate_medgemma_report(run):
             "vessel_occlusion_class_result"
         )
         patient_ctx["vessel_occlusion_confidence"] = vessel_result.get("confidence")
+        patient_ctx.update(three_class_result)
         # 补充患者姓名（从数据库获取）
         if patient_id:
             try:
@@ -4906,17 +6157,317 @@ def _tool_generate_medgemma_report(run):
             f"[SUMMARY] assembler_failed run_id={run.get('run_id')} file_id={file_id} error={summary_exc}"
         )
 
+    persistence_warnings = []
+    json_sync = _sync_report_payload_to_result_json(
+        data.get("json_path"), report_payload
+    )
+    if not json_sync.get("success"):
+        persistence_warnings.append(
+            f"result_json_sync_failed: {json_sync.get('error')}"
+        )
+    db_sync = _persist_report_payload_best_effort(
+        patient_id, file_id, report_payload
+    )
+    if not db_sync.get("success"):
+        persistence_warnings.append(
+            f"report_payload_persist_failed: {db_sync.get('error')}"
+        )
+
     return (
         True,
         {
             "report": data.get("report"),
             "report_payload": report_payload,
             "json_path": data.get("json_path"),
-            "is_mock": bool(data.get("is_mock", False)),
-            "warning": data.get("warning"),
+            "persistence_warnings": persistence_warnings,
         },
         None,
     )
+
+
+# Legacy compatibility alias: persisted Agent runs and older clients still use
+# the historical tool identifier ``generate_medgemma_report``.
+_tool_generate_medgemma_report = _tool_generate_report
+
+
+def _tool_human_confirm(run):
+    """Pause the terminal pipeline node until report review is complete."""
+    review_source = copy.deepcopy(run)
+    if not isinstance(review_source.get("result"), dict):
+        review_source["result"] = _build_pipeline_result(review_source)
+    review_state = (
+        run.get("review_state") if isinstance(run.get("review_state"), dict) else None
+    )
+    if review_state is None:
+        review_state = _review_build_state(review_source)
+    else:
+        review_state = _review_recompute_state(review_state)
+
+    def _attach(state):
+        _review_attach_to_run_state(state, review_state)
+
+    _update_agent_run(run.get("run_id"), _attach)
+    pending_sections = [
+        str(section.get("section_id") or "")
+        for section in (review_state.get("sections") or [])
+        if str(section.get("review_status") or "").strip().lower() != "confirmed"
+    ]
+    return (
+        True,
+        {
+            "status": "waiting",
+            "action_required": "请医生完成报告分段审阅并确认后继续。",
+            "review_initialized": True,
+            "all_confirmed": bool(review_state.get("all_confirmed")),
+            "pending_sections": [item for item in pending_sections if item],
+            "current_section_id": review_state.get("current_section_id"),
+        },
+        None,
+    )
+
+
+def _build_pipeline_result(run, planner_output=None, tool_sequence=None):
+    planner_output = planner_output or (run.get("planner_output") or {})
+    tool_sequence = tool_sequence or planner_output.get("tool_sequence") or []
+    context = _build_context_from_completed_tools(run)
+    three_class_result = _resolve_ncct_classification(run=run)
+    safety_gate = three_class_result.get("safety_gate") or {}
+    return {
+        "summary": "Week6 summary + evidence chain completed",
+        "path_decision": (planner_output.get("path_decision") or {}),
+        "tool_sequence": tool_sequence,
+        "tool_results": run.get("tool_results", []),
+        "patient_context": context.get("patient_context"),
+        "quality_control_result": context.get("quality_control_result"),
+        "analysis_result": context.get("analysis_result"),
+        "mrs_prognosis_result": context.get("mrs_prognosis_result"),
+        "vessel_occlusion_result": context.get("vessel_occlusion_result"),
+        "icv": context.get("icv_result"),
+        "ekv": context.get("ekv_result"),
+        "consensus": context.get("consensus_result"),
+        "report_result": context.get("report_result"),
+        "human_confirm_result": context.get("human_confirm_result"),
+        "three_class_result": three_class_result,
+        "safety_gate": safety_gate,
+        "uncertainties": [],
+        "next_actions": [],
+    }
+
+
+def _pause_for_human_confirm(run_id, tool_name="human_confirm", tool_result=None):
+    run = _get_agent_run(run_id)
+    if not run:
+        return None
+    planner_output = run.get("planner_output") or {}
+    tool_sequence = planner_output.get("tool_sequence") or []
+    final_result = _build_pipeline_result(run, planner_output, tool_sequence)
+    output = (tool_result or {}).get("structured_output") or {}
+    safety_gate = final_result.get("safety_gate") or {}
+    pending_items = list(output.get("pending_sections") or [])
+    if safety_gate.get("blocked"):
+        for item in ("ncct_classification", "imaging_summary"):
+            if item not in pending_items:
+                pending_items.append(item)
+    checkpoint = {
+        "required": True,
+        "tool_name": tool_name,
+        "reason": (
+            safety_gate.get("reason")
+            if safety_gate.get("blocked")
+            else output.get("action_required")
+        )
+        or "manual_review_required",
+        "reason_code": safety_gate.get("reason_code"),
+        "risk_level": "high",
+        "pending_items": pending_items,
+        "paused_at": _agent_now(),
+        "safety_gate_blocked": bool(safety_gate.get("blocked")),
+    }
+
+    def _pause(state):
+        state["status"] = "paused_review_required"
+        state["stage"] = "review"
+        state["current_tool"] = tool_name
+        state["error"] = (
+            {
+                "error_code": "HUMAN_REVIEW_REQUIRED",
+                "error_message": checkpoint["reason"],
+                "retryable": False,
+                "suggested_action": "Manual clinical review required",
+            }
+            if safety_gate.get("blocked")
+            else None
+        )
+        state["result"] = final_result
+        state["termination_reason"] = "human_review_required"
+        state["human_checkpoint"] = checkpoint
+        state["finalization"] = {
+            "status": "review_required",
+            "writeback_status": "not_started",
+            "signed": False,
+            "version": "w0-draft",
+        }
+
+    updated = _update_agent_run(run_id, _pause)
+    _agent_log(
+        run_id=run_id,
+        stage="review",
+        tool=tool_name,
+        attempt=(tool_result or {}).get("attempt") or 1,
+        status="paused_review_required",
+        error_code=(
+            "HUMAN_REVIEW_REQUIRED" if safety_gate.get("blocked") else None
+        ),
+        latency_ms=(tool_result or {}).get("latency_ms"),
+        message="awaiting_human_confirm",
+    )
+    return updated
+
+
+def _complete_human_confirm_checkpoint(
+    run_id, *, action="finalize_review", note=None
+):
+    """Complete a waiting terminal human node without fabricating one for old runs."""
+    run = _get_agent_run(run_id)
+    if not run:
+        return None, "Run not found"
+
+    waiting_step = None
+    for step in run.get("steps") or []:
+        if step.get("key") in {"human_confirm", "human_review"} and str(
+            step.get("status") or ""
+        ).strip().lower() in {"waiting", "running", "pending"}:
+            waiting_step = step
+            break
+
+    # Runs persisted before this feature have no terminal human node. Preserve
+    # their former review/finalization behavior rather than inventing a step.
+    if waiting_step is None:
+        return run, None
+
+    review_state = (
+        _review_recompute_state(run.get("review_state"))
+        if isinstance(run.get("review_state"), dict)
+        else None
+    )
+    if not review_state or not review_state.get("all_confirmed"):
+        return None, "Cannot complete human review before all sections confirmed"
+
+    tool_name = waiting_step.get("key") or "human_confirm"
+    planner_output = run.get("planner_output") or {}
+    tool_sequence = planner_output.get("tool_sequence") or []
+    completed_output = {
+        "status": "completed",
+        "action": action,
+        "action_log": note or "人工复核已完成并允许流程归档。",
+        "approved": True,
+        "completed_at": _agent_now(),
+    }
+
+    def _complete(state):
+        now = _agent_now()
+        for step in state.get("steps") or []:
+            if step.get("key") == tool_name:
+                step["status"] = "completed"
+                step["message"] = "Human review completed"
+                step["ended_at"] = now
+                step["started_at"] = step.get("started_at") or now
+        if state.get("current_tool") == tool_name:
+            state["current_tool"] = None
+
+        updated_existing = False
+        for result in reversed(state.get("tool_results") or []):
+            if result.get("tool_name") == tool_name:
+                result["status"] = "completed"
+                result["structured_output"] = completed_output
+                result["error_code"] = None
+                result["error_message"] = None
+                updated_existing = True
+                break
+        if not updated_existing:
+            state.setdefault("tool_results", []).append(
+                {
+                    "tool_name": tool_name,
+                    "status": "completed",
+                    "error_code": None,
+                    "retryable": False,
+                    "structured_output": completed_output,
+                    "raw_ref": {"tool_name": tool_name},
+                    "latency_ms": 0,
+                    "attempt": 1,
+                }
+            )
+
+        reviewed_result = (
+            copy.deepcopy(state.get("result"))
+            if isinstance(state.get("result"), dict)
+            else {}
+        )
+        final_result = _build_pipeline_result(
+            state, planner_output, tool_sequence
+        )
+        if isinstance(reviewed_result.get("report_result"), dict):
+            final_result["report_result"] = reviewed_result["report_result"]
+        state["result"] = final_result
+        state["status"] = "succeeded"
+        state["stage"] = "done"
+        state["error"] = None
+        state["termination_reason"] = "normal_completion"
+        state["human_checkpoint"] = {
+            "required": False,
+            "tool_name": tool_name,
+            "reason": "human_review_completed",
+            "risk_level": "none",
+            "pending_items": [],
+            "completed_at": now,
+            "action": action,
+            "safety_gate_blocked": bool(
+                (state.get("result") or {}).get("safety_gate", {}).get("blocked")
+            ),
+        }
+        state["finalization"] = {
+            "status": "pending_archive",
+            "writeback_status": "not_started",
+            "signed": True,
+            "version": "w0-draft",
+        }
+
+    updated = _update_agent_run(run_id, _complete)
+    _append_agent_event(
+        run_id=run_id,
+        agent_name="Human Review Agent",
+        tool_name=tool_name,
+        status="completed",
+        input_ref={"run_id": run_id, "action": action},
+        output_ref=completed_output,
+        latency_ms=0,
+        error_code=None,
+        retryable=False,
+        attempt=1,
+    )
+    _append_agent_event(
+        run_id=run_id,
+        agent_name="Clinical Summary Agent",
+        tool_name="summary",
+        status="completed",
+        input_ref={"run_id": run_id},
+        output_ref={"status": "succeeded"},
+        latency_ms=0,
+        error_code=None,
+        retryable=False,
+        attempt=1,
+    )
+    _agent_log(
+        run_id=run_id,
+        stage="done",
+        tool=tool_name,
+        attempt=1,
+        status="run_done",
+        error_code=None,
+        latency_ms=0,
+        message="human_confirm_completed",
+    )
+    return updated, None
 
 
 def _execute_agent_tool(run_id, tool_name):
@@ -4955,6 +6506,9 @@ def _execute_agent_tool(run_id, tool_name):
         elif tool_name == "load_patient_context":
             ok, output, err = _tool_load_patient_context(run)
             agent_name = "Triage Planner Agent"
+        elif tool_name == "image_quality_control":
+            ok, output, err = _tool_image_quality_control(run)
+            agent_name = "Imaging Quality Agent"
         elif tool_name == "generate_ctp_maps":
             ok, output, err = _tool_generate_ctp_maps(run) # AI辅助生成：GLM-5, 2026-03-19
             agent_name = "Clinical Tool Agent"
@@ -4964,6 +6518,9 @@ def _execute_agent_tool(run_id, tool_name):
         elif tool_name == "run_stroke_analysis":
             ok, output, err = _tool_run_stroke_analysis(run)
             agent_name = "Clinical Tool Agent"
+        elif tool_name == "run_mrs_prognosis_prediction":
+            ok, output, err = _tool_run_mrs_prognosis_prediction(run)
+            agent_name = "Clinical Prognosis Agent"
         elif tool_name == "icv":
             ok, output, err = _tool_icv(run)
             agent_name = "ICV Agent"
@@ -4974,8 +6531,11 @@ def _execute_agent_tool(run_id, tool_name):
             ok, output, err = _tool_consensus_lite(run)
             agent_name = "Consensus Lite Agent"
         elif tool_name == "generate_medgemma_report":
-            ok, output, err = _tool_generate_medgemma_report(run)
+            ok, output, err = _tool_generate_report(run)
             agent_name = "Clinical Summary Agent"
+        elif tool_name in {"human_confirm", "human_review"}:
+            ok, output, err = _tool_human_confirm(run)
+            agent_name = "Human Review Agent"
         else:
             ok = False # AI辅助生成：GLM-5, 2026-03-21
             output = None
@@ -5008,6 +6568,8 @@ def _execute_agent_tool(run_id, tool_name):
             output_status = str(output.get("status") or "").strip().lower()
             if output_status == "skipped":
                 result_status = "skipped"
+            elif output_status == "waiting":
+                result_status = "waiting"
         tool_result = {
             "tool_name": tool_name,
             "status": result_status,
@@ -5019,11 +6581,15 @@ def _execute_agent_tool(run_id, tool_name):
             "attempt": attempt,
         }
         _append_agent_tool_result(run_id, tool_result) # AI辅助生成：GLM-5, 2026-03-24
-        step_message = (
-            "Tool skipped by policy"
-            if result_status == "skipped"
-            else "Tool completed"
-        )
+        if result_status == "waiting":
+            step_message = "Awaiting human review"
+            event_status = "paused_review_required"
+        elif result_status == "skipped":
+            step_message = "Tool skipped by policy"
+            event_status = result_status
+        else:
+            step_message = "Tool completed"
+            event_status = result_status
         _upsert_agent_step(
             run_id,
             tool_name,
@@ -5036,7 +6602,7 @@ def _execute_agent_tool(run_id, tool_name):
             run_id=run_id,
             agent_name=agent_name,
             tool_name=tool_name,
-            status=result_status,
+            status=event_status,
             input_ref=input_ref,
             output_ref=output,
             latency_ms=latency_ms,
@@ -5057,6 +6623,8 @@ def _execute_agent_tool(run_id, tool_name):
         "structured_output": (
             normalize_vessel_occlusion_result(output)
             if tool_name == "vessel_occlusion" and isinstance(output, dict)
+            else output
+            if tool_name == "run_mrs_prognosis_prediction" and isinstance(output, dict)
             else None
         ),
         "raw_ref": {"tool_name": tool_name},
@@ -5094,12 +6662,17 @@ def _build_context_from_completed_tools(run):
     context = {
         "path_decision": ((run.get("planner_output") or {}).get("path_decision") or {}),
         "patient_context": None,
+        "quality_control_result": copy.deepcopy(
+            (run.get("planner_input") or {}).get("quality_control_result") or {}
+        ),
         "analysis_result": None,
+        "mrs_prognosis_result": None,
         "vessel_occlusion_result": planner_vessel_result,
         "icv_result": None,
         "ekv_result": None,
         "consensus_result": None,
         "report_result": None,
+        "human_confirm_result": None,
     }
     for result in run.get("tool_results", []):
         tool_name = result.get("tool_name")
@@ -5111,12 +6684,20 @@ def _build_context_from_completed_tools(run):
             context["vessel_occlusion_result"] = normalize_vessel_occlusion_result(
                 output
             )
+        if tool_name in {"human_confirm", "human_review"} and isinstance(output, dict):
+            context["human_confirm_result"] = output
+        if tool_name == "run_mrs_prognosis_prediction" and isinstance(output, dict):
+            context["mrs_prognosis_result"] = output
         if result.get("status") != "completed":
             continue # AI辅助生成：GLM-5, 2026-03-25
         if tool_name == "load_patient_context":
             context["patient_context"] = output
+        elif tool_name == "image_quality_control":
+            context["quality_control_result"] = output
         elif tool_name == "run_stroke_analysis":
             context["analysis_result"] = output
+        elif tool_name == "run_mrs_prognosis_prediction":
+            context["mrs_prognosis_result"] = output
         elif tool_name == "vessel_occlusion":
             context["vessel_occlusion_result"] = normalize_vessel_occlusion_result(output)
         elif tool_name == "icv":
@@ -5127,6 +6708,8 @@ def _build_context_from_completed_tools(run):
             context["consensus_result"] = output
         elif tool_name == "generate_medgemma_report":
             context["report_result"] = output
+        elif tool_name in {"human_confirm", "human_review"}:
+            context["human_confirm_result"] = output
     return context
 
 
@@ -5235,8 +6818,26 @@ def _run_agent_pipeline(run_id, start_tool=None):
 
         _update_agent_run(run_id, _set_stage_for_tool)
         ok, tool_result = _execute_agent_tool(run_id, tool_name)
+        if ok and tool_result.get("status") == "waiting":
+            if tool_name == "image_quality_control":
+                _set_agent_quality_checkpoint(
+                    run_id, tool_result.get("structured_output") or {}
+                )
+            else:
+                _pause_for_human_confirm(
+                    run_id,
+                    tool_name=tool_name,
+                    tool_result=tool_result,
+                )
+            return
         if not ok:
-            if tool_name in {"icv", "ekv", "consensus_lite", "vessel_occlusion"}:
+            if tool_name in {
+                "icv",
+                "ekv",
+                "consensus_lite",
+                "vessel_occlusion",
+                "run_mrs_prognosis_prediction",
+            }:
                 # Keep verification tools non-blocking.
                 _agent_log(
                     run_id=run_id,
@@ -5276,56 +6877,98 @@ def _run_agent_pipeline(run_id, start_tool=None):
 
     run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-04-03
     context = _build_context_from_completed_tools(run)
+    three_class_result = _resolve_ncct_classification(run=run)
+    safety_gate = three_class_result.get("safety_gate") or {}
     final_result = {
         "summary": "Week6 summary + evidence chain completed",
         "path_decision": (planner_output.get("path_decision") or {}),
         "tool_sequence": tool_sequence,
         "tool_results": run.get("tool_results", []),
         "patient_context": context.get("patient_context"),
+        "quality_control_result": context.get("quality_control_result"),
         "analysis_result": context.get("analysis_result"),
+        "mrs_prognosis_result": context.get("mrs_prognosis_result"),
         "vessel_occlusion_result": context.get("vessel_occlusion_result"),
         "icv": context.get("icv_result"),
         "ekv": context.get("ekv_result"),
         "consensus": context.get("consensus_result"),
         "report_result": context.get("report_result"),
+        "three_class_result": three_class_result,
+        "safety_gate": safety_gate,
         "uncertainties": [],
         "next_actions": [],
     }
 
     def _complete(state):
-        state["status"] = "succeeded"
-        state["stage"] = "done"
+        if safety_gate.get("blocked"):
+            state["status"] = "paused_review_required"
+            state["stage"] = "summary"
+            state["error"] = {
+                "error_code": "HUMAN_REVIEW_REQUIRED",
+                "error_message": safety_gate.get("reason")
+                or "NCCT safety gate requires clinician review",
+                "retryable": False,
+                "suggested_action": "Manual clinical review required",
+            }
+            state["human_checkpoint"] = {
+                "required": True,
+                "reason": safety_gate.get("reason"),
+                "reason_code": safety_gate.get("reason_code"),
+                "risk_level": "high",
+                "pending_items": ["ncct_classification", "imaging_summary"],
+            }
+            state["termination_reason"] = "human_review_required"
+        else:
+            state["status"] = "succeeded"
+            state["stage"] = "done"
+            state["error"] = None
+            state["human_checkpoint"] = None
+            state["termination_reason"] = "normal_completion"
         state["current_tool"] = None
-        state["error"] = None
         state["result"] = final_result # AI辅助生成：GLM-5, 2026-04-04
-        state["termination_reason"] = "normal_completion"
         state["finalization"] = {
-            "status": "pending_archive",
+            "status": "review_required"
+            if safety_gate.get("blocked")
+            else "pending_archive",
             "writeback_status": "not_started",
             "signed": False,
             "version": "w0-draft",
         }
 
     _update_agent_run(run_id, _complete)
+    run_status = (
+        "paused_review_required" if safety_gate.get("blocked") else "succeeded"
+    )
     _agent_log(
         run_id=run_id,
-        stage="done",
+        stage="summary" if safety_gate.get("blocked") else "done",
         tool="run",
         attempt=1,
-        status="run_done",
-        error_code=None,
+        status="run_paused" if safety_gate.get("blocked") else "run_done",
+        error_code="HUMAN_REVIEW_REQUIRED"
+        if safety_gate.get("blocked")
+        else None,
         latency_ms=0,
-        message="pipeline_completed",
+        message=str(
+            safety_gate.get("reason")
+            if safety_gate.get("blocked")
+            else "pipeline_completed"
+        ),
     )
     _append_agent_event(
         run_id=run_id,
         agent_name="Clinical Summary Agent",
         tool_name="summary",
-        status="completed",
+        status=run_status,
         input_ref={"run_id": run_id},
-        output_ref={"status": "succeeded"},
+        output_ref={
+            "status": run_status,
+            "action_required": safety_gate.get("reason"),
+        },
         latency_ms=0,
-        error_code=None,
+        error_code="HUMAN_REVIEW_REQUIRED"
+        if safety_gate.get("blocked")
+        else None,
         retryable=False,
         attempt=1,
     )
@@ -5703,10 +7346,10 @@ def init_ai_models():
             find_weight_file(config["weight_dir"], "_Network.pth") is not None
         )
 
-        print(f"  配置文件: {'✓' if config_exists else '✗'}")
+        print(f"  配置文件: {'[OK]' if config_exists else '[MISSING]'}")
         print(f"  权重基础路径: {weight_base}")
-        print(f"  EMA权重: {'✓' if ema_exists else '✗'}") # AI辅助生成：GLM-5, 2026-03-04
-        print(f"  普通权重: {'✓' if normal_exists else '✗'}")
+        print(f"  EMA权重: {'[OK]' if ema_exists else '[MISSING]'}") # AI辅助生成：GLM-5, 2026-03-04
+        print(f"  普通权重: {'[OK]' if normal_exists else '[MISSING]'}")
 
         if config_exists and weight_base:
             try:
@@ -5721,24 +7364,24 @@ def init_ai_models():
                         "available": True,
                     }
                     models_initialized += 1
-                    print(f"  ✓ {config['name']} 模型初始化成功")
+                    print(f"  [OK] {config['name']} 模型初始化成功")
                 else:
                     ai_models[model_key] = {
                         "model": None,
                         "config": config,
                         "available": False,
                     }
-                    print(f"  ✗ {config['name']} 模型初始化失败")
+                    print(f"  [ERROR] {config['name']} 模型初始化失败")
             except Exception as e:
                 ai_models[model_key] = {
                     "model": None,
                     "config": config,
                     "available": False,
                 }
-                print(f"  ✗ {config['name']} 模型初始化异常: {e}") # AI辅助生成：GLM-5, 2026-03-05
+                print(f"  [ERROR] {config['name']} 模型初始化异常: {e}") # AI辅助生成：GLM-5, 2026-03-05
         else:
             ai_models[model_key] = {"model": None, "config": config, "available": False}
-            print(f"  ✗ {config['name']} 模型文件不完整")
+            print(f"  [MISSING] {config['name']} 模型文件不完整")
 
     print(f"\n模型初始化统计: {models_initialized}/{len(MODEL_CONFIGS)} 个模型成功初始化")
     print("=" * 50)
@@ -6268,13 +7911,13 @@ def api_update_analysis():
         return jsonify({"status": "error", "message": result}), 500
 
 
-# ==================== MedGemma AI Report API ====================
+# ==================== Baichuan M3 AI Report API ====================
 
 
 @app.route("/api/generate_report/<int:patient_id>", methods=["GET", "POST"])
 def api_generate_report(patient_id):
     """
-    Generate imaging report via MedGemma using structured data.
+    Generate an imaging report through Baichuan M3 using structured data.
     """
     request_start = time.time()
     try:
@@ -6304,7 +7947,8 @@ def api_generate_report(patient_id):
             return jsonify({"status": "error", "message": "Missing file_id"}), 400
 
         print(
-            f"[MedGemma] /api/generate_report patient_id={patient_id} file_id={file_id} format={output_format} source={source}"
+            f"[BaichuanReport] /api/generate_report "
+            f"format={output_format} source={source}"
         )
 
         patient_data = get_patient_by_id(patient_id)
@@ -6327,7 +7971,10 @@ def api_generate_report(patient_id):
                 if not run_state:
                     run_state = (_w0_mock_refresh_run(run_key)[0] or None)
             except Exception as run_lookup_exc:
-                print(f"[MedGemma] run lookup failed run_id={run_key}: {run_lookup_exc}")
+                print(
+                    f"[BaichuanReport] run lookup failed "
+                    f"type={type(run_lookup_exc).__name__}"
+                )
                 run_state = None
         vessel_result = _resolve_vessel_result(run=run_state, imaging=imaging_data)
 
@@ -6346,7 +7993,7 @@ def api_generate_report(patient_id):
                     str(admission_time).replace("Z", "+00:00")
                 )
                 onset_to_admission_hours = round(
-                    (admission_dt - onset_dt).total_seconds() / 3600, 1
+                    (admission_dt - onset_dt).total_seconds() / 3600, 2
                 )
             except Exception as e:
                 print(f"Onset-to-admission calc failed: {e}")
@@ -6355,6 +8002,19 @@ def api_generate_report(patient_id):
             (imaging_data or {}).get("hemisphere") # AI辅助生成：GLM-5, 2026-04-14
             or patient_data.get("hemisphere")
             or "both"
+        )
+        ncct_result = _resolve_ncct_classification(
+            run=run_state,
+            imaging=imaging_data,
+        )
+        quality_control_result = copy.deepcopy(
+            ((run_state or {}).get("planner_input") or {}).get(
+                "quality_control_result"
+            )
+            or ((imaging_data or {}).get("analysis_result") or {}).get(
+                "quality_control"
+            )
+            or {}
         )
         structured_data = {
             "id": patient_data.get("id"),
@@ -6368,8 +8028,10 @@ def api_generate_report(patient_id):
             "penumbra_volume": patient_data.get("penumbra_volume"),
             "mismatch_ratio": patient_data.get("mismatch_ratio"),
             "hemisphere": hemisphere_value,
-            "three_class_label": "ischemia",
-            "three_class_label_cn": "脑缺血",
+            "three_class_status": ncct_result.get("status"),
+            "three_class_label": ncct_result.get("three_class_label"),
+            "three_class_label_cn": ncct_result.get("three_class_label_cn"),
+            "three_class_confidence": ncct_result.get("three_class_confidence"),
             "vessel_occlusion_result": vessel_result,
             "vessel_occlusion_status": vessel_result.get("status"),
             "vessel_occlusion_class_result": vessel_result.get(
@@ -6377,18 +8039,8 @@ def api_generate_report(patient_id):
             ),
             "vessel_occlusion_confidence": vessel_result.get("confidence"),
             "analysis_status": patient_data.get("analysis_status", "pending"),
+            "quality_control_result": quality_control_result,
         }
-
-        # Debug summary
-        print("=" * 60)
-        print("[AI Report] structured_data:")
-        print(json.dumps(structured_data, ensure_ascii=False, indent=2, default=str))
-        print("=" * 60) # AI辅助生成：GLM-5, 2026-04-15
-        print("[AI Report] key fields:")
-        print(f"  - NIHSS: {structured_data.get('admission_nihss')}")
-        print(f"  - Age: {structured_data.get('patient_age')}")
-        print(f"  - Onset->Admission (h): {onset_to_admission_hours}")
-        print("=" * 60)
 
         if structured_data.get("admission_nihss") is None:
             print("WARN: admission_nihss is empty") # AI辅助生成：GLM-5, 2026-04-16
@@ -6397,7 +8049,7 @@ def api_generate_report(patient_id):
         if onset_to_admission_hours is None:
             print("WARN: onset_to_admission_hours is empty")
 
-        result = generate_report_with_medgemma(
+        result = generate_report(
             structured_data, imaging_data, file_id, output_format
         )
 
@@ -6432,8 +8084,19 @@ def api_generate_report(patient_id):
                     structured_data.get("penumbra_volume"),
                 )
                 report_payload.setdefault("mismatch_ratio", structured_data.get("mismatch_ratio"))
-                report_payload.setdefault("three_class_label", "ischemia") # AI辅助生成：GLM-5, 2026-04-20
-                report_payload.setdefault("three_class_label_cn", "脑缺血")
+                report_payload.setdefault(
+                    "three_class_status", structured_data.get("three_class_status")
+                )
+                report_payload.setdefault(
+                    "three_class_label", structured_data.get("three_class_label")
+                ) # AI辅助生成：GLM-5, 2026-04-20
+                report_payload.setdefault(
+                    "three_class_label_cn", structured_data.get("three_class_label_cn")
+                )
+                report_payload.setdefault(
+                    "three_class_confidence",
+                    structured_data.get("three_class_confidence"),
+                )
                 report_payload["vessel_occlusion_result"] = vessel_result
                 report_payload["vessel_occlusion_status"] = vessel_result.get("status")
                 report_payload["vessel_occlusion_class_result"] = vessel_result.get(
@@ -6442,42 +8105,57 @@ def api_generate_report(patient_id):
                 report_payload["vessel_occlusion_confidence"] = vessel_result.get(
                     "confidence"
                 )
-                if user_question:
-                    try:
-                        report_payload = build_summary_artifacts(
-                            run_id=run_key or f"report:{patient_id}:{file_id}",
-                            file_id=file_id,
-                            report_payload=report_payload,
-                            icv=None,
-                            ekv=None,
-                            consensus=None,
-                            goal_question=user_question,
-                            patient_context=structured_data,
-                        )
-                    except Exception as summary_exc:
-                        print(
-                            f"[MedGemma] question answer summary failed "
-                            f"patient_id={patient_id} file_id={file_id}: {summary_exc}"
-                        )
+                try:
+                    report_payload = build_summary_artifacts(
+                        run_id=run_key or f"report:{patient_id}:{file_id}",
+                        file_id=file_id,
+                        report_payload=report_payload,
+                        icv=None,
+                        ekv=None,
+                        consensus=None,
+                        goal_question=user_question,
+                        patient_context=structured_data,
+                    )
+                except Exception as summary_exc:
+                    print(
+                        f"[BaichuanReport] structured summary failed "
+                        f"type={type(summary_exc).__name__}"
+                    )
+                    if user_question:
                         report_payload.setdefault(
                             "question_answer",
                             {
                                 "question": user_question,
                                 "direct_answer": (
-                                    f"当前病例提示脑缺血，血管堵塞三分类为"
+                                    f"当前结构化报告组装暂不可用，血管堵塞三分类为"
                                     f"{vessel_result_display_label(vessel_result)}。"
-                                    "需结合性别、NIHSS评分、发病至入院时间、病灶偏侧、"
-                                    "核心梗死体积、半暗带体积与 mismatch 比值，优先评估" # AI辅助生成：GLM-5, 2026-04-21
-                                    "再通治疗获益及出血风险。"
+                                    "请结合原始影像、NIHSS评分、发病至入院时间、"
+                                    "核心梗死体积、半暗带体积和不匹配比值人工复核，"
+                                    "不得依据当前回退文本形成确定性治疗结论。" # AI辅助生成：GLM-5, 2026-04-21
                                 ),
                             },
                         )
                 result["report_payload"] = report_payload
+            persistence_warnings = []
+            json_sync = _sync_report_payload_to_result_json(
+                result.get("json_path"), report_payload
+            )
+            if not json_sync.get("success"):
+                persistence_warnings.append(
+                    f"result_json_sync_failed: {json_sync.get('error')}"
+                )
+            db_sync = _persist_report_payload_best_effort(
+                patient_id, file_id, report_payload
+            )
+            if not db_sync.get("success"):
+                persistence_warnings.append(
+                    f"report_payload_persist_failed: {db_sync.get('error')}"
+                )
             elapsed = round(time.time() - request_start, 2)
             if result.get("json_path"):
-                print(f"[MedGemma] report json saved: {result.get('json_path')}")
+                print("[BaichuanReport] report json saved")
             print(
-                f"[MedGemma] /api/generate_report success patient_id={patient_id} file_id={file_id} elapsed={elapsed}s"
+                f"[BaichuanReport] /api/generate_report success elapsed={elapsed}s"
             )
             return jsonify(
                 {
@@ -6490,13 +8168,15 @@ def api_generate_report(patient_id):
                     "json_path": result.get("json_path"),
                     "is_mock": result.get("is_mock", False),
                     "warning": result.get("warning"),
+                    "persistence_warnings": persistence_warnings,
                     "source": source,
                 }
             )
         else:
             elapsed = round(time.time() - request_start, 2) # AI辅助生成：GLM-5, 2026-04-22
             print(
-                f"[MedGemma] /api/generate_report failed patient_id={patient_id} file_id={file_id} elapsed={elapsed}s error={result.get('error')}"
+                f"[BaichuanReport] /api/generate_report failed "
+                f"elapsed={elapsed}s error_type=report_generation"
             )
             return jsonify(
                 {
@@ -6509,7 +8189,8 @@ def api_generate_report(patient_id):
     except Exception as e:
         elapsed = round(time.time() - request_start, 2)
         print(
-            f"[MedGemma] /api/generate_report exception patient_id={patient_id} elapsed={elapsed}s error={e}"
+            f"[BaichuanReport] /api/generate_report exception "
+            f"elapsed={elapsed}s type={type(e).__name__}"
         )
         import traceback
 
@@ -6632,7 +8313,7 @@ def api_generate_report_from_data():
                             )
                         )
                         data["onset_to_admission_hours"] = round(
-                            (admission_dt - onset_dt).total_seconds() / 3600, 1
+                            (admission_dt - onset_dt).total_seconds() / 3600, 2
                         )
                     except Exception as e:
                         print(f"Onset-to-admission calc failed: {e}") # AI辅助生成：GLM-5, 2026-03-07
@@ -6643,20 +8324,62 @@ def api_generate_report_from_data():
                 {"status": "error", "message": f"Imaging case {file_id} not found"}
             ), 404
 
-        result = generate_report_with_medgemma(
+        result = generate_report(
             data, imaging_data, file_id, output_format
         )
 
         if result["success"]:
+            report_payload = result.get("report_payload")
+            if isinstance(report_payload, dict):
+                try:
+                    report_payload = build_summary_artifacts(
+                        run_id=str(data.get("run_id") or f"report-data:{file_id}"),
+                        file_id=str(file_id),
+                        report_payload=report_payload,
+                        icv=data.get("icv") if isinstance(data.get("icv"), dict) else None,
+                        ekv=data.get("ekv") if isinstance(data.get("ekv"), dict) else None,
+                        consensus=(
+                            data.get("consensus")
+                            if isinstance(data.get("consensus"), dict)
+                            else None
+                        ),
+                        goal_question=str(
+                            data.get("question") or data.get("goal_question") or ""
+                        ),
+                        patient_context=data,
+                    )
+                except Exception as summary_exc:
+                    print(
+                        f"[BaichuanReport] structured summary failed "
+                        f"type={type(summary_exc).__name__}"
+                    )
+            result["report_payload"] = report_payload
+            persistence_warnings = []
+            json_sync = _sync_report_payload_to_result_json(
+                result.get("json_path"), report_payload
+            )
+            if not json_sync.get("success"):
+                persistence_warnings.append(
+                    f"result_json_sync_failed: {json_sync.get('error')}"
+                )
+            if patient_id:
+                db_sync = _persist_report_payload_best_effort(
+                    patient_id, file_id, report_payload
+                )
+                if not db_sync.get("success"):
+                    persistence_warnings.append(
+                        f"report_payload_persist_failed: {db_sync.get('error')}"
+                    )
             return jsonify(
                 {
                     "status": "success",
                     "message": "Report generated",
                     "format": output_format,
                     "report": result["report"],
-                    "report_payload": result.get("report_payload"),
+                    "report_payload": report_payload,
                     "is_mock": result.get("is_mock", False),
                     "warning": result.get("warning"),
+                    "persistence_warnings": persistence_warnings,
                 }
             )
         else:
@@ -6949,11 +8672,11 @@ def _get_latest_imaging_by_patient(patient_id: int):
 def _latest_result_json_for_file(file_id: str):
     if not file_id:
         return None
-    results_dir = _medgemma_results_dir()
-    if not os.path.isdir(results_dir):
-        return None # AI辅助生成：GLM-5, 2026-03-27
-    pattern = os.path.join(results_dir, f"medgemma_report_{file_id}_*.json")
-    candidates = glob.glob(pattern)
+    candidates = [
+        path
+        for pattern in _report_result_patterns(file_id)
+        for path in glob.glob(pattern)
+    ]
     if not candidates:
         return None
     candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
@@ -8115,6 +9838,21 @@ def api_chat_clinical():
         return jsonify({"success": False, "error": str(e)}), 500 # AI辅助生成：GLM-5, 2026-04-17
 
 
+def _build_kg_run_context(run, events, current_dag_node="", question=""):
+    """Build a privacy-minimized routing context from an existing agent run."""
+    try:
+        from .kg_context import build_run_context
+    except ImportError:
+        from kg_context import build_run_context
+    return build_run_context(
+        run or {},
+        events or [],
+        current_dag_node=current_dag_node,
+        question=question,
+        modality_normalizer=_normalize_uploaded_modalities,
+    )
+
+
 @app.route("/api/kb/docs", methods=["GET"])
 def api_kb_docs():
     """Return merged knowledge-base PDFs with grading metadata."""
@@ -8126,6 +9864,27 @@ def api_kb_docs():
 def api_kb_graph():
     """Return the local stroke knowledge graph.""" # AI辅助生成：GLM-5, 2026-04-18
     view = str(request.args.get("view") or "clinical").strip().lower()
+    kg_type = str(request.args.get("kg_type") or "").strip()
+    if kg_type:
+        try:
+            from .kg_store import graph_for_types
+        except ImportError:
+            from kg_store import graph_for_types
+        selected_types = None if kg_type == "all" else [kg_type]
+        try:
+            graph = graph_for_types(selected_types)
+        except KeyError:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"unknown kg_type: {kg_type}",
+                    }
+                ),
+                400,
+            )
+        return jsonify({"success": True, **graph})
+
     try:
         from .kg_builder import clinical_graph_view, load_graph
     except ImportError:
@@ -8133,6 +9892,182 @@ def api_kb_graph():
 
     graph = clinical_graph_view() if view == "clinical" else load_graph(force_rebuild=False)
     return jsonify({"success": True, **graph})
+
+
+@app.route("/api/kb/graphs", methods=["GET"])
+def api_kb_graphs():
+    """Return the versioned multi-section knowledge graph catalogue."""
+    enabled_raw = str(request.args.get("enabled") or "").strip().lower()
+    enabled = None
+    if enabled_raw:
+        if enabled_raw not in {"true", "false", "1", "0"}:
+            return jsonify({"success": False, "error": "enabled must be true or false"}), 400
+        enabled = enabled_raw in {"true", "1"}
+    try:
+        from .kg_store import list_graphs
+    except ImportError:
+        from kg_store import list_graphs
+    return jsonify({"success": True, **list_graphs(enabled=enabled)})
+
+
+@app.route("/api/kb/graph/route-query", methods=["POST"])
+def api_kb_graph_route_query():
+    """Route a doctor question and the current run to relevant KG sections."""
+    data = request.get_json(silent=True) or {}
+    run_id = str(data.get("run_id") or "").strip()
+    file_id = str(data.get("file_id") or "").strip()
+    patient_id_raw = data.get("patient_id")
+    patient_id = None
+    if patient_id_raw not in (None, ""):
+        try:
+            patient_id = int(patient_id_raw)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "invalid patient_id"}), 400
+    if run_id.lower().startswith("case:") and not file_id:
+        file_id = run_id.split(":", 1)[1].strip()
+    explicit_question = str(data.get("question") or "").strip()
+    current_dag_node = str(data.get("current_dag_node") or "").strip()
+    try:
+        depth = max(0, min(2, int(data.get("depth", 1))))
+    except Exception:
+        depth = 1
+
+    run = None
+    events = []
+    resolved_run_id = ""
+    source_tag = "none"
+    has_case_locator = bool(run_id or file_id or patient_id is not None)
+    if has_case_locator:
+        run, events, resolved_run_id, source_tag = _resolve_cockpit_run_and_events(
+            run_id=run_id,
+            file_id=file_id,
+            patient_id=patient_id,
+        )
+        if not run:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Run or case context not found",
+                        "run_id": run_id or None,
+                        "file_id": file_id or None,
+                        "patient_id": patient_id,
+                    }
+                ),
+                404,
+            )
+    if not has_case_locator and not explicit_question:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "run_id, file_id/patient_id, or question is required",
+                }
+            ),
+            400,
+        )
+
+    context = _build_kg_run_context(
+        run or {},
+        events,
+        current_dag_node=current_dag_node,
+        question=explicit_question,
+    )
+    effective_question = explicit_question or context.get("original_question") or ""
+    try:
+        from .knowledge_graph_lookup import knowledge_graph_lookup
+    except ImportError:
+        from knowledge_graph_lookup import knowledge_graph_lookup
+    result = knowledge_graph_lookup(
+        effective_question,
+        context=context,
+        depth=depth,
+    )
+    source = {
+        "real": "real_run",
+        "case": "case_recovered",
+        "mock": "mock_run",
+    }.get(source_tag, "question_only" if not run else source_tag or "unknown")
+    feature_presence = {
+        "question": bool(effective_question),
+        "modalities": bool(context.get("modalities")),
+        "tasks": bool(context.get("task_keys")),
+        "findings": bool(context.get("result_terms") or context.get("risk_terms")),
+    }
+    context_warnings = []
+    confidence_cap = None
+    if source == "case_recovered":
+        confidence_cap = 0.75
+        context_warnings.append("历史病例使用已保存数据恢复，缺少完整运行事件。")
+        raw_confidence = float(result.get("confidence") or 0.0)
+        result["raw_confidence"] = raw_confidence
+        result["confidence"] = min(confidence_cap, raw_confidence)
+        capped_routes = []
+        for route in result.get("routes") or []:
+            route_item = dict(route)
+            route_item["confidence"] = min(
+                confidence_cap,
+                float(route_item.get("confidence") or 0.0),
+            )
+            capped_routes.append(route_item)
+        result["routes"] = capped_routes
+        display_plan = dict(result.get("display_plan") or {})
+        display_plan["context_confidence_cap"] = confidence_cap
+        display_plan["context_degraded"] = True
+        result["display_plan"] = display_plan
+    resolved_file_id = str((run or {}).get("file_id") or file_id or "").strip()
+    resolved_patient_id = (run or {}).get("patient_id")
+    if resolved_patient_id in (None, ""):
+        resolved_patient_id = patient_id
+    return jsonify(
+        {
+            "success": True,
+            "run_id": resolved_run_id or run_id or None,
+            "effective_question": effective_question,
+            "context_meta": {
+                "source": source,
+                "resolved_run_id": resolved_run_id or run_id or None,
+                "file_id": resolved_file_id or None,
+                "patient_id": resolved_patient_id,
+                "completeness": round(
+                    sum(1 for value in feature_presence.values() if value)
+                    / len(feature_presence),
+                    4,
+                ),
+                "available_features": [
+                    key for key, value in feature_presence.items() if value
+                ],
+                "missing_features": [
+                    key for key, value in feature_presence.items() if not value
+                ],
+                "confidence_cap": confidence_cap,
+                "warnings": context_warnings,
+            },
+            "context_summary": {
+                "modalities": context.get("modalities") or [],
+                "task_keys": context.get("task_keys") or [],
+                "raw_task_keys": context.get("raw_task_keys") or [],
+                "result_terms": context.get("result_terms") or [],
+                "negative_result_terms": context.get("negative_result_terms") or [],
+                "uncertain_result_terms": context.get("uncertain_result_terms") or [],
+                "risk_terms": context.get("risk_terms") or [],
+            },
+            **result,
+        }
+    )
+
+
+@app.route("/api/kb/node/<node_id>", methods=["GET"])
+def api_kb_node_detail(node_id):
+    """Return a multi-section KG node with relations and evidence metadata."""
+    try:
+        from .kg_store import get_node_detail
+    except ImportError:
+        from kg_store import get_node_detail
+    detail = get_node_detail(node_id)
+    if not detail:
+        return jsonify({"success": False, "error": "Knowledge node not found"}), 404
+    return jsonify({"success": True, **detail})
 
 
 @app.route("/api/kb/graph/search", methods=["GET"])
@@ -9631,13 +11566,27 @@ def api_upload_start():
             detected_modalities.append(modality_map[field_name]) # AI辅助生成：GLM-5, 2026-03-27
 
         normalized_modalities = _normalize_uploaded_modalities(detected_modalities)
+        clinical_dag = build_clinical_dag(normalized_modalities)
+        if not clinical_dag.get("valid"):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return jsonify(
+                {
+                    "success": False,
+                    "error": clinical_dag.get("error")
+                    or "不支持的影像模态组合",
+                    "clinical_dag": clinical_dag,
+                }
+            ), 400
 
-        _create_upload_job(job_id, patient_id, file_id, normalized_modalities)
-        _update_step(
-            job_id, "archive_ready", "completed", f"患者档案已建立（ID={patient_id}）"
+        _create_upload_job(
+            job_id,
+            patient_id,
+            file_id,
+            normalized_modalities,
+            clinical_dag=clinical_dag,
         )
         _update_step(
-            job_id, "modality_detect", "completed", f"识别模态: {normalized_modalities}"
+            job_id, "archive_ready", "completed", f"患者档案已建立（ID={patient_id}）"
         )
 
         payload = {
@@ -9656,6 +11605,15 @@ def api_upload_start():
 
         agent_run_id = None
         upload_question = (request.form.get("question") or "").strip() # AI辅助生成：GLM-5, 2026-03-28
+        mrs_clinical_record = None
+        raw_mrs_clinical_record = request.form.get("mrs_clinical_record")
+        if raw_mrs_clinical_record:
+            try:
+                parsed_mrs_record = json.loads(raw_mrs_clinical_record)
+                if isinstance(parsed_mrs_record, dict):
+                    mrs_clinical_record = parsed_mrs_record
+            except Exception:
+                return jsonify({"success": False, "error": "Invalid mrs_clinical_record"}), 400
         if str(request.form.get("start_agent_run", "false")).lower() == "true":
             agent_run_id = str(uuid.uuid4())
             _create_agent_run(
@@ -9669,20 +11627,16 @@ def api_upload_start():
                 execution_mode="post_upload_summary",
                 trigger_source="upload_start",
                 question=upload_question or None,
+                mrs_clinical_record=mrs_clinical_record,
             )
 
         payload["agent_run_id"] = agent_run_id
 
-        # Keep uploaded files staged until the doctor confirms the clinical DAG.
-        # This makes the review gate authoritative: algorithms and Agent/Skill
-        # execution do not start merely because the upload request completed.
-        with UPLOAD_JOBS_LOCK:
-            UPLOAD_JOB_PAYLOADS[job_id] = payload
-            staged_job = UPLOAD_JOBS.get(job_id)
-            if staged_job:
-                staged_job["status"] = "awaiting_review"
-                staged_job["current_step"] = "dag_review"
-                staged_job["updated_at"] = _job_now()
+        staged_job = _stage_upload_for_dag_review(job_id, payload, clinical_dag)
+        if not staged_job:
+            return jsonify(
+                {"success": False, "error": "上传任务无法进入临床 DAG 审批状态"}
+            ), 409
 
         return jsonify(
             {
@@ -9690,8 +11644,9 @@ def api_upload_start():
                 "job_id": job_id,
                 "file_id": file_id,
                 "status": "awaiting_review",
-                "progress_url": f"/api/upload/progress/{job_id}",
                 "dag_review_required": True,
+                "clinical_dag": clinical_dag,
+                "progress_url": f"/api/upload/progress/{job_id}",
                 "agent_run_id": agent_run_id,
             }
         )
@@ -9707,9 +11662,32 @@ def api_upload_progress(job_id):
     return jsonify({"success": True, "job": job})
 
 
+def _cancel_preexecution_agent_run(run_id, reason):
+    if not run_id:
+        return False
+
+    def _mut(run):
+        if run.get("status") != "queued":
+            return
+        run["status"] = "cancelled"
+        run["stage"] = "done"
+        run["current_tool"] = None
+        run["termination_reason"] = "clinical_dag_rejected"
+        run["error"] = str(reason or "Clinical DAG rejected before execution")
+        run["human_checkpoint"] = {
+            "type": "clinical_dag_review",
+            "status": "rejected",
+            "reason": str(reason or "Clinical DAG rejected before execution"),
+        }
+
+    updated = _update_agent_run(run_id, _mut)
+    return bool(updated and updated.get("status") == "cancelled")
+
+
 @app.route("/api/upload/jobs/<job_id>/dag-review", methods=["POST"])
 def api_review_upload_dag(job_id):
-    """Confirm the doctor-facing clinical DAG before starting execution."""
+    """Approve or reject the server-owned clinical DAG before execution."""
+
     data = request.get_json(silent=True) or {}
     decision = str(data.get("doctor_final_decision") or "").strip().lower()
     reviewer = str(data.get("reviewer") or "").strip()
@@ -9717,69 +11695,379 @@ def api_review_upload_dag(job_id):
     submitted_modalities = data.get("available_modalities")
 
     if decision not in {"approved", "rejected"}:
-        return jsonify({"success": False, "error": "doctor_final_decision must be approved or rejected"}), 400
-    if decision == "approved" and not reviewer:
+        return jsonify(
+            {
+                "success": False,
+                "error": "doctor_final_decision must be approved or rejected",
+            }
+        ), 400
+    if not reviewer:
         return jsonify({"success": False, "error": "reviewer is required"}), 400
+    if not dag_id:
+        return jsonify({"success": False, "error": "dag_id is required"}), 400
+    if not isinstance(submitted_modalities, list):
+        return jsonify(
+            {"success": False, "error": "available_modalities must be an array"}
+        ), 400
 
+    submitted_canonical = sorted(_normalize_uploaded_modalities(submitted_modalities))
     payload_to_start = None
+    cancelled_run_id = None
     with UPLOAD_JOBS_LOCK:
         job = UPLOAD_JOBS.get(job_id)
         if not job:
-            return jsonify({"success": False, "error": "任务不存在或已过期"}), 404
+            return jsonify({"success": False, "error": "upload job not found"}), 404
 
-        job_modalities = _normalize_uploaded_modalities(job.get("modalities") or [])
-        if isinstance(submitted_modalities, list):
-            normalized_submitted = _normalize_uploaded_modalities(submitted_modalities)
-            if set(normalized_submitted) != set(job_modalities):
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "error": "available_modalities changed; regenerate the clinical DAG",
-                            "available_modalities": job_modalities,
-                        }
-                    ),
-                    409,
-                )
+        server_dag = job.get("clinical_dag") or {}
+        server_dag_id = str(server_dag.get("dag_id") or "")
+        server_modalities = sorted(
+            _normalize_uploaded_modalities(
+                server_dag.get("available_modalities") or job.get("modalities") or []
+            )
+        )
+        if dag_id != server_dag_id:
+            return jsonify(
+                {"success": False, "error": "clinical DAG changed; reload before review"}
+            ), 409
+        if submitted_canonical != server_modalities:
+            return jsonify(
+                {"success": False, "error": "uploaded modalities changed; reload before review"}
+            ), 409
 
-        reviewed_at = datetime.now().isoformat(timespec="seconds")
-        job["dag_review"] = {
-            "review_status": "completed",
-            "doctor_final_decision": decision,
-            "reviewer": reviewer or None,
-            "reviewed_at": reviewed_at,
-            "dag_id": dag_id or None,
-            "available_modalities": list(job_modalities),
-        }
+        review = job.get("dag_review") or {}
+        if (
+            job.get("execution_authorized")
+            or review.get("review_status") == "completed"
+            or job.get("status") != "awaiting_review"
+        ):
+            return jsonify(
+                {"success": False, "error": "clinical DAG review is already final"}
+            ), 409
 
-        if decision == "approved" and not job.get("execution_authorized"):
-            payload_to_start = UPLOAD_JOB_PAYLOADS.pop(job_id, None)
+        if decision == "approved":
+            payload_to_start = UPLOAD_JOB_PAYLOADS.get(job_id)
             if payload_to_start is None:
-                return jsonify({"success": False, "error": "staged upload payload is unavailable"}), 409
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "staged upload payload is unavailable; upload again",
+                    }
+                ), 409
+            UPLOAD_JOB_PAYLOADS.pop(job_id, None)
             job["execution_authorized"] = True
             job["status"] = "queued"
             job["current_step"] = None
-        elif decision == "rejected" and not job.get("execution_authorized"):
+        else:
+            UPLOAD_JOB_PAYLOADS.pop(job_id, None)
+            cancelled_run_id = job.get("agent_run_id")
+            job["execution_authorized"] = False
             job["status"] = "review_rejected"
             job["current_step"] = "dag_review"
 
-        job["updated_at"] = _job_now()
+        reviewed_at = _job_now()
+        job["dag_review"] = {
+            "review_status": "completed",
+            "doctor_final_decision": decision,
+            "reviewer": reviewer,
+            "reviewed_at": reviewed_at,
+            "dag_id": server_dag_id,
+            "available_modalities": server_modalities,
+        }
+        job["updated_at"] = reviewed_at
         response_job = _safe_job_copy(job)
 
-    if payload_to_start is not None:
-        worker = threading.Thread(
-            target=_run_upload_processing_job,
-            args=(job_id, payload_to_start),
-            daemon=True,
+    if cancelled_run_id:
+        _cancel_preexecution_agent_run(
+            cancelled_run_id, "Clinical DAG rejected by reviewer"
         )
-        worker.start()
+
+    if payload_to_start is not None:
+        _start_upload_processing_thread(job_id, payload_to_start)
 
     return jsonify(
         {
             "success": True,
             "job": response_job,
-            "dag_review": response_job.get("dag_review"),
             "execution_started": payload_to_start is not None,
+        }
+    )
+
+
+def _cancel_quality_review_agent_run(run_id, reason):
+    if not run_id:
+        return None
+
+    def _mut(run):
+        if run.get("status") not in {"queued", "paused_review_required"}:
+            return
+        run["status"] = "cancelled"
+        run["stage"] = "done"
+        run["current_tool"] = None
+        run["termination_reason"] = "image_quality_control_rejected"
+        run["error"] = str(reason or "Image quality rejected; re-upload required")
+        run["human_checkpoint"] = {
+            "type": "image_quality_control",
+            "status": "rejected",
+            "reason": run["error"],
+        }
+
+    return _update_agent_run(run_id, _mut)
+
+
+@app.route("/api/upload/jobs/<job_id>/quality-review", methods=["POST"])
+def api_review_upload_quality(job_id):
+    data = request.get_json(silent=True) or {}
+    decision = str(data.get("decision") or "").strip().lower()
+    reviewer = str(data.get("reviewer") or "").strip()
+    comment = str(data.get("comment") or "").strip()
+    fingerprint = str(data.get("qc_fingerprint") or "").strip()
+    if decision not in {"accept_risk", "reject_reupload"}:
+        return jsonify({"success": False, "error": "invalid quality review decision"}), 400
+    if not reviewer or not comment or not fingerprint:
+        return jsonify(
+            {
+                "success": False,
+                "error": "reviewer, comment and qc_fingerprint are required",
+            }
+        ), 400
+
+    payload_to_start = None
+    payload_to_delete = None
+    linked_run_id = None
+    idempotent = False
+    with UPLOAD_JOBS_LOCK:
+        job = UPLOAD_JOBS.get(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "upload job not found"}), 404
+        result = job.get("quality_control_result") or {}
+        if not result or str(result.get("qc_fingerprint") or "") != fingerprint:
+            return jsonify(
+                {"success": False, "error": "quality result changed; reload before review"}
+            ), 409
+        existing = job.get("quality_review") or {}
+        existing_decision = existing.get("decision") or existing.get("review_override", {}).get("decision")
+        if existing_decision:
+            if existing_decision != decision:
+                return jsonify({"success": False, "error": "quality review decision conflicts"}), 409
+            idempotent = True
+            response_job = _safe_job_copy(job)
+        else:
+            if job.get("status") != "paused_review_required":
+                return jsonify({"success": False, "error": "quality review is not pending"}), 409
+            payload = UPLOAD_JOB_PAYLOADS.get(job_id)
+            if payload is None:
+                return jsonify(
+                    {"success": False, "error": "staged upload payload is unavailable; upload again"}
+                ), 409
+            if decision == "accept_risk" and has_non_overrideable_failure(result):
+                return jsonify(
+                    {"success": False, "error": "structural quality failure cannot be overridden"}
+                ), 409
+
+            reviewed_at = _job_now()
+            reviewed_result = apply_quality_review(
+                result,
+                decision=decision,
+                reviewer=reviewer,
+                comment=comment,
+                reviewed_at=reviewed_at,
+            )
+            review_record = copy.deepcopy(reviewed_result.get("review_override") or {})
+            review_record["status"] = "completed"
+            job["quality_control_result"] = reviewed_result
+            job["quality_review"] = review_record
+            job["human_checkpoint"] = None
+            job["updated_at"] = reviewed_at
+            linked_run_id = job.get("agent_run_id")
+            UPLOAD_JOB_PAYLOADS.pop(job_id, None)
+            if decision == "accept_risk":
+                payload["quality_control_result"] = reviewed_result
+                payload["quality_control_reviewed"] = True
+                payload_to_start = payload
+                job["status"] = "queued"
+                job["current_step"] = None
+                for step in job.get("steps") or []:
+                    if step.get("key") == "image_quality_control":
+                        step["status"] = "completed"
+                        step["message"] = "医生已接受可覆盖的图像质量风险，继续执行"
+                        step["ended_at"] = reviewed_at
+                        break
+            else:
+                payload_to_delete = payload
+                job["status"] = "review_rejected"
+                job["current_step"] = "image_quality_control"
+                for step in job.get("steps") or []:
+                    if step.get("key") == "image_quality_control":
+                        step["status"] = "failed"
+                        step["message"] = "医生退回并要求重新上传"
+                        step["ended_at"] = reviewed_at
+                        break
+            job["progress"] = _calc_job_progress(job)
+            response_job = _safe_job_copy(job)
+
+    if idempotent:
+        return jsonify(
+            {
+                "success": True,
+                "job": response_job,
+                "quality_control_result": response_job.get("quality_control_result"),
+                "quality_review": response_job.get("quality_review"),
+                "human_checkpoint": response_job.get("human_checkpoint"),
+                "execution_resumed": False,
+                "idempotent": True,
+            }
+        )
+
+    if decision == "accept_risk":
+        if linked_run_id:
+            def _resume_linked(run):
+                if run.get("status") == "paused_review_required" and (
+                    (run.get("human_checkpoint") or {}).get("type")
+                    == "image_quality_control"
+                ):
+                    run["status"] = "queued"
+                    run["stage"] = "triage"
+                    run["current_tool"] = None
+                    run["termination_reason"] = "quality_risk_accepted"
+                    run["human_checkpoint"] = None
+                    run.setdefault("planner_input", {})["quality_control_result"] = copy.deepcopy(
+                        response_job.get("quality_control_result") or {}
+                    )
+            _update_agent_run(linked_run_id, _resume_linked)
+        _start_upload_processing_thread(job_id, payload_to_start)
+    else:
+        reason = "Image quality rejected by reviewer; re-upload required"
+        _skip_upload_steps_after_quality_control(job_id, reason)
+        _cancel_quality_review_agent_run(linked_run_id, reason)
+        temp_dir = (payload_to_delete or {}).get("temp_dir")
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    final_job = _get_upload_job(job_id)
+    return jsonify(
+        {
+            "success": True,
+            "job": final_job,
+            "quality_control_result": final_job.get("quality_control_result"),
+            "quality_review": final_job.get("quality_review"),
+            "human_checkpoint": final_job.get("human_checkpoint"),
+            "execution_resumed": decision == "accept_risk",
+            "idempotent": False,
+        }
+    )
+
+
+@app.route("/api/agent/runs/<run_id>/quality-review", methods=["POST"])
+def api_review_agent_quality(run_id):
+    data = request.get_json(silent=True) or {}
+    decision = str(data.get("decision") or "").strip().lower()
+    reviewer = str(data.get("reviewer") or "").strip()
+    comment = str(data.get("comment") or "").strip()
+    fingerprint = str(data.get("qc_fingerprint") or "").strip()
+    if decision not in {"accept_risk", "reject_reupload"}:
+        return jsonify({"success": False, "error": "invalid quality review decision"}), 400
+    if not reviewer or not comment or not fingerprint:
+        return jsonify(
+            {"success": False, "error": "reviewer, comment and qc_fingerprint are required"}
+        ), 400
+
+    run = _get_agent_run(run_id)
+    if not run:
+        return jsonify({"success": False, "error": "Run not found"}), 404
+    result = (run.get("planner_input") or {}).get("quality_control_result") or {}
+    if str(result.get("qc_fingerprint") or "") != fingerprint:
+        return jsonify(
+            {"success": False, "error": "quality result changed; reload before review"}
+        ), 409
+    existing = result.get("review_override") or {}
+    if existing.get("decision"):
+        if existing.get("decision") != decision:
+            return jsonify({"success": False, "error": "quality review decision conflicts"}), 409
+        return jsonify(
+            {
+                "success": True,
+                "run": run,
+                "quality_control_result": result,
+                "quality_review": existing,
+                "human_checkpoint": run.get("human_checkpoint"),
+                "execution_resumed": False,
+                "idempotent": True,
+            }
+        )
+    if (
+        run.get("status") != "paused_review_required"
+        or (run.get("human_checkpoint") or {}).get("type") != "image_quality_control"
+    ):
+        return jsonify({"success": False, "error": "quality review is not pending"}), 409
+    if decision == "accept_risk" and has_non_overrideable_failure(result):
+        return jsonify(
+            {"success": False, "error": "structural quality failure cannot be overridden"}
+        ), 409
+
+    reviewed = apply_quality_review(
+        result,
+        decision=decision,
+        reviewer=reviewer,
+        comment=comment,
+        reviewed_at=_agent_now(),
+    )
+
+    def _apply(state):
+        state.setdefault("planner_input", {})["quality_control_result"] = copy.deepcopy(
+            reviewed
+        )
+        state["planner_input"]["quality_control"] = copy.deepcopy(reviewed)
+        for step in state.get("steps") or []:
+            if step.get("key") == "image_quality_control":
+                step["status"] = "completed" if decision == "accept_risk" else "failed"
+                step["message"] = (
+                    "Quality risk accepted by reviewer"
+                    if decision == "accept_risk"
+                    else "Rejected; re-upload required"
+                )
+                step["ended_at"] = _agent_now()
+        for item in reversed(state.get("tool_results") or []):
+            if item.get("tool_name") == "image_quality_control":
+                item["status"] = "completed" if decision == "accept_risk" else "failed"
+                item["structured_output"] = copy.deepcopy(reviewed) | {
+                    "status": "completed" if decision == "accept_risk" else "failed"
+                }
+                break
+        state["human_checkpoint"] = None
+        state["current_tool"] = None
+        if decision == "accept_risk":
+            state["status"] = "queued"
+            state["stage"] = "triage"
+            state["termination_reason"] = "quality_risk_accepted"
+            state["error"] = None
+        else:
+            state["status"] = "cancelled"
+            state["stage"] = "done"
+            state["termination_reason"] = "image_quality_control_rejected"
+            state["error"] = "Image quality rejected; re-upload required"
+
+    updated = _update_agent_run(run_id, _apply)
+    _persist_quality_control_to_imaging(
+        (updated.get("planner_input") or {}).get("patient_id"),
+        (updated.get("planner_input") or {}).get("file_id"),
+        reviewed,
+    )
+    resumed = decision == "accept_risk"
+    if resumed:
+        threading.Thread(
+            target=_run_agent_pipeline,
+            args=(run_id, "detect_modalities"),
+            daemon=True,
+        ).start()
+    return jsonify(
+        {
+            "success": True,
+            "run": updated,
+            "quality_control_result": reviewed,
+            "quality_review": reviewed.get("review_override"),
+            "human_checkpoint": updated.get("human_checkpoint"),
+            "execution_resumed": resumed,
+            "idempotent": False,
         }
     )
 
@@ -10202,7 +12490,7 @@ def api_start_demo_scenario(scenario_id):
         )
         worker = threading.Thread(target=_run_agent_pipeline, args=(run_id,), daemon=True)
         worker.start()
-        run = _ensure_w0_run_fields(run)
+        run = _ensure_w0_run_fields(run, events=_get_agent_events(run_id))
         return jsonify(
             {
                 "success": True,
@@ -10300,9 +12588,10 @@ def api_create_w0_mock_run():
 
 @app.route("/api/strokeclaw/w0/mock-runs/<run_id>", methods=["GET"])
 def api_get_w0_mock_run(run_id):
-    run, _events = _w0_mock_refresh_run(str(run_id or "").strip())
+    run, events = _w0_mock_refresh_run(str(run_id or "").strip())
     if not run:
         return jsonify({"success": False, "error": "Mock run not found"}), 404
+    run = _ensure_w0_run_fields(run, events=events)
     return jsonify({"success": True, "run": run})
 
 
@@ -10311,7 +12600,8 @@ def api_get_w0_mock_run_events(run_id):
     run, events = _w0_mock_refresh_run(str(run_id or "").strip())
     if not run:
         return jsonify({"success": False, "error": "Mock run not found"}), 404
-    return jsonify({"success": True, "run_id": run_id, "events": events})
+    normalized = _normalize_agent_events_for_api(run, events)
+    return jsonify({"success": True, "run_id": run_id, "events": normalized})
 
 
 @app.route("/api/agent/runs", methods=["POST"])
@@ -10369,7 +12659,7 @@ def api_create_agent_run():
     worker = threading.Thread(target=_run_agent_pipeline, args=(run_id,), daemon=True)
     worker.start()
 
-    run = _ensure_w0_run_fields(run)
+    run = _ensure_w0_run_fields(run, events=_get_agent_events(run_id))
 
     return jsonify(
         {
@@ -10388,7 +12678,7 @@ def api_get_agent_run(run_id):
     run = _get_agent_run(run_id) # AI辅助生成：GLM-5, 2026-03-05
     if not run:
         return jsonify({"success": False, "error": "Run not found"}), 404
-    run = _ensure_w0_run_fields(run)
+    run = _ensure_w0_run_fields(run, events=_get_agent_events(run_id))
     return jsonify({"success": True, "run": run})
 
 
@@ -10398,19 +12688,7 @@ def api_get_agent_events(run_id):
     if not run:
         return jsonify({"success": False, "error": "Run not found"}), 404 # AI辅助生成：GLM-5, 2026-03-06
     events = _get_agent_events(run_id)
-    normalized = []
-    for item in sorted(events, key=lambda x: int((x or {}).get("event_seq") or 0)):
-        event = dict(item or {})
-        event["event_type"] = str(
-            event.get("event_type") or _classify_agent_event_type(event)
-        )
-        event["phase"] = str(event.get("phase") or event.get("stage") or "")
-        event["node_name"] = str(event.get("node_name") or event.get("tool_name") or "") # AI辅助生成：GLM-5, 2026-03-07
-        enrich = _build_agent_event_clinical_fields(event)
-        for field_name, field_value in enrich.items():
-            if field_name not in event or event.get(field_name) in (None, "", [], {}):
-                event[field_name] = field_value
-        normalized.append(event)
+    normalized = _normalize_agent_events_for_api(run, events)
     return jsonify({"success": True, "run_id": run_id, "events": normalized})
 
 
@@ -10420,16 +12698,18 @@ def api_get_agent_result(run_id):
     if not run:
         return jsonify({"success": False, "error": "Run not found"}), 404
 
-    if run.get("status") != "succeeded":
+    if run.get("status") not in {"succeeded", "paused_review_required"}:
         return (
             jsonify(
                 {
                     "success": False,
                     "run_id": run_id,
                     "status": run.get("status"),
+                    "run_status": run.get("status"),
                     "stage": run.get("stage"),
                     "error": run.get("error"),
                     "result": run.get("result"),
+                    "human_checkpoint": run.get("human_checkpoint"),
                 }
             ),
             409,
@@ -10440,9 +12720,26 @@ def api_get_agent_result(run_id):
             "success": True,
             "run_id": run_id,
             "status": run.get("status"),
+            "run_status": run.get("status"),
             "stage": run.get("stage"),
             "result": run.get("result"),
+            "human_checkpoint": run.get("human_checkpoint"),
         }
+    )
+
+
+def _review_can_enter_viewer(run, review_state):
+    if not bool((review_state or {}).get("all_confirmed")):
+        return False
+    run_status = str((run or {}).get("status") or "").strip().lower()
+    has_terminal_human_node = any(
+        str(step.get("key") or "").strip().lower()
+        in {"human_confirm", "human_review"}
+        for step in ((run or {}).get("steps") or [])
+    )
+    return run_status == "succeeded" or (
+        run_status == "paused_review_required"
+        and not has_terminal_human_node
     )
 
 
@@ -10469,7 +12766,8 @@ def api_get_agent_run_review(run_id):
     else:
         review_state = _review_recompute_state(review_state)
 
-    run = _ensure_w0_run_fields(run)
+    run = _ensure_w0_run_fields(run, events=_get_agent_events(run_id))
+    run_status = str(run.get("status") or "").strip().lower()
     return jsonify(
         {
             "success": True,
@@ -10477,7 +12775,9 @@ def api_get_agent_run_review(run_id):
             "review_state": review_state,
             "all_confirmed": bool(review_state.get("all_confirmed")),
             "current_section_id": review_state.get("current_section_id"),
-            "can_enter_viewer": bool(review_state.get("all_confirmed")),
+            "can_enter_viewer": _review_can_enter_viewer(run, review_state),
+            "run_status": run_status,
+            "human_checkpoint": run.get("human_checkpoint"),
         }
     )
 
@@ -10569,6 +12869,17 @@ def api_review_agent_run(run_id):
         )
         if not updated_run:
             return jsonify(persist_result), 500 # AI辅助生成：GLM-5, 2026-03-13
+        updated_run, complete_err = _complete_human_confirm_checkpoint(
+            run_id,
+            action="finalize_review",
+            note="报告分段审阅已全部确认，人工复核节点完成。",
+        )
+        if complete_err:
+            return jsonify({"success": False, "error": complete_err}), 500
+        updated_run = _ensure_w0_run_fields(
+            updated_run or _get_agent_run(run_id),
+            events=_get_agent_events(run_id),
+        )
         return jsonify(
             {
                 "success": True,
@@ -10578,6 +12889,13 @@ def api_review_agent_run(run_id):
                 "all_confirmed": True,
                 "final_report": final_report_text,
                 "persist_result": persist_result,
+                "run_status": (updated_run or {}).get("status"),
+                "human_checkpoint": (updated_run or {}).get(
+                    "human_checkpoint"
+                ),
+                "can_enter_viewer": _review_can_enter_viewer(
+                    updated_run, review_state
+                ),
             }
         )
 
@@ -10680,6 +12998,23 @@ def api_review_agent_run(run_id):
         if not updated_run:
             return jsonify(persist_result), 500
 
+        human_checkpoint = None
+        run_status = None
+        if review_state.get("all_confirmed") and auto_finalize:
+            updated_run, complete_err = _complete_human_confirm_checkpoint(
+                run_id,
+                action="confirm_section_auto_finalize",
+                note="报告分段审阅已全部确认，人工复核节点完成。",
+            )
+            if complete_err:
+                return jsonify({"success": False, "error": complete_err}), 500
+            updated_run = _ensure_w0_run_fields(
+                updated_run or _get_agent_run(run_id),
+                events=_get_agent_events(run_id),
+            )
+            human_checkpoint = (updated_run or {}).get("human_checkpoint")
+            run_status = (updated_run or {}).get("status")
+
         return jsonify(
             {
                 "success": True,
@@ -10690,6 +13025,11 @@ def api_review_agent_run(run_id):
                 "all_confirmed": bool(review_state.get("all_confirmed")),
                 "final_report": final_report_text,
                 "persist_result": persist_result,
+                "run_status": run_status,
+                "human_checkpoint": human_checkpoint,
+                "can_enter_viewer": _review_can_enter_viewer(
+                    updated_run, review_state
+                ),
             }
         )
 
@@ -10918,13 +13258,13 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
     if rid:
         run = _get_agent_run(rid)
         if run:
-            run = _ensure_w0_run_fields(run) # AI辅助生成：GLM-5, 2026-04-01
             events = _get_agent_events(rid)
+            run = _ensure_w0_run_fields(run, events=events) # AI辅助生成：GLM-5, 2026-04-01
             return run, events, rid, "real"
 
         mock_run, mock_events = _w0_mock_refresh_run(rid)
         if mock_run:
-            mock_run = _ensure_w0_run_fields(mock_run)
+            mock_run = _ensure_w0_run_fields(mock_run, events=mock_events)
             return mock_run, (mock_events or []), rid, "mock"
 
     report_payload, meta, imaging, resolved_file_id = _load_cockpit_case_report_payload(
@@ -10958,14 +13298,24 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
             updated_at = imaging.get("updated_at") or updated_at or imaging.get("created_at")
 
         planner_sequence = list(AGENT_TOOL_SEQUENCE_MAP.get("ncct_mcta", []))
+        recovered_mrs = report_payload.get("mrs_prognosis_result")
+        recovered_mrs = recovered_mrs if isinstance(recovered_mrs, dict) else None
         recovered_steps = [] # AI辅助生成：GLM-5, 2026-04-05
         for step_key in planner_sequence:
+            recovered_status = "completed"
+            recovered_message = "Recovered from stored case data"
+            if step_key == "run_mrs_prognosis_prediction":
+                if recovered_mrs and recovered_mrs.get("status") == "completed":
+                    recovered_message = "Recovered mRS prognosis result from stored case data"
+                else:
+                    recovered_status = "unavailable"
+                    recovered_message = "Historical case has no completed mRS prognosis result"
             recovered_steps.append(
                 {
                     "key": step_key,
                     "stage": _stage_for_tool(step_key),
-                    "status": "completed",
-                    "message": "Recovered from stored case data",
+                    "status": recovered_status,
+                    "message": recovered_message,
                     "attempts": 1,
                     "retryable": False,
                 }
@@ -10991,7 +13341,23 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
                 "imaging_path": "",
             },
             "steps": recovered_steps,
+            "tool_results": (
+                [
+                    {
+                        "tool_name": "run_mrs_prognosis_prediction",
+                        "status": "completed"
+                        if recovered_mrs and recovered_mrs.get("status") == "completed"
+                        else "failed",
+                        "structured_output": recovered_mrs,
+                        "retryable": False,
+                        "attempt": 1,
+                    }
+                ]
+                if recovered_mrs
+                else []
+            ),
             "result": {
+                "mrs_prognosis_result": recovered_mrs,
                 "report_result": {
                     "report": str(
                         report_payload.get("final_confirmed_report")
@@ -11116,6 +13482,16 @@ def _build_cockpit_dag(run, events):
             payload["tool_name"] = key
             latest_event_by_tool[key] = payload
 
+    latest_result_by_tool = {}
+    for result in (run or {}).get("tool_results") or []:
+        if not isinstance(result, dict):
+            continue
+        key = _canonical_tool_name(
+            result.get("tool_name") or result.get("name") or result.get("step_key")
+        )
+        if key:
+            latest_result_by_tool[key] = result
+
     nodes = []
     edges = [] # AI辅助生成：GLM-5, 2026-04-15
     normalized_sequence = _ensure_ctp_step(tool_sequence)
@@ -11166,6 +13542,12 @@ def _build_cockpit_dag(run, events):
                 node_message = "共识裁决已完成（策略性跳过）"
         input_payload = evt.get("input_ref") or {}
         output_payload = evt.get("output_ref") or {}
+        if not output_payload:
+            stored_output = (latest_result_by_tool.get(tool_name) or {}).get(
+                "structured_output"
+            )
+            if isinstance(stored_output, dict):
+                output_payload = stored_output
         if tool_name == "generate_ctp_maps" and status == "completed":
             if not input_payload:
                 input_payload = {
@@ -11199,33 +13581,42 @@ def _build_cockpit_dag(run, events):
                     "verdicts": [],
                     "message": "共识裁决已完成（前序校验均通过或策略性跳过）",
                 }
-        nodes.append(
-            {
-                "id": tool_name,
-                "step_key": tool_name,
-                "title": _agent_tool_title(tool_name),
-                "description": _agent_tool_description(tool_name),
-                "order": idx,
-                "status": status,
-                "stage": stage,
-                "lane": stage,
-                "lane_title": lane_titles.get(stage, stage),
-                "latency_ms": evt.get("latency_ms"),
-                "attempt": evt.get("attempt") or step.get("attempts"),
-                "retryable": bool(
-                    evt.get("retryable")
-                    if evt.get("retryable") is not None
-                    else step.get("retryable") # AI辅助生成：GLM-5, 2026-04-20
-                ),
-                "error_code": evt.get("error_code"),
-                "confidence": confidence,
-                "message": node_message,
-                "input_payload": input_payload,
-                "output_payload": output_payload,
-                "event_id": evt.get("event_id"),
-                "event_seq": evt.get("event_seq"),
-            }
+        node_event = dict(evt)
+        node_event["input_ref"] = input_payload
+        node_event["output_ref"] = output_payload
+        node_event["result_summary"] = node_event.get("result_summary") or node_message
+        node_payload = {
+            "id": tool_name,
+            "step_key": tool_name,
+            "title": _agent_tool_title(tool_name),
+            "description": _agent_tool_description(tool_name),
+            "order": idx,
+            "status": status,
+            "stage": stage,
+            "lane": stage,
+            "lane_title": lane_titles.get(stage, stage),
+            "latency_ms": evt.get("latency_ms"),
+            "attempt": evt.get("attempt") or step.get("attempts"),
+            "retryable": bool(
+                evt.get("retryable")
+                if evt.get("retryable") is not None
+                else step.get("retryable") # AI辅助生成：GLM-5, 2026-04-20
+            ),
+            "error_code": evt.get("error_code"),
+            "confidence": confidence,
+            "message": node_message,
+            "input_payload": input_payload,
+            "output_payload": output_payload,
+            "event_id": evt.get("event_id"),
+            "event_seq": evt.get("event_seq"),
+        }
+        node_payload["node_info"] = _build_cockpit_node_info(
+            tool_name=tool_name,
+            step=step,
+            event=node_event,
+            tool_result=latest_result_by_tool.get(tool_name),
         )
+        nodes.append(node_payload)
         if idx > 1:
             edges.append(
                 {
@@ -11582,6 +13973,172 @@ def api_compat_skill_registry():
     return jsonify({"success": True, "count": len(skills), "skills": skills})
 
 
+@app.route("/api/report/context", methods=["GET"])
+def api_report_context():
+    patient_id_raw = request.args.get("patient_id")
+    file_id = str(request.args.get("file_id") or "").strip()
+    run_id = str(request.args.get("run_id") or "").strip()
+    patient_id = None
+    if patient_id_raw not in (None, ""):
+        try:
+            patient_id = int(patient_id_raw)
+        except Exception:
+            return jsonify({"success": False, "error": "Invalid patient_id"}), 400
+    if not any([patient_id is not None, file_id, run_id]):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "At least one of patient_id, file_id, or run_id is required",
+                }
+            ),
+            400,
+        )
+
+    resolved_run_id = run_id or _get_latest_run_id_by_context(
+        file_id=file_id, patient_id=patient_id
+    )
+    run = _get_agent_run(resolved_run_id) if resolved_run_id else None
+    report_payload = None
+    report_text = ""
+    source_meta = {
+        "source_chain": "none",
+        "run_id": resolved_run_id or None,
+        "file_id": file_id or None,
+        "patient_id": patient_id,
+        "last_updated": None,
+        "fallback": False,
+    }
+
+    if isinstance(run, dict):
+        run_result = run.get("result") if isinstance(run.get("result"), dict) else {}
+        report_result = (
+            run_result.get("report_result")
+            if isinstance(run_result.get("report_result"), dict)
+            else {}
+        )
+        candidate = report_result.get("report_payload")
+        if isinstance(candidate, dict):
+            report_payload = copy.deepcopy(candidate)
+            report_text = str(
+                candidate.get("final_confirmed_report")
+                or report_result.get("report")
+                or ""
+            )
+            source_meta.update(
+                {
+                    "source_chain": "agent_run",
+                    "run_id": str(run.get("run_id") or resolved_run_id),
+                    "file_id": str(
+                        run.get("file_id")
+                        or (run.get("planner_input") or {}).get("file_id")
+                        or file_id
+                    ),
+                    "patient_id": run.get("patient_id")
+                    or (run.get("planner_input") or {}).get("patient_id")
+                    or patient_id,
+                    "last_updated": run.get("updated_at") or run.get("completed_at"),
+                }
+            )
+            file_id = str(source_meta["file_id"] or file_id)
+            patient_id = source_meta["patient_id"]
+
+    imaging = None
+    if report_payload is None:
+        report_payload, payload_meta, imaging, resolved_file_id = (
+            _load_cockpit_case_report_payload(
+                file_id=file_id, patient_id=patient_id
+            )
+        )
+        if resolved_file_id:
+            file_id = resolved_file_id
+        source_meta.update(payload_meta or {})
+        source_meta["file_id"] = file_id or None
+        source_meta["fallback"] = True
+
+    if imaging is None and file_id:
+        imaging = get_imaging_by_case(patient_id, file_id)
+    patient = get_patient_by_id(patient_id) if patient_id not in (None, "") else {}
+
+    if not report_text and isinstance(report_payload, dict):
+        report_text = str(
+            report_payload.get("final_confirmed_report")
+            or report_payload.get("report")
+            or ""
+        )
+    if not report_text and file_id:
+        json_path, result_json = _load_result_json_for_file(file_id)
+        if isinstance(result_json, dict):
+            report_text = str(
+                result_json.get("markdown")
+                or result_json.get("report")
+                or ""
+            )
+            source_meta["result_json_path"] = json_path
+
+    if not isinstance(report_payload, dict) and not report_text:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Report context not found",
+                    "source_meta": source_meta,
+                }
+            ),
+            404,
+        )
+
+    analysis = (
+        imaging.get("analysis_result")
+        if isinstance(imaging, dict)
+        and isinstance(imaging.get("analysis_result"), dict)
+        else {}
+    )
+    patient_context = {}
+    if isinstance(patient, dict):
+        patient_context.update(patient)
+    if isinstance(analysis, dict):
+        patient_context.update(
+            {
+                key: value
+                for key, value in analysis.items()
+                if value is not None
+            }
+        )
+    if isinstance(imaging, dict):
+        patient_context.setdefault("available_modalities", imaging.get("available_modalities"))
+        patient_context.setdefault("hemisphere", imaging.get("hemisphere"))
+    if patient_context.get("onset_to_admission_hours") is None:
+        patient_context["onset_to_admission_hours"] = _compute_onset_to_admission_hours(
+            patient_context
+        )
+    patient_context.update(
+        _resolve_ncct_classification(run=run, imaging=imaging, structured=report_payload)
+    )
+    vessel_context_value = _resolve_vessel_result(
+        run=run, imaging=imaging, structured=report_payload
+    )
+    patient_context["vessel_occlusion_result"] = vessel_context_value
+
+    normalized_payload = ensure_structured_report_v2(
+        report_payload,
+        run_id=str(source_meta.get("run_id") or resolved_run_id or ""),
+        file_id=str(file_id or ""),
+        patient_context=patient_context,
+        legacy_report_text=report_text,
+    )
+    structured_report = normalized_payload.get("structured_report_v2") or {}
+    return jsonify(
+        {
+            "success": True,
+            "report_text": report_text,
+            "report_payload": normalized_payload,
+            "structured_report": structured_report,
+            "source_meta": source_meta,
+        }
+    )
+
+
 @app.route("/api/compat/clinical-decision-bundle", methods=["GET"])
 def api_compat_clinical_decision_bundle():
     patient_id_raw = request.args.get("patient_id")
@@ -11900,33 +14457,7 @@ def upload_files():
             request.form.get("defer_stroke_analysis", "false") == "true"
         )
         upload_job_id = str(request.form.get("upload_job_id") or "").strip()
-
-        def report_ctp_progress(slice_number, total_slices, model_key="", phase="model_running"):
-            if not upload_job_id:
-                return
-            model_keys = list(REQUIRED_CTP_MODELS)
-            total_slices = max(1, int(total_slices or 1))
-            slice_number = max(1, min(total_slices, int(slice_number or 1)))
-            units_per_slice = max(1, len(model_keys))
-            total_units = total_slices * units_per_slice
-            if phase == "slice_completed":
-                completed_units = slice_number * units_per_slice
-                progress_text = f"切片 {slice_number}/{total_slices} 已完成"
-            else:
-                try:
-                    model_offset = model_keys.index(model_key)
-                except ValueError:
-                    model_offset = 0
-                completed_units = (slice_number - 1) * units_per_slice + model_offset
-                model_label = str(model_key or "CTP").upper()
-                progress_text = f"{model_label} · 切片 {slice_number}/{total_slices}"
-            percent = min(99, max(0, int((completed_units / total_units) * 100)))
-            _update_step(
-                upload_job_id,
-                "ctp_generate",
-                "running",
-                f"正在生成 CTP 灌注图：{progress_text} · {percent}%",
-            )
+        report_ctp_progress = _make_ctp_progress_callback(upload_job_id)
 
         # 检查是否仅上传了完整 CTA 功能图像
         skip_ai = True
@@ -11939,6 +14470,9 @@ def upload_files():
 
         # 获取模型类型参数，默认使用 mrdpm
         selected_model = request.form.get("model_type", "mrdpm")
+        if selected_model == "medgemma":
+            # Backward-compatible alias retained for older upload clients.
+            selected_model = "palette"
         model_type = selected_model
         print(f"用户选择的模型: {selected_model}, 实际使用的模型: {model_type}")
 
@@ -12060,9 +14594,21 @@ def upload_files():
             three_class_view = _build_three_class_view(file_id, rgb_files)
             if not three_class_view.get("success"):
                 print(f"[WARN] three_class inference failed: {three_class_view.get('error')}")
+            three_class_result = _resolve_ncct_classification(
+                structured=three_class_view.get("three_class_result")
+                or three_class_view.get("summary")
+            )
+            safety_gate = three_class_result.get("safety_gate") or {}
+            analysis_blocked = bool(safety_gate.get("blocked"))
+            _publish_three_class_step(
+                upload_job_id,
+                three_class_view.get("summary"),
+                three_class_result,
+                rgb_files,
+            )
 
             # 自动触发脑卒中分析（如果满足条件）
-            if patient_id and not defer_stroke_analysis:
+            if patient_id and not defer_stroke_analysis and not analysis_blocked:
                 print("尝试自动触发脑卒中分析...")
                 try:
                     try:
@@ -12080,7 +14626,14 @@ def upload_files():
                     print(f"自动触发脑卒中分析异常: {e}")
             elif patient_id and defer_stroke_analysis:
                 print("已启用 defer_stroke_analysis，上传接口跳过自动脑卒中分析。")
+            elif analysis_blocked:
+                print(
+                    f"[SAFETY_GATE] blocked reason_code={safety_gate.get('reason_code')}"
+                )
 
+            _persist_three_class_result_to_imaging(
+                patient_id, file_id, three_class_result
+            )
             return jsonify(
                 {
                     "success": True,
@@ -12097,39 +14650,80 @@ def upload_files():
                     "model_configs": MODEL_CONFIGS,
                     "skip_ai": skip_ai,
                     "three_class_summary": three_class_view.get("summary"),
+                    "three_class_result": three_class_result,
+                    "safety_gate": safety_gate,
+                    "analysis_blocked": analysis_blocked,
                 }
             )
         else:
             # 先完成 NCCT 三分类，再进入 CTP 相关推理
             print("开始执行 NCCT 三分类与 Grad-CAM（先于 CTP 推理）...")
             three_class_view = _build_three_class_view(file_id, [])
-            if not three_class_view.get("success"):
-                err = three_class_view.get("error") or "NCCT 三分类失败，已阻止 CTP 推理"
-                print(f"[ERROR] {err}")
-                return jsonify({"success": False, "error": err})
-
-            if upload_job_id:
-                three_class_summary = three_class_view.get("summary") or {}
-                three_class_message = (
-                    str(three_class_summary.get("display") or "").strip()
-                    if isinstance(three_class_summary, dict)
-                    else ""
+            three_class_result = _resolve_ncct_classification(
+                structured=three_class_view.get("three_class_result")
+                or three_class_view.get("summary")
+            )
+            safety_gate = three_class_result.get("safety_gate") or {}
+            analysis_blocked = bool(safety_gate.get("blocked"))
+            three_class_step_status, _ = _publish_three_class_step(
+                upload_job_id,
+                three_class_view.get("summary"),
+                three_class_result,
+                [],
+            )
+            if not three_class_view.get("success") or analysis_blocked:
+                reason = (
+                    safety_gate.get("reason")
+                    or three_class_view.get("error")
+                    or "NCCT 三分类未获得有效结果，已阻断后续分析"
                 )
-                _update_step(
-                    upload_job_id,
-                    "three_class",
-                    "completed",
-                    three_class_message or "NCCT 三分类与 Grad-CAM 完成",
+                print(
+                    f"[SAFETY_GATE] blocked reason_code={safety_gate.get('reason_code')}"
                 )
-                _update_step(
-                    upload_job_id,
-                    "ctp_generate",
-                    "running",
-                    "三分类完成，开始基于 mCTA 生成 CBF/CBV/Tmax",
+                _persist_three_class_result_to_imaging(
+                    patient_id, file_id, three_class_result
+                )
+                return jsonify(
+                    {
+                        "success": True,
+                        "file_id": file_id,
+                        "mcta_filename": mcta_file.filename if mcta_file else "",
+                        "vcta_filename": vcta_file.filename if vcta_file else "",
+                        "dcta_filename": dcta_file.filename if dcta_file else "",
+                        "ncct_filename": ncct_file.filename,
+                        "metadata": {},
+                        "rgb_files": [],
+                        "total_slices": int(
+                            three_class_result.get("total_slices") or 0
+                        ),
+                        "has_ai": False,
+                        "available_models": [],
+                        "model_configs": MODEL_CONFIGS,
+                        "skip_ai": True,
+                        "three_class_summary": three_class_view.get("summary"),
+                        "three_class_result": three_class_result,
+                        "safety_gate": safety_gate,
+                        "analysis_blocked": True,
+                        "warning": reason,
+                    }
                 )
 
             # 处理 RGB 合成并执行多模型 AI 推理
             print("NCCT 三分类完成，开始处理 RGB 合成和多模型 AI 推理...")
+            if three_class_step_status != "completed":
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "NCCT 三分类或 Grad-CAM 未完成，未启动 CTP 生成",
+                    }
+                )
+            if not _start_ctp_generation_step(upload_job_id):
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "上传任务中的 NCCT 节点尚未完成，未启动 CTP 生成",
+                    }
+                )
             result = process_rgb_synthesis(
                 mcta_path,
                 vcta_path,
@@ -12142,6 +14736,12 @@ def upload_files():
 
             if result["success"]:
                 print("RGB 合成和多模型 AI 推理处理成功")
+                _update_step(
+                    upload_job_id,
+                    "ctp_generate",
+                    "completed",
+                    "CTP 灌注图生成完成",
+                )
 
                 _attach_three_class_to_rgb_files(
                     result.get("rgb_files") or [],
@@ -12167,6 +14767,10 @@ def upload_files():
                         print(f"自动触发脑卒中分析异常: {e}")
                 elif patient_id and defer_stroke_analysis:
                     print("已启用 defer_stroke_analysis，上传接口跳过自动脑卒中分析。")
+
+                _persist_three_class_result_to_imaging(
+                    patient_id, file_id, three_class_result
+                )
 
                 def ensure_json_serializable(obj):
                     if isinstance(obj, dict):
@@ -12202,12 +14806,21 @@ def upload_files():
                         "three_class_summary": ensure_json_serializable(
                             three_class_view.get("summary")
                         ),
+                        "three_class_result": ensure_json_serializable(
+                            three_class_result
+                        ),
+                        "safety_gate": ensure_json_serializable(safety_gate),
+                        "analysis_blocked": False,
                     }
                 )
             else:
                 print(f"RGB 合成处理失败: {result['error']}")
-                if upload_job_id:
-                    _update_step(upload_job_id, "ctp_generate", "failed", result["error"])
+                _update_step(
+                    upload_job_id,
+                    "ctp_generate",
+                    "failed",
+                    str(result.get("error") or "CTP 灌注图生成失败"),
+                )
                 return jsonify({"success": False, "error": result["error"]})
 
     except Exception as e:
@@ -12340,6 +14953,24 @@ def api_save_and_generate_report():
                 {"status": "error", "message": f"Imaging case {file_id} not found"}
             ), 404
         vessel_result = _resolve_vessel_result(imaging=imaging_data)
+        ncct_result = _resolve_ncct_classification(imaging=imaging_data)
+        if structured_data.get("onset_to_admission_hours") is None:
+            onset_time = structured_data.get("onset_exact_time")
+            admission_time = structured_data.get("admission_time")
+            if onset_time and admission_time:
+                try:
+                    onset_dt = datetime.fromisoformat(
+                        str(onset_time).replace("Z", "+00:00")
+                    )
+                    admission_dt = datetime.fromisoformat(
+                        str(admission_time).replace("Z", "+00:00")
+                    )
+                    structured_data["onset_to_admission_hours"] = round(
+                        (admission_dt - onset_dt).total_seconds() / 3600.0, 2
+                    )
+                except Exception:
+                    structured_data["onset_to_admission_hours"] = None
+        structured_data.update(ncct_result)
         structured_data["vessel_occlusion_result"] = vessel_result
         structured_data["vessel_occlusion_status"] = vessel_result.get("status")
         structured_data["vessel_occlusion_class_result"] = vessel_result.get(
@@ -12347,9 +14978,9 @@ def api_save_and_generate_report():
         )
         structured_data["vessel_occlusion_confidence"] = vessel_result.get("confidence")
 
-        # 3. Generate MedGemma report
-        print(f"Auto-generate AI report after save, patient_id: {patient_id}")
-        ai_result = generate_report_with_medgemma(
+        # 3. Generate the AI report through Baichuan M3.
+        print("[BaichuanReport] auto-generate report after save")
+        ai_result = generate_report(
             structured_data, imaging_data, file_id, output_format="markdown"
         )
         if not ai_result.get("success"):
@@ -12359,6 +14990,42 @@ def api_save_and_generate_report():
                     "message": ai_result.get("error", "Report generation failed"),
                 }
             ), 500
+        report_payload = ai_result.get("report_payload")
+        persistence_warnings = []
+        if isinstance(report_payload, dict):
+            try:
+                report_payload = build_summary_artifacts(
+                    run_id=str(
+                        data.get("run_id")
+                        or f"save-report:{patient_id}:{file_id}"
+                    ),
+                    file_id=str(file_id),
+                    report_payload=report_payload,
+                    icv=None,
+                    ekv=None,
+                    consensus=None,
+                    goal_question=str(data.get("question") or ""),
+                    patient_context=structured_data,
+                )
+            except Exception as summary_exc:
+                persistence_warnings.append(
+                    f"structured_report_assembly_failed: {summary_exc}"
+                )
+            ai_result["report_payload"] = report_payload
+        payload_sync = _sync_report_payload_to_result_json(
+            ai_result.get("json_path"), report_payload
+        )
+        if not payload_sync.get("success"):
+            persistence_warnings.append(
+                f"result_json_sync_failed: {payload_sync.get('error')}"
+            )
+        db_sync = _persist_report_payload_best_effort(
+            patient_id, file_id, report_payload
+        )
+        if not db_sync.get("success"):
+            persistence_warnings.append(
+                f"report_payload_persist_failed: {db_sync.get('error')}"
+            )
 
         # Ensure the newly generated report json also carries latest doctor notes.
         try:
@@ -12388,7 +15055,7 @@ def api_save_and_generate_report():
                 "ai_report": ai_result.get("report", ""),
                 "report_payload": ai_result.get("report_payload"),
                 "ai_generated": True,
-                "warnings": save_result.get("warnings", []),
+                "warnings": save_result.get("warnings", []) + persistence_warnings,
                 "saved_targets": save_result.get("saved_targets", {}),
                 "json_sync": save_result.get("json_sync", {}),
             }

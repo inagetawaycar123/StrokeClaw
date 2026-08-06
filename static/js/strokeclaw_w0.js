@@ -31,8 +31,9 @@ const EVENT_TYPE_TEXT_MAP = {
 };
 
 const TOOL_TITLE_MAP = {
-    detect_modalities: "Case_Intake.parse()",
-    load_patient_context: "Image_QC.validate()",
+    load_patient_context: "Case_Context.load()",
+    image_quality_control: "Image_QC.validate()",
+    detect_modalities: "Modality_Detect.route()",
     generate_ctp_maps: "MRDPM_Generate.run()",
     run_stroke_analysis: "Stroke_Analysis.segment()",
     icv: "Evidence_Check.icv()",

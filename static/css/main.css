@@ -1206,6 +1206,19 @@ body { font-family:Arial, sans-serif; font-size:12px; background:#000; color:#ff
     line-height: 1.65;
 }
 
+.runtime-review-done-banner {
+    padding: 12px 14px;
+    border: 1px solid #49d0a4;
+    border-radius: 10px;
+    background: rgba(20, 70, 52, 0.55);
+    color: #9dffd6;
+    font-size: 16px;
+}
+
+.runtime-review-done-banner[hidden] {
+    display: none !important;
+}
+
 .runtime-finalization-card {
     padding: 15px 16px;
     border-color: #1ea06f;
@@ -2343,4 +2356,48 @@ body { font-family:Arial, sans-serif; font-size:12px; background:#000; color:#ff
     .image-grid { display: none; }
     #aiReportSection { display: block !important; border: 1px solid #667eea; padding: 20px; margin: 20px 0; }
     #aiReportContent { max-height: none !important; overflow: visible !important; }
+}
+.runtime-quality-review {
+    display: grid;
+    gap: 12px;
+}
+
+.runtime-quality-review label {
+    display: grid;
+    gap: 6px;
+    color: #cfe2ff;
+    font-size: 13px;
+}
+
+.runtime-quality-review input[type="text"],
+.runtime-quality-review textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #31517d;
+    border-radius: 8px;
+    background: #071326;
+    color: #e8f3ff;
+    padding: 9px 11px;
+}
+
+.runtime-quality-review .runtime-quality-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.runtime-quality-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.runtime-quality-actions .danger {
+    border-color: #b7465f;
+    color: #ffb8c5;
+}
+
+.runtime-review-error {
+    color: #ffb86b;
+    font-size: 13px;
 }

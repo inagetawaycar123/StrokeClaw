@@ -89,9 +89,11 @@ const DAG_LANES = [
 ];
 
 const TOOL_TITLE_MAP = {
+    run_mrs_prognosis_prediction: '90天功能预后评估',
     triage_planner: 'Planner',
     detect_modalities: '模态识别',
     load_patient_context: '病例上下文',
+    image_quality_control: '图像质控',
     run_ncct_classification: 'NCCT三分类',
     run_vessel_occlusion_classification: '血管闭塞三分类',
     generate_ctp_maps: '类CTP生成',
@@ -111,9 +113,11 @@ const TOOL_TITLE_MAP = {
 };
 
 const TOOL_LANE_MAP = {
+    run_mrs_prognosis_prediction: 'L4',
     triage_planner: 'L1',
     detect_modalities: 'L1',
     load_patient_context: 'L1',
+    image_quality_control: 'L2',
     run_ncct_classification: 'L2',
     run_vessel_occlusion_classification: 'L3',
     generate_ctp_maps: 'L3',
@@ -160,6 +164,7 @@ const NCCT_STEP_KEY = 'run_ncct_classification';
 const CONTEXT_STEP_KEY = 'load_patient_context';
 const VESSEL_OCCLUSION_STEP_KEY = 'run_vessel_occlusion_classification'; // AI辅助生成：GLM-5, 2026-03-03
 const STROKE_ANALYSIS_STEP_KEY = 'run_stroke_analysis';
+const MRS_PROGNOSIS_STEP_KEY = 'run_mrs_prognosis_prediction';
 const CTP_SKIP_MESSAGE = '已提供CTP或本次无需生成，跳过类CTP生成';
 const VESSEL_OCCLUSION_DEFAULT = '等待模型预测';
 const VESSEL_OCCLUSION_DEFAULT_MESSAGE = '结果：等待 DINOv3 模型预测...';
@@ -239,11 +244,50 @@ function formatPercentFromFraction(value) {
     return `${(n * 100).toFixed(1)}%`;
 }
 
+function formatMrsPercent(value) {
+    if (value === null || value === undefined || value === '') return '-';
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '-';
+    return `${(number * 100).toFixed(1)}%`;
+}
+
+function mrsPrognosisSummary(result) {
+    if (!result || typeof result !== 'object') return '90天功能预后结果不可用';
+    const prediction = result.prediction && typeof result.prediction === 'object' ? result.prediction : null;
+    return `${result.display_mode || '90天功能预后评估'}；不良预后风险 ${prediction ? formatMrsPercent(prediction.poor_prognosis_risk) : '-'}；置信度 ${(result.confidence || {}).level || 'unavailable'}；状态 ${result.status || 'unavailable'}`;
+}
+
+function mrsPrognosisDetail(result) {
+    if (!result || typeof result !== 'object') return '状态：unavailable';
+    const prediction = result.prediction && typeof result.prediction === 'object' ? result.prediction : null;
+    const confidence = result.confidence && typeof result.confidence === 'object' ? result.confidence : {};
+    const lines = [
+        `当前状态：${result.status || 'unavailable'}`,
+        `评估模式：${result.display_mode || '-'}`,
+        `良好预后概率：${prediction ? formatMrsPercent(prediction.good_prognosis_probability) : '-'}`,
+        `不良预后风险：${prediction ? formatMrsPercent(prediction.poor_prognosis_risk) : '-'}`,
+        `风险类别：${prediction?.class_name || '-'}`,
+        `置信度：${confidence.level || 'unavailable'}`,
+        `Fallback：${result.fallback_used === true ? `是（${result.fallback_reason || '未提供原因'}）` : '否'}`,
+    ];
+    return lines.join('\n');
+}
+
 function formatConfidence(value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return '-';
     if (n > 1) return `${Math.max(0, Math.min(100, n)).toFixed(1)}%`;
     return `${(Math.max(0, Math.min(1, n)) * 100).toFixed(1)}%`;
+}
+
+function confidenceLevel(value) {
+    let score = Number(value);
+    if (!Number.isFinite(score)) return { text: '未知', className: 'confidence-unknown' };
+    if (score > 1 && score <= 100) score /= 100;
+    if (score < 0 || score > 1) return { text: '未知', className: 'confidence-unknown' };
+    if (score >= 0.85) return { text: '高置信度', className: 'confidence-high' };
+    if (score >= 0.7) return { text: '中等', className: 'confidence-medium' };
+    return { text: '低置信度', className: 'confidence-low' };
 }
 
 function safeJson(value) {
@@ -997,6 +1041,12 @@ function deriveStepsFromEvents(events) {
 
 function buildGraphModel(run, events, resultResp = null) {
     const toolHintMap = buildToolHintMap(events);
+    const toolResultByKey = new Map();
+    (Array.isArray(run?.tool_results) ? run.tool_results : []).forEach((result) => {
+        if (!result || typeof result !== 'object') return;
+        const key = normalizeStepKey(result.tool_name || result.name || result.step_key);
+        if (key) toolResultByKey.set(key, result);
+    });
     const stepsSource = Array.isArray(run?.steps) && run.steps.length > 0 ? run.steps : deriveStepsFromEvents(events);
     const stepsWithNcct = ensureNcctStep(normalizeStepList(stepsSource), toolHintMap, run, resultResp); // AI辅助生成：GLM-5, 2026-04-23
     const stepsWithCtp = ensureCtpStep(stepsWithNcct, toolHintMap, run);
@@ -1012,6 +1062,26 @@ function buildGraphModel(run, events, resultResp = null) {
         const stepKey = normalizeStepKey(step.key || step.tool_name || step.node_name || `step_${idx + 1}`);
         if (!stepKey) return;
         const evt = resolveStepEvent(stepKey, toolHintMap);
+        const toolResult = toolResultByKey.get(stepKey) || null;
+        const eventNodeInfo = evt?.node_info && typeof evt.node_info === 'object' ? evt.node_info : {};
+        const stepNodeInfo = step?.node_info && typeof step.node_info === 'object' ? step.node_info : {};
+        const nodeInfo = {
+            node_id: stepKey,
+            node_name: toolTitle(stepKey),
+            agent_name: '',
+            skill_id: '',
+            skill_name: '',
+            tool_name: stepKey,
+            input_summary: '',
+            output_summary: '',
+            confidence_score: null,
+            confidence_method: '',
+            evidence_refs: [],
+            conflict_status: 'unknown',
+            ...stepNodeInfo,
+            ...eventNodeInfo,
+        };
+        if (!Array.isArray(nodeInfo.evidence_refs)) nodeInfo.evidence_refs = [];
         let status = normalizeStatus(step.status || evt?.status || 'pending');
         if (stepKey === CTP_STEP_KEY && status === 'skipped' && !evt && hasReadyCtp) {
             status = 'completed';
@@ -1021,6 +1091,10 @@ function buildGraphModel(run, events, resultResp = null) {
         const stage = String(step.phase || evt?.stage || run?.stage || '').trim().toLowerCase();
         const laneKey = laneForStep(stepKey, stage); // AI辅助生成：GLM-5, 2026-03-02
         const isVesselOcclusion = stepKey === VESSEL_OCCLUSION_STEP_KEY;
+        const isMrsPrognosis = stepKey === MRS_PROGNOSIS_STEP_KEY;
+        const mrsResult = isMrsPrognosis
+            ? (evt?.output_ref || toolResult?.structured_output || step?.output_payload || null)
+            : null;
         const node = {
             step_key: stepKey,
             tool_key: stepKey,
@@ -1029,7 +1103,7 @@ function buildGraphModel(run, events, resultResp = null) {
             lane_title: laneTitle(laneKey),
             order: idx + 1,
             status,
-            confidence: extractConfidence(step, evt),
+            confidence: nodeInfo.confidence_score ?? extractConfidence(step, evt),
             latency_ms: extractLatency(step, evt),
             risk_level: inferRisk(status, evt),
             source_tag: evt?.source_tag || run?.source_tag || cockpitSourceTag || 'real',
@@ -1051,7 +1125,12 @@ function buildGraphModel(run, events, resultResp = null) {
                 : (evt?.result_summary || evt?.message || safeJson(evt?.output_ref || nodeMessage)),
             input_payload: isVesselOcclusion ? (step.input_payload || buildVesselOcclusionInputPayload()) : (evt?.input_ref || {}),
             engineering_payload: isVesselOcclusion ? (step.engineering_payload || buildVesselOcclusionEngineeringPayload(evt)) : (evt || {}),
-            evidence_refs: collectEvidenceRefs(evt),
+            evidence_refs: nodeInfo.evidence_refs.length > 0 ? [...nodeInfo.evidence_refs] : collectEvidenceRefs(evt),
+            node_info: nodeInfo,
+            tool_result: toolResult,
+            attempt: toolResult?.attempt ?? toolResult?.attempts ?? evt?.attempt ?? evt?.attempts ?? step?.attempt ?? step?.attempts ?? null,
+            retryable_value: toolResult?.retryable ?? evt?.retryable ?? step?.retryable ?? null,
+            error_code_value: toolResult?.error_code ?? evt?.error_code ?? step?.error_code ?? null,
             ncct_result_summary: stepKey === NCCT_STEP_KEY ? extractNcctThreeClassSummary(run, resultResp) : '',
             ncct_result_confidence: stepKey === NCCT_STEP_KEY ? extractNcctThreeClassConfidence(run, resultResp) : '',
             ncct_result_detail: stepKey === NCCT_STEP_KEY ? buildNcctThreeClassDetail(run, resultResp) : '',
@@ -1066,6 +1145,11 @@ function buildGraphModel(run, events, resultResp = null) {
             secondary_deps: 0,
             primary_parent: '',
         };
+        if (isMrsPrognosis) {
+            node.mrs_result_detail = mrsResult;
+            node.clinical_summary = mrsPrognosisSummary(mrsResult);
+            node.output_summary = mrsPrognosisDetail(mrsResult);
+        }
         nodes.push(node);
         nodeByKey.set(stepKey, node);
     });
@@ -1304,7 +1388,7 @@ function renderDagGraph(graph, preserveViewport = true) {
     const laneHeaderH = 76;
     const laneBottomPadding = 20;
     const nodeWidth = 244;
-    const nodeHeight = 140;
+    const nodeHeight = 156;
     const nodeGapY = 18;
 
     const laneHeights = graph.lanes.map((lane) => {
@@ -1349,6 +1433,19 @@ function renderDagGraph(graph, preserveViewport = true) {
             nodeBtn.style.width = `${nodeWidth}px`;
             nodeBtn.setAttribute('data-step-key', node.step_key);
             const aggLine = node.secondary_deps > 0 ? `<span class="dag-node-agg">+${node.secondary_deps} 依赖</span>` : '';
+            const agentName = String(node.node_info?.agent_name || '').trim();
+            const skillName = String(node.node_info?.skill_name || '').trim();
+            const identityBadges = [
+                agentName
+                    ? `<span class="dag-node-identity-badge agent" title="Agent: ${escapeHtml(agentName)}">Agent: ${escapeHtml(agentName)}</span>`
+                    : '',
+                skillName
+                    ? `<span class="dag-node-identity-badge skill" title="Skill: ${escapeHtml(skillName)}">Skill: ${escapeHtml(skillName)}</span>`
+                    : '',
+            ].filter(Boolean).join('');
+            const identityLine = identityBadges
+                ? `<div class="dag-node-agent-skill">${identityBadges}</div>`
+                : '';
             nodeBtn.innerHTML = `
                 <div class="dag-node-order">#${node.order}</div>
                 <div class="dag-node-top">
@@ -1357,6 +1454,7 @@ function renderDagGraph(graph, preserveViewport = true) {
                 </div>
                 <h4 class="dag-node-title">${escapeHtml(node.title)}</h4>
                 <div class="dag-node-key">${escapeHtml(node.tool_key)}</div>
+                ${identityLine}
                 <div class="dag-node-meta">
                     <div>confidence: ${escapeHtml(formatConfidence(node.confidence))}</div>
                     <div>latency: ${escapeHtml(formatLatency(node.latency_ms))}</div>
@@ -1456,14 +1554,174 @@ function closeNodeDrawer() {
     document.body.classList.remove('node-drawer-open');
 }
 
+function firstEvidenceField(item, keys) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+    for (const key of keys) {
+        const value = item[key];
+        if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return null;
+}
+
+function evidenceDisplayValue(value) {
+    if (value && typeof value === 'object') return safeJson(value);
+    return String(value ?? '');
+}
+
+function renderEvidenceSource(item, index) {
+    const card = document.createElement('div');
+    card.className = 'evidence-source-item';
+
+    const heading = document.createElement('div');
+    heading.className = 'evidence-source-heading';
+    heading.textContent = `Evidence ${index + 1}:`;
+    card.appendChild(heading);
+
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        const value = document.createElement('div');
+        value.className = 'evidence-source-value';
+        value.textContent = evidenceDisplayValue(item);
+        card.appendChild(value);
+        return card;
+    }
+
+    const preferredFields = [
+        ['Title', firstEvidenceField(item, ['evidence_title', 'title'])],
+        ['Type', firstEvidenceField(item, ['evidence_type', 'type', 'source_type'])],
+        ['Source', firstEvidenceField(item, ['source', 'source_name'])],
+    ].filter(([, value]) => value !== null);
+    const evidenceId = firstEvidenceField(item, ['evidence_id', 'id', 'ref_id', 'reference_id']);
+
+    if (preferredFields.length === 0 && evidenceId !== null) {
+        const value = document.createElement('div');
+        value.className = 'evidence-source-value';
+        value.textContent = evidenceDisplayValue(evidenceId);
+        card.appendChild(value);
+        return card;
+    }
+
+    const displayFields = [...preferredFields];
+    if (evidenceId !== null) displayFields.push(['ID', evidenceId]);
+    if (displayFields.length === 0) displayFields.push(['Details', item]);
+
+    displayFields.forEach(([label, fieldValue]) => {
+        const row = document.createElement('div');
+        row.className = 'evidence-source-field';
+        const labelEl = document.createElement('span');
+        labelEl.textContent = label;
+        const valueEl = document.createElement('strong');
+        valueEl.textContent = evidenceDisplayValue(fieldValue);
+        row.append(labelEl, valueEl);
+        card.appendChild(row);
+    });
+    return card;
+}
+
+function hasSkillResultValue(value) {
+    if (value === undefined || value === null || value === '') return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'object') return Object.keys(value).length > 0;
+    return true;
+}
+
+function firstSkillResultValue(...values) {
+    return values.find((value) => hasSkillResultValue(value));
+}
+
+function skillResultField(source, keys) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return undefined;
+    return firstSkillResultValue(...keys.map((key) => source[key]));
+}
+
+function formatSkillResultValue(value) {
+    if (!hasSkillResultValue(value)) return '暂无数据';
+    if (value && typeof value === 'object') return safeJson(value);
+    return String(value);
+}
+
+function resolveSkillExecutionResult(node, nodeInfo) {
+    const toolResult = node?.tool_result && typeof node.tool_result === 'object' ? node.tool_result : {};
+    const toolStructured = toolResult.structured_output && typeof toolResult.structured_output === 'object'
+        ? toolResult.structured_output
+        : {};
+    const engineering = node?.engineering_payload && typeof node.engineering_payload === 'object'
+        ? node.engineering_payload
+        : {};
+    const eventOutput = engineering.output_ref && typeof engineering.output_ref === 'object'
+        ? engineering.output_ref
+        : {};
+    const eventStructured = engineering.structured_output && typeof engineering.structured_output === 'object'
+        ? engineering.structured_output
+        : {};
+
+    const skillStatus = firstSkillResultValue(
+        skillResultField(toolResult, ['skill_status', 'status']),
+        skillResultField(toolStructured, ['skill_status', 'status']),
+        skillResultField(eventOutput, ['skill_status', 'status']),
+        skillResultField(eventStructured, ['skill_status', 'status']),
+        skillResultField(engineering, ['skill_status', 'status']),
+        node?.status,
+    );
+    const attempt = firstSkillResultValue(
+        skillResultField(toolResult, ['attempt', 'attempts']),
+        skillResultField(toolStructured, ['attempt', 'attempts']),
+        skillResultField(eventOutput, ['attempt', 'attempts']),
+        skillResultField(engineering, ['attempt', 'attempts']),
+        node?.attempt,
+    );
+    const version = firstSkillResultValue(
+        skillResultField(toolResult, ['skill_version', 'version']),
+        skillResultField(toolStructured, ['skill_version', 'version']),
+        skillResultField(eventOutput, ['skill_version', 'version']),
+        skillResultField(eventStructured, ['skill_version', 'version']),
+        skillResultField(engineering, ['skill_version', 'version']),
+    );
+    const failureStrategy = firstSkillResultValue(
+        skillResultField(toolResult, ['failure_strategy']),
+        skillResultField(toolStructured, ['failure_strategy']),
+        skillResultField(eventOutput, ['failure_strategy']),
+        skillResultField(eventStructured, ['failure_strategy']),
+        skillResultField(engineering, ['failure_strategy']),
+    );
+    const retryable = firstSkillResultValue(
+        skillResultField(toolResult, ['retryable']),
+        skillResultField(toolStructured, ['retryable']),
+        skillResultField(eventOutput, ['retryable']),
+        skillResultField(engineering, ['retryable']),
+        node?.retryable_value,
+    );
+    const errorCode = firstSkillResultValue(
+        skillResultField(toolResult, ['error_code']),
+        skillResultField(toolStructured, ['error_code']),
+        skillResultField(eventOutput, ['error_code']),
+        skillResultField(eventStructured, ['error_code']),
+        skillResultField(engineering, ['error_code']),
+        node?.error_code_value,
+    );
+    const structuredOutput = firstSkillResultValue(
+        toolResult.structured_output,
+        skillResultField(toolResult, ['output', 'output_ref', 'result']),
+        hasSkillResultValue(toolResult) ? toolResult : undefined,
+        engineering.output_ref,
+        engineering.structured_output,
+        hasSkillResultValue(engineering) ? engineering : undefined,
+        nodeInfo?.output_summary,
+    );
+
+    return { skillStatus, attempt, version, structuredOutput, failureStrategy, retryable, errorCode };
+}
+
 function renderNodeDrawer(nodeKey) {
     const node = cockpitGraphModel?.nodeByKey?.get(nodeKey);
     if (!node) return;
+    const nodeInfo = node.node_info && typeof node.node_info === 'object' ? node.node_info : {};
+    const standardizedConfidence = nodeInfo.confidence_score ?? node.confidence;
+    const confidenceGrade = confidenceLevel(standardizedConfidence);
     setText('drawerNodeTitle', node.title || '-');
     setText('drawerNodeKey', node.step_key || '-');
     setText('drawerNodeLane', node.lane_title || '-'); // AI辅助生成：GLM-5, 2026-03-31
     setText('drawerNodeStage', stageText(node.stage || '-'));
-    setText('drawerNodeConfidence', formatConfidence(node.confidence));
+    setText('drawerNodeConfidence', formatConfidence(standardizedConfidence));
     setText('drawerNodeLatency', formatLatency(node.latency_ms));
     setText('drawerNodeRisk', node.risk_level || '-');
     setText('drawerNodeRetryable', node.retryable ? 'true' : 'false');
@@ -1472,6 +1730,34 @@ function renderNodeDrawer(nodeKey) {
     setText('drawerNodeParents', node.parents.length > 0 ? node.parents.join(', ') : '-'); // AI辅助生成：GLM-5, 2026-04-01
     setText('drawerNodeChildren', node.children.length > 0 ? node.children.join(', ') : '-');
     setText('drawerNodeSecondaryDeps', String(node.secondary_deps || 0));
+    setText('drawerNodeAgentName', nodeInfo.agent_name || '-');
+    setText('drawerNodeSkillId', nodeInfo.skill_id || '-');
+    setText('drawerNodeSkillName', nodeInfo.skill_name || '-');
+    setText('drawerNodeInputSummary', nodeInfo.input_summary || '暂无输入摘要');
+    setText('drawerNodeOutputSummary', nodeInfo.output_summary || '暂无输出摘要');
+    setText('drawerNodeConfidenceScore', formatConfidence(standardizedConfidence));
+    setText('drawerNodeConfidenceMethod', nodeInfo.confidence_method || '-');
+    setText('drawerNodeConflictStatus', nodeInfo.conflict_status || 'unknown');
+
+    const skillExecution = resolveSkillExecutionResult(node, nodeInfo);
+    setText('drawerSkillResultStatus', formatSkillResultValue(skillExecution.skillStatus));
+    setText('drawerSkillResultAttempt', formatSkillResultValue(skillExecution.attempt));
+    setText('drawerSkillResultVersion', formatSkillResultValue(skillExecution.version));
+    setText('drawerSkillResultFailureStrategy', formatSkillResultValue(skillExecution.failureStrategy));
+    setText('drawerSkillResultRetryable', formatSkillResultValue(skillExecution.retryable));
+    setText('drawerSkillResultErrorCode', formatSkillResultValue(skillExecution.errorCode));
+    setText('drawerSkillResultStructuredOutput', formatSkillResultValue(skillExecution.structuredOutput));
+
+    const confidenceLevelEl = document.getElementById('drawerNodeConfidenceLevel');
+    if (confidenceLevelEl) {
+        confidenceLevelEl.className = `node-info-state ${confidenceGrade.className}`;
+        confidenceLevelEl.textContent = confidenceGrade.text;
+    }
+    const conflictStatusEl = document.getElementById('drawerNodeConflictStatus');
+    if (conflictStatusEl) {
+        const conflictToken = String(nodeInfo.conflict_status || 'unknown').trim().toLowerCase();
+        conflictStatusEl.className = `node-info-state conflict-${conflictToken.replace(/[^a-z0-9_-]/g, '_')}`;
+    }
 
     const statusEl = document.getElementById('drawerNodeStatus');
     if (statusEl) {
@@ -1500,12 +1786,12 @@ function renderNodeDrawer(nodeKey) {
     const evidenceWrap = document.getElementById('drawerNodeEvidence');
     if (evidenceWrap) {
         evidenceWrap.innerHTML = '';
-        if (Array.isArray(node.evidence_refs) && node.evidence_refs.length > 0) {
-            node.evidence_refs.forEach((item) => {
-                const chip = document.createElement('span');
-                chip.className = 'evidence-chip';
-                chip.textContent = item;
-                evidenceWrap.appendChild(chip);
+        const evidenceRefs = Array.isArray(nodeInfo.evidence_refs) && nodeInfo.evidence_refs.length > 0
+            ? nodeInfo.evidence_refs
+            : node.evidence_refs;
+        if (Array.isArray(evidenceRefs) && evidenceRefs.length > 0) {
+            evidenceRefs.forEach((item, index) => {
+                evidenceWrap.appendChild(renderEvidenceSource(item, index));
             }); // AI辅助生成：GLM-5, 2026-04-04
         } else {
             evidenceWrap.innerHTML = '<span class="empty-block">No evidence refs.</span>';

@@ -76,6 +76,35 @@ def test_registers_missing_pytorch_21_dynamo_setting():
     assert "accumulated_cache_size_limit" in config._allowed_keys
 
 
+def test_registers_missing_modern_dynamo_setting_as_config_entry():
+    from torch.utils._config_module import _Config, _ConfigEntry
+
+    class _ModernConfig:
+        def __init__(self) -> None:
+            object.__setattr__(
+                self,
+                "_config",
+                {"existing_limit": _ConfigEntry(_Config(default=1, value_type=int))},
+            )
+            object.__setattr__(self, "_default", None)
+            object.__setattr__(self, "_allowed_keys", None)
+
+        def __getattr__(self, name):
+            try:
+                return self._config[name].default
+            except KeyError as exc:
+                raise AttributeError(name) from exc
+
+    config = _ModernConfig()
+
+    adapter._ensure_dynamo_config_compat(config)
+
+    entry = config._config["accumulated_cache_size_limit"]
+    assert isinstance(entry, _ConfigEntry)
+    assert entry.default == 1024
+    assert config.accumulated_cache_size_limit == 1024
+
+
 def test_imports_backbone_directly_without_torch_hub(monkeypatch, tmp_path):
     repo_dir = tmp_path / "repo"
     backbones_path = repo_dir / "dinov3" / "hub" / "backbones.py"

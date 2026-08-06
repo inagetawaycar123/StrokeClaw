@@ -205,7 +205,10 @@ VITE_API_URL=http://localhost:5011
 BAICHUAN_API_URL=https://api.baichuan-ai.com/v1/chat/completions
 BAICHUAN_API_KEY=your_key
 BAICHUAN_MODEL=Baichuan-M3
+REPORT_RESULTS_DIR=runtime/reports
 ```
+
+报告生成只调用百川 M3；未配置密钥时返回带有 `is_mock=true` 标记的本地规则化草稿。原始影像和患者直接标识不会发送给百川。
 
 ### 安装依赖并启动后端
 ```bash
@@ -235,8 +238,6 @@ cd ..
 
 | 模块 | 文件 | 放置路径 | 链接 | 提取码 |
 |---|---|---|---|---|
-| MedGemma | `model-00001-of-00002.safetensors` | `MedGemma_Model/` | https://pan.baidu.com/s/1G6Ru1CaU3OiqDt5W7OrOUQ | `31k4` |
-| MedGemma | `model-00002-of-00002.safetensors` | `MedGemma_Model/` | https://pan.baidu.com/s/1xtl-r96R0f_dvJSFLwUDmw | `vqj8` |
 | Palette | CBF/CBV/Tmax 权重 | `palette/weights/cbf`、`palette/weights/cbv`、`palette/weights/tmax` | https://pan.baidu.com/s/1QzYK6Fx-wKtBSB-iVkhXBg | `ynua` |
 | MRDPM | CBF/CBV/Tmax 权重 | `mrdpm/weights/cbf`、`mrdpm/weights/cbv`、`mrdpm/weights/tmax` | https://pan.baidu.com/s/1hLgUh_lVA6RDWm4SaMZedg | `ixqm` |
 | NCCT 三分类 | `best_model.pt` | `backend/three_class/best_model.pt` | https://pan.baidu.com/s/1pyZbx1pIH3G6DlZkbm1gAg | `bvnv` |

@@ -18,6 +18,31 @@ function resetState() {
         revealedNodeIds: [],
         revealPendingIds: [],
         revealAt: Object.create(null),
+        dagReview: {
+            approved: false,
+            reviewer: "",
+            approvedAt: "",
+            fingerprint: "",
+            hydratedKey: "",
+            error: "",
+        },
+        review: {
+            required: false,
+            visible: false,
+            loading: false,
+            saving: false,
+            offlineMode: false,
+            error: "",
+            info: "",
+            state: null,
+            currentSectionId: "",
+            rewriteSuggestion: null,
+            pendingOps: [],
+            flushInFlight: false,
+            inited: false,
+            serverCanEnterViewer: false,
+            runStatus: "",
+        },
     });
 }
 
@@ -43,61 +68,461 @@ test.afterEach(() => {
     delete global.localStorage;
 });
 
-test("clinical DAG changes with NCCT-only input", () => {
-    const dag = processing.buildClinicalDag(["ncct"]);
-    const nodeIds = dag.nodes.map((node) => node.id);
-
-    assert.equal(dag.path, "ncct_only");
-    assert.equal(dag.valid, true);
-    assert.ok(nodeIds.includes("ncct_triage"));
-    assert.ok(nodeIds.includes("internal_check"));
-    assert.ok(!nodeIds.includes("vessel_occlusion"));
-    assert.ok(!nodeIds.includes("pseudo_ctp"));
-});
-
-test("single-phase CTA adds vessel assessment without multi-phase perfusion tasks", () => {
-    const dag = processing.buildClinicalDag(["ncct", "mcta"]);
-    const nodeIds = dag.nodes.map((node) => node.id);
-
-    assert.equal(dag.path, "ncct_single_phase_cta");
-    assert.ok(nodeIds.includes("vessel_occlusion"));
-    assert.ok(!nodeIds.includes("collateral_score"));
-    assert.ok(!nodeIds.includes("pseudo_ctp"));
-});
-
-test("three-phase mCTA adds collateral and pseudo-CTP branches", () => {
-    const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
-    const nodeIds = dag.nodes.map((node) => node.id);
-
-    assert.equal(dag.path, "ncct_mcta");
-    assert.ok(nodeIds.includes("collateral_score"));
-    assert.ok(nodeIds.includes("pseudo_ctp"));
-    assert.ok(nodeIds.includes("stroke_analysis"));
-    assert.ok(dag.edges.some((edge) => edge.from === "pseudo_ctp" && edge.to === "stroke_analysis"));
-});
-
-test("uploaded CTP replaces the pseudo-CTP generation branch", () => {
-    const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"]);
-    const nodeIds = dag.nodes.map((node) => node.id);
-
-    assert.equal(dag.path, "ncct_mcta_ctp");
-    assert.ok(nodeIds.includes("ctp_review"));
-    assert.ok(!nodeIds.includes("pseudo_ctp"));
-});
-
-test("clinical DAG structure key stays stable across polling with unchanged modalities", () => {
-    const first = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
-    const nextPoll = processing.buildClinicalDag(["dcta", "vcta", "mcta", "ncct"]);
-    const changed = processing.buildClinicalDag(["ncct", "mcta"]);
-
-    assert.equal(processing.clinicalDagStructureKey(first), processing.clinicalDagStructureKey(nextPoll));
-    assert.notEqual(processing.clinicalDagStructureKey(first), processing.clinicalDagStructureKey(changed));
-});
-
 test("normStatus keeps issue idempotent", () => {
     assert.equal(processing.normStatus("issue"), "issue");
     assert.equal(processing.normStatus(processing.normStatus("failed")), "issue");
     assert.equal(processing.normStatus("unavailable"), "issue");
+});
+
+test("clinical DAG builder covers all four supported imaging paths with stable ids", () => {
+    const cases = [
+        [["ncct"], "ncct_only", 5],
+        [["ncct", "mcta"], "ncct_single_phase_cta", 6],
+        [["ncct", "mcta", "vcta", "dcta"], "ncct_mcta", 9],
+        [["ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"], "ncct_mcta_ctp", 9],
+    ];
+    cases.forEach(([modalities, path, nodeCount]) => {
+        const first = processing.buildClinicalDag(modalities);
+        const reversed = processing.buildClinicalDag([...modalities].reverse());
+        assert.equal(first.path, path);
+        assert.equal(first.dagId, reversed.dagId);
+        assert.equal(first.valid, true);
+        assert.equal(first.nodes.length, nodeCount);
+        assert.equal(
+            processing.clinicalDagStructureKey(first),
+            processing.clinicalDagStructureKey(reversed),
+        );
+    });
+});
+
+test("clinical DAG uses the server descriptor and keeps collateral capability inactive", () => {
+    const serverDag = {
+        dag_id: "clinical:server-owned",
+        path: "ncct_mcta",
+        valid: true,
+        available_modalities: ["ncct", "mcta", "vcta", "dcta"],
+        nodes: [{ id: "collateral_score", status: "inactive", active: false }],
+        edges: [],
+        columns: [["collateral_score"]],
+    };
+    processing.state.latestJob = {
+        status: "awaiting_review",
+        modalities: ["ncct"],
+        clinical_dag: serverDag,
+    };
+
+    const resolved = processing.clinicalDagForJob();
+    assert.equal(resolved, serverDag);
+    assert.equal(resolved.nodes[0].status, "inactive");
+    assert.equal(processing.normStatus("awaiting_review"), "waiting");
+    assert.equal(processing.normStatus("review_rejected"), "issue");
+});
+
+test("three-phase mCTA preserves the dev_zhao nine-node visual DAG", () => {
+    const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
+    const nodes = new Map(dag.nodes.map((node) => [node.id, node]));
+
+    assert.deepEqual(
+        dag.nodes.map((node) => node.title),
+        [
+            "影像质控",
+            "出血 / 缺血排查",
+            "血管闭塞识别",
+            "类 CTP 生成",
+            "侧支循环评估",
+            "卒中定量分析",
+            "内部一致性校验",
+            "外部指南一致性校验",
+            "结构化报告生成",
+        ],
+    );
+    assert.equal(nodes.get("collateral_score").riskLevel, "medium");
+    assert.ok(
+        dag.edges.some(
+            (edge) => edge.from === "pseudo_ctp" && edge.to === "stroke_analysis",
+        ),
+    );
+});
+
+test("uploaded CTP replaces pseudo-CTP while retaining the exact review layout", () => {
+    const dag = processing.buildClinicalDag([
+        "ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax",
+    ]);
+    const ids = dag.nodes.map((node) => node.id);
+
+    assert.equal(dag.path, "ncct_mcta_ctp");
+    assert.ok(ids.includes("ctp_review"));
+    assert.ok(!ids.includes("pseudo_ctp"));
+});
+
+test("collateral execution metadata remains planned and cannot masquerade as runtime output", () => {
+    const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
+    const rows = processing.systemExecutionRows(dag);
+    const collateral = rows
+        .flatMap((row) => row.invocations)
+        .find((item) => item.toolName === "collateral_score");
+
+    assert.ok(collateral);
+    assert.equal(collateral.capabilityStatus, "planned");
+    assert.equal(collateral.status, "pending");
+});
+
+test("approved execution cards retain Agent and Skill metadata in the sequential feed", () => {
+    const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
+    const nodes = [
+        {
+            id: "upload_image_quality_control",
+            key: "image_quality_control",
+            subtitle: "图像质量控制",
+            detailInput: { available_modalities: ["ncct", "mcta", "vcta", "dcta"] },
+            meta: [],
+        },
+    ];
+
+    const [decorated] = processing.decorateExecutionNodes(dag, nodes);
+
+    assert.equal(decorated.subtitle, "影像质控 · Imaging Quality Agent");
+    assert.equal(decorated.detailInput.assigned_agent, "Imaging Quality Agent");
+    assert.equal(decorated.detailInput.called_skill_id, "SKILL_IMG_QC");
+    assert.equal(decorated.detailInput.skill_name, "image_quality_control");
+    assert.ok(decorated.meta.includes("assigned_agent · Imaging Quality Agent"));
+});
+
+test("quality control appears between case context and modality detection", () => {
+    processing.state.latestJob = {
+        status: "paused_review_required",
+        modalities: ["ncct"],
+        quality_control_result: {
+            qc_status: "failed",
+            qc_method: "rule_based_nifti_qc",
+            findings: [{ code: "motion", severity: "high", message: "疑似严重运动伪影", overrideable: true }],
+        },
+        steps: [
+            { key: "archive_ready", status: "completed" },
+            { key: "image_quality_control", status: "waiting", message: "等待医生复核" },
+            { key: "modality_detect", status: "pending" },
+            { key: "three_class", status: "pending" },
+        ],
+    };
+    processing.state.latestRun = null;
+    processing.state.hints = {};
+    const nodes = processing.buildNodes();
+    assert.deepEqual(nodes.slice(0, 3).map((node) => node.key), [
+        "archive_ready",
+        "image_quality_control",
+        "modality_detect",
+    ]);
+    assert.equal(nodes[1].status, "waiting");
+    assert.equal(nodes[2].status, "pending");
+    assert.deepEqual(nodes[1].riskItems, ["疑似严重运动伪影"]);
+});
+
+test("quality warning completes without hiding its risk findings", () => {
+    processing.state.latestJob = {
+        status: "running",
+        modalities: ["ncct"],
+        quality_control_result: {
+            qc_status: "warning",
+            qc_method: "rule_based_nifti_qc",
+            qc_input_mode: "single_slice",
+            qc_scan_coverage: "not_applicable",
+            qc_motion_artifact_level: "not_applicable",
+            qc_missing_slice_status: "not_applicable",
+            qc_not_applicable_checks: ["axial_coverage", "internal_missing_slices", "inter_slice_motion"],
+            findings: [{ code: "single_slice_limited_assessment", severity: "medium", message: "单层影像无法执行三维覆盖、疑似缺片及跨层运动评估", overrideable: true }],
+        },
+        steps: [
+            { key: "archive_ready", status: "completed" },
+            { key: "image_quality_control", status: "completed", message: "单层影像：三维质控项目不适用；可执行检查已完成，流程自动继续" },
+            { key: "modality_detect", status: "running" },
+        ],
+    };
+    const qualityNode = processing.buildNodes().find((node) => node.key === "image_quality_control");
+    assert.equal(qualityNode.status, "completed");
+    assert.equal(qualityNode.riskLevel, "medium");
+    assert.deepEqual(qualityNode.riskItems, ["单层影像无法执行三维覆盖、疑似缺片及跨层运动评估"]);
+    assert.match(qualityNode.fallback, /三维质控项目不适用/);
+    assert.equal(qualityNode.detailResult.qc_input_mode, "single_slice");
+});
+
+test("NCCT running is the only visible execution node while later steps are pending", () => {
+    processing.state.nodes = [
+        { id: "three-class", key: "three_class", group: "upload", status: "running" },
+        { id: "ctp", key: "ctp_generate", group: "upload", status: "pending" },
+        { id: "vessel", key: "vessel_occlusion", group: "upload", status: "pending" },
+    ];
+
+    processing.syncRevealQueue();
+
+    assert.deepEqual(processing.state.revealedNodeIds, ["three-class"]);
+    assert.deepEqual(processing.state.revealPendingIds, ["ctp", "vessel"]);
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[0]).status,
+        "running",
+    );
+});
+
+test("NCCT completed and CTP running are displayed from the same backend poll", () => {
+    processing.state.nodes = [
+        { id: "three-class", key: "three_class", group: "upload", status: "completed" },
+        { id: "ctp", key: "ctp_generate", group: "upload", status: "running" },
+        { id: "vessel", key: "vessel_occlusion", group: "upload", status: "pending" },
+    ];
+
+    processing.syncRevealQueue();
+
+    assert.deepEqual(processing.state.revealedNodeIds, ["three-class", "ctp"]);
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[0]).status,
+        "completed",
+    );
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[1]).status,
+        "running",
+    );
+});
+
+test("CTP completion does not reveal the next pending node", () => {
+    processing.state.nodes = [
+        { id: "three-class", key: "three_class", group: "upload", status: "completed" },
+        { id: "ctp", key: "ctp_generate", group: "upload", status: "completed" },
+        { id: "vessel", key: "vessel_occlusion", group: "upload", status: "pending" },
+    ];
+
+    processing.syncRevealQueue();
+
+    assert.deepEqual(processing.state.revealedNodeIds, ["three-class", "ctp"]);
+    assert.deepEqual(processing.state.revealPendingIds, ["vessel"]);
+});
+
+test("the next node is appended only after its backend status becomes running", () => {
+    processing.state.nodes = [
+        { id: "three-class", key: "three_class", group: "upload", status: "completed" },
+        { id: "ctp", key: "ctp_generate", group: "upload", status: "completed" },
+        { id: "vessel", key: "vessel_occlusion", group: "upload", status: "pending" },
+    ];
+
+    processing.syncRevealQueue();
+    processing.state.nodes[2].status = "running";
+    processing.syncRevealQueue();
+
+    assert.deepEqual(
+        processing.state.revealedNodeIds,
+        ["three-class", "ctp", "vessel"],
+    );
+});
+
+test("elapsed time cannot complete a running node or reveal a pending node", () => {
+    const originalNow = Date.now;
+    let now = 1000;
+    Date.now = () => now;
+    try {
+        processing.state.nodes = [
+            { id: "ctp", key: "ctp_generate", group: "upload", status: "running" },
+            { id: "vessel", key: "vessel_occlusion", group: "upload", status: "pending" },
+        ];
+
+        processing.syncRevealQueue();
+        now += 10 * 60 * 1000;
+        processing.syncRevealQueue();
+
+        assert.deepEqual(processing.state.revealedNodeIds, ["ctp"]);
+        assert.equal(
+            processing.withDisplayStatus(processing.state.nodes[0]).status,
+            "running",
+        );
+    } finally {
+        Date.now = originalNow;
+    }
+});
+
+test("skipped and waiting states are visible while review blocks later nodes", () => {
+    processing.state.nodes = [
+        { id: "skipped-step", key: "archive_ready", group: "upload", status: "skipped" },
+        { id: "review-step", key: "human_confirm", group: "agent", status: "waiting" },
+        { id: "future-step", key: "stroke_analysis", group: "agent", status: "completed" },
+    ];
+
+    processing.syncRevealQueue();
+    assert.deepEqual(processing.state.revealedNodeIds, ["skipped-step", "review-step"]);
+    assert.equal(processing.nodeStatus("skipped"), "skipped");
+    assert.equal(processing.canAdvanceRevealFrom(processing.state.nodes[1]), false);
+});
+
+test("pending human confirmation stays hidden until the backend reports waiting", () => {
+    processing.state.nodes = [
+        { id: "report", key: "ai_report", group: "agent", status: "completed" },
+        { id: "human", key: "human_confirm", group: "agent", status: "pending" },
+    ];
+
+    processing.syncRevealQueue();
+    assert.deepEqual(processing.state.revealedNodeIds, ["report"]);
+
+    processing.state.nodes[1].status = "waiting";
+    processing.syncRevealQueue();
+    assert.deepEqual(processing.state.revealedNodeIds, ["report", "human"]);
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[1]).status,
+        "waiting",
+    );
+});
+
+test("human confirmation completion is driven only by the backend step status", () => {
+    processing.state.nodes = [
+        { id: "report", key: "ai_report", group: "agent", status: "completed" },
+        { id: "human", key: "human_confirm", group: "agent", status: "waiting" },
+    ];
+
+    processing.syncRevealQueue();
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[1]).status,
+        "waiting",
+    );
+
+    processing.state.nodes[1].status = "completed";
+    processing.syncRevealQueue();
+    assert.equal(
+        processing.withDisplayStatus(processing.state.nodes[1]).status,
+        "completed",
+    );
+});
+
+test("viewer entry requires both confirmed sections and server authorization", () => {
+    processing.state.review.required = true;
+    processing.state.review.state = { all_confirmed: true };
+    processing.state.review.serverCanEnterViewer = false;
+
+    assert.equal(processing.reviewCanEnterViewer(), false);
+
+    processing.reviewApplyServerPayload({
+        all_confirmed: true,
+        run_status: "succeeded",
+        can_enter_viewer: true,
+    });
+
+    assert.equal(processing.reviewCanEnterViewer(), true);
+    assert.equal(processing.state.latestRun.status, "succeeded");
+});
+
+test("offline confirmation cannot authorize viewer entry", () => {
+    processing.state.review.required = true;
+    processing.state.review.state = { all_confirmed: true };
+
+    processing.reviewApplyServerPayload({
+        all_confirmed: true,
+        run_status: "paused_review_required",
+        can_enter_viewer: false,
+    });
+
+    assert.equal(processing.reviewCanEnterViewer(), false);
+});
+
+test("review editor snapshot restores unsaved values, focus, and selection", () => {
+    const originalDocument = global.document;
+    const originalElements = {
+        runtimeReviewDraft: {
+            value: "unsaved draft",
+            focus() {},
+            setSelectionRange() {},
+        },
+        runtimeReviewNote: { value: "unsaved note" },
+        runtimeReviewRewriteIntent: { value: "concise" },
+    };
+    let focused = false;
+    let restoredRange = null;
+    originalElements.runtimeReviewDraft.focus = () => { focused = true; };
+    originalElements.runtimeReviewDraft.setSelectionRange = (start, end) => {
+        restoredRange = [start, end];
+    };
+    global.document = {
+        activeElement: {
+            id: "runtimeReviewDraft",
+            selectionStart: 2,
+            selectionEnd: 7,
+        },
+        getElementById(id) {
+            return originalElements[id] || null;
+        },
+    };
+
+    try {
+        const snapshot = processing.reviewCaptureEditorSnapshot();
+        originalElements.runtimeReviewDraft.value = "server render";
+        originalElements.runtimeReviewNote.value = "server note";
+        processing.reviewRestoreEditorSnapshot(snapshot);
+
+        assert.equal(originalElements.runtimeReviewDraft.value, "unsaved draft");
+        assert.equal(originalElements.runtimeReviewNote.value, "unsaved note");
+        assert.equal(focused, true);
+        assert.deepEqual(restoredRange, [2, 7]);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test("upload job completion cannot be overwritten by stale Agent running hints", () => {
+    const resolved = processing.resolveUploadNodeState(
+        { status: "completed", message: "CTP 灌注图生成完成" },
+        { status: "running", message: "Tool running" },
+        { status: "running", inputSummary: "正在调用旧 Agent" },
+    );
+
+    assert.equal(resolved.status, "completed");
+    assert.equal(resolved.message, "CTP 灌注图生成完成");
+    assert.equal(resolved.summaryHint, null);
+});
+
+test("backend CTP progress text remains authoritative while the node is running", () => {
+    processing.state.latestJob = {
+        status: "running",
+        steps: [{
+            key: "ctp_generate",
+            status: "running",
+            message: "正在生成 CTP 灌注图：CBV · 切片 2/4 · 41%",
+        }],
+    };
+    processing.state.latestRun = {
+        steps: [{
+            key: "generate_ctp_maps",
+            status: "completed",
+            message: "stale completion",
+        }],
+    };
+    processing.state.hints = {
+        generate_ctp_maps: {
+            status: "completed",
+            resultSummary: "旧 Agent 已完成",
+        },
+    };
+
+    const node = processing.buildNodes().find((item) => item.key === "ctp_generate");
+
+    assert.equal(node.status, "running");
+    assert.match(node.fallback, /CBV · 切片 2\/4 · 41%/);
+    assert.match(node.summary.doing, /正在执行/);
+    assert.doesNotMatch(node.summary.doing, /旧 Agent 已完成/);
+});
+
+test("completed NCCT card does not retain a stale executing conclusion", () => {
+    processing.state.latestJob = {
+        status: "running",
+        result: {
+            three_class_summary: {
+                display: "正常 2 | 脑出血 0 | 脑缺血 1",
+            },
+        },
+        steps: [{
+            key: "three_class",
+            status: "completed",
+            message: "正常 2 | 脑出血 0 | 脑缺血 1",
+        }],
+    };
+
+    const node = processing.buildNodes().find((item) => item.key === "three_class");
+
+    assert.equal(node.status, "completed");
+    assert.match(node.summary.doing, /已完成/);
+    assert.doesNotMatch(node.summary.doing, /正在执行/);
 });
 
 test("corrupt completed vessel payload without prediction evidence becomes an issue", () => {
@@ -129,7 +554,7 @@ test("a legacy label without model evidence remains unavailable", () => {
     assert.equal(result.vessel_occlusion_class_result, null);
 });
 
-test("missing CTA is a completed non-applicable upload step", () => {
+test("missing CTA is a skipped non-applicable upload step", () => {
     processing.state.latestJob = {
         status: "completed",
         result: {
@@ -149,7 +574,7 @@ test("missing CTA is a completed non-applicable upload step", () => {
     };
 
     const node = processing.buildNodes().find((item) => item.key === "vessel_occlusion");
-    assert.equal(node.status, "completed");
+    assert.equal(node.status, "skipped");
     assert.match(node.fallback, /No CTA slice images found/);
     assert.equal(node.riskItems.length, 0);
 });
@@ -260,8 +685,14 @@ test("an upload job failure still blocks reveal at its issue", () => {
     assert.equal(processing.isBlockingIssue(processing.state.nodes[0]), true);
 });
 
-test("persistUpload copies the vessel contract and flattened compatibility fields", () => {
+test("persistUpload copies NCCT and vessel case-level contracts", () => {
     const vesselResult = completedVesselResult();
+    const threeClassResult = {
+        status: "completed",
+        three_class_label: "normal",
+        three_class_label_cn: "正常",
+        three_class_confidence: 0.923,
+    };
     const writes = {};
     let viewerData = null;
     global.setViewerData = (value) => { viewerData = value; };
@@ -269,12 +700,21 @@ test("persistUpload copies the vessel contract and flattened compatibility field
     global.localStorage = { setItem: (key, value) => { writes[`local:${key}`] = value; }, removeItem: () => {} };
     processing.state.latestJob = {
         status: "completed",
-        result: { file_id: "case-1", vessel_occlusion_result: vesselResult },
+        result: {
+            file_id: "case-1",
+            three_class_result: threeClassResult,
+            vessel_occlusion_result: vesselResult,
+        },
     };
 
     processing.persistUpload(processing.state.latestJob);
 
     assert.equal(viewerData.file_id, "case-1");
+    assert.deepEqual(viewerData.three_class_result, threeClassResult);
+    assert.equal(viewerData.three_class_status, "completed");
+    assert.equal(viewerData.three_class_label, "normal");
+    assert.equal(viewerData.three_class_label_cn, "正常");
+    assert.equal(viewerData.three_class_confidence, 0.923);
     assert.deepEqual(viewerData.vessel_occlusion_result, processing.normalizeVesselOcclusionResult(vesselResult));
     assert.equal(viewerData.vessel_occlusion_status, "completed");
     assert.equal(viewerData.vessel_occlusion_class_result, "大血管闭塞");

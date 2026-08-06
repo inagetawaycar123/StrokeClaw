@@ -1,0 +1,39 @@
+{
+  "version": "stroke-multi-kg-v1",
+  "bindings": [
+    {"binding_type": "modality", "value": "ncct", "kg_types": ["imaging_sign", "guideline", "model_explanation"], "weight": 2.2},
+    {"binding_type": "modality", "value": "cta", "kg_types": ["vessel_anatomy", "imaging_sign", "guideline"], "weight": 2.2},
+    {"binding_type": "modality", "value": "mcta", "kg_types": ["vessel_anatomy", "imaging_sign", "guideline"], "weight": 2.2},
+    {"binding_type": "modality", "value": "vcta", "kg_types": ["vessel_anatomy", "imaging_sign", "guideline"], "weight": 2.0},
+    {"binding_type": "modality", "value": "dcta", "kg_types": ["vessel_anatomy", "imaging_sign", "guideline"], "weight": 2.0},
+    {"binding_type": "modality", "value": "cbf", "kg_types": ["perfusion", "consistency_check", "guideline"], "weight": 2.0},
+    {"binding_type": "modality", "value": "cbv", "kg_types": ["perfusion", "consistency_check", "guideline"], "weight": 2.0},
+    {"binding_type": "modality", "value": "tmax", "kg_types": ["perfusion", "consistency_check", "guideline"], "weight": 2.2},
+
+    {"binding_type": "task", "value": "case_intake_parse", "kg_types": ["workflow", "risk_contraindication", "guideline"], "weight": 1.5},
+    {"binding_type": "task", "value": "modality_detection", "kg_types": ["workflow", "imaging_sign"], "weight": 1.5},
+    {"binding_type": "task", "value": "image_quality_control", "kg_types": ["workflow", "imaging_sign", "model_explanation"], "weight": 1.7},
+    {"binding_type": "task", "value": "ncct_classification", "kg_types": ["imaging_sign", "model_explanation", "consistency_check"], "weight": 2.5},
+    {"binding_type": "task", "value": "vessel_occlusion_classification", "kg_types": ["vessel_anatomy", "model_explanation", "guideline"], "weight": 2.5},
+    {"binding_type": "task", "value": "pseudo_ctp_generation", "kg_types": ["perfusion", "model_explanation", "consistency_check"], "weight": 2.4},
+    {"binding_type": "task", "value": "generate_ctp_maps", "kg_types": ["perfusion", "model_explanation", "consistency_check"], "weight": 2.4},
+    {"binding_type": "task", "value": "stroke_analysis", "kg_types": ["perfusion", "vessel_anatomy", "consistency_check"], "weight": 2.2},
+    {"binding_type": "task", "value": "icv", "kg_types": ["consistency_check", "report_evidence"], "weight": 2.2},
+    {"binding_type": "task", "value": "ekv", "kg_types": ["guideline", "report_evidence", "risk_contraindication"], "weight": 2.2},
+    {"binding_type": "task", "value": "consensus_lite", "kg_types": ["consistency_check", "guideline", "report_evidence"], "weight": 2.2},
+    {"binding_type": "task", "value": "report_generation", "kg_types": ["report_evidence", "guideline", "consistency_check"], "weight": 2.2},
+    {"binding_type": "task", "value": "doctor_review", "kg_types": ["report_evidence", "consistency_check", "risk_contraindication"], "weight": 2.0},
+
+    {"binding_type": "result", "value": "hemorrhage", "kg_types": ["imaging_sign", "risk_contraindication", "consistency_check"], "weight": 3.0},
+    {"binding_type": "result", "value": "脑出血", "kg_types": ["imaging_sign", "risk_contraindication", "consistency_check"], "weight": 3.0},
+    {"binding_type": "result", "value": "large vessel", "kg_types": ["vessel_anatomy", "guideline", "model_explanation"], "weight": 3.0},
+    {"binding_type": "result", "value": "大血管", "kg_types": ["vessel_anatomy", "guideline", "model_explanation"], "weight": 3.0},
+    {"binding_type": "result", "value": "medium vessel", "kg_types": ["vessel_anatomy", "guideline", "model_explanation"], "weight": 2.8},
+    {"binding_type": "result", "value": "中血管", "kg_types": ["vessel_anatomy", "guideline", "model_explanation"], "weight": 2.8},
+    {"binding_type": "result", "value": "penumbra", "kg_types": ["perfusion", "guideline", "consistency_check"], "weight": 2.8},
+    {"binding_type": "result", "value": "半暗带", "kg_types": ["perfusion", "guideline", "consistency_check"], "weight": 2.8},
+    {"binding_type": "risk", "value": "high", "kg_types": ["risk_contraindication", "consistency_check", "guideline"], "weight": 2.4},
+    {"binding_type": "risk", "value": "conflict", "kg_types": ["consistency_check", "report_evidence", "risk_contraindication"], "weight": 2.6},
+    {"binding_type": "risk", "value": "冲突", "kg_types": ["consistency_check", "report_evidence", "risk_contraindication"], "weight": 2.6}
+  ]
+}

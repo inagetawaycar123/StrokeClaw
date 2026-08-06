@@ -18,6 +18,7 @@ let autoReportBootstrapped = false; // AI辅助生成：GLM-5, 2026-04-21
 let viewerLayoutMode = 'full';
 let currentRunId = '';
 let reportGeneratingWatcher = null;
+let currentViewerData = null;
 const REPORT_GENERATING_TIMEOUT_MS = 90000;
 
 // Markdown �?HTML 瑙ｆ瀽鍑芥暟
@@ -286,6 +287,7 @@ if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded
 });
 
 function initializeViewer(data) {
+    currentViewerData = data && typeof data === 'object' ? data : {};
     currentFileId = data.file_id;
     currentRgbFiles = data.rgb_files;
     totalSlices = data.total_slices;
@@ -1178,49 +1180,132 @@ function applyVesselOcclusionResult(rawResult, source = 'viewer_data') {
 // Case-scoped safe default. A model failure must never imply an LVO diagnosis.
 let currentVesselOcclusionResult = normalizeViewerVesselOcclusionResult(null, 'unavailable');
 
-function formatNcctConfidence(value) {
-    const n = Number(value); // AI辅助生成：GLM-5, 2026-04-18
-    if (!Number.isFinite(n)) return '--';
-    if (n > 1) {
-        return `${Math.max(0, Math.min(100, n)).toFixed(1)}%`;
+const NCCT_LABEL_CN = Object.freeze({
+    normal: '\u6b63\u5e38',
+    hemo: '\u8111\u51fa\u8840',
+    infarct: '\u8111\u7f3a\u8840',
+});
+
+function normalizeNcctConfidence(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const text = String(value).trim();
+    if (!text) return null;
+    const isPercent = text.endsWith('%');
+    const parsed = Number(isPercent ? text.slice(0, -1).trim() : text);
+    if (!Number.isFinite(parsed)) return null;
+    const normalized = isPercent || parsed > 1 ? parsed / 100 : parsed;
+    return normalized >= 0 && normalized <= 1 ? normalized : null;
+}
+
+function normalizeViewerThreeClassResult(rawResult) {
+    const candidate = rawResult && typeof rawResult === 'object' && !Array.isArray(rawResult)
+        ? rawResult
+        : {};
+    const raw = candidate.three_class_result && typeof candidate.three_class_result === 'object'
+        ? candidate.three_class_result
+        : candidate;
+    const status = String(raw.status || raw.three_class_status || candidate.three_class_status || '').trim().toLowerCase();
+    if (status && status !== 'completed') {
+        return { status, label: null, confidence: null };
     }
-    return `${(Math.max(0, Math.min(1, n)) * 100).toFixed(1)}%`;
+    const rawLabel = String(
+        raw.three_class_label_cn
+        || raw.label_cn
+        || raw.three_class_label
+        || raw.label
+        || ''
+    ).trim();
+    const rawKey = String(raw.three_class_label || raw.label || '').trim().toLowerCase();
+    const label = rawLabel ? (NCCT_LABEL_CN[rawKey] || rawLabel) : null;
+    if (!label) {
+        return { status: status || 'unavailable', label: null, confidence: null };
+    }
+    return {
+        status: 'completed',
+        label,
+        confidence: normalizeNcctConfidence(
+            raw.three_class_confidence !== undefined ? raw.three_class_confidence : raw.confidence
+        ),
+    };
+}
+
+function hasThreeClassFields(value) {
+    return !!(
+        value
+        && typeof value === 'object'
+        && !Array.isArray(value)
+        && [
+            'three_class_status',
+            'three_class_label',
+            'three_class_label_cn',
+            'three_class_confidence',
+        ].some((key) => Object.prototype.hasOwnProperty.call(value, key))
+    );
+}
+
+function resolveViewerThreeClassResult(viewerData = {}, analysisData = {}, rgbFiles = []) {
+    const viewerNested = viewerData?.three_class_result;
+    if (viewerNested && typeof viewerNested === 'object' && Object.keys(viewerNested).length) {
+        return normalizeViewerThreeClassResult(viewerNested);
+    }
+    const analysisNested = analysisData?.three_class_result;
+    if (analysisNested && typeof analysisNested === 'object' && Object.keys(analysisNested).length) {
+        return normalizeViewerThreeClassResult(analysisNested);
+    }
+    if (hasThreeClassFields(viewerData)) {
+        return normalizeViewerThreeClassResult(viewerData);
+    }
+    if (hasThreeClassFields(analysisData)) {
+        return normalizeViewerThreeClassResult(analysisData);
+    }
+
+    let bestSlice = null;
+    (Array.isArray(rgbFiles) ? rgbFiles : []).forEach((slice) => {
+        const label = String(slice?.three_class_label_cn || slice?.three_class_label || '').trim();
+        const confidence = normalizeNcctConfidence(slice?.three_class_confidence);
+        if (!label || confidence === null) return;
+        if (!bestSlice || confidence > bestSlice.confidence) {
+            const key = String(slice?.three_class_label || '').trim().toLowerCase();
+            bestSlice = { label: NCCT_LABEL_CN[key] || label, confidence };
+        }
+    });
+    return bestSlice
+        ? { status: 'completed', label: bestSlice.label, confidence: bestSlice.confidence }
+        : { status: 'unavailable', label: null, confidence: null };
+}
+
+function formatNcctConfidence(value) {
+    const confidence = normalizeNcctConfidence(value); // AI辅助生成：GLM-5, 2026-04-18
+    return confidence === null ? '--' : `${(confidence * 100).toFixed(1)}%`;
+}
+
+function ncctConfidenceColor(value) {
+    const confidence = normalizeNcctConfidence(value);
+    if (confidence === null) return '';
+    return confidence >= 0.7 ? '#51cf66' : confidence >= 0.5 ? '#ffd43b' : '#ff6b6b';
 }
 
 function extractNcctThreeClassInfo() {
-    const fallback = { label: '--', confidence: '--' };
-    if (!Array.isArray(currentRgbFiles) || currentRgbFiles.length === 0) {
-        return fallback;
+    const result = resolveViewerThreeClassResult(currentViewerData || {}, analysisResults || {}, currentRgbFiles);
+    return {
+        status: result.status,
+        label: result.label || '--',
+        confidence: formatNcctConfidence(result.confidence),
+        confidenceValue: result.confidence,
+    };
+}
+
+function renderNcctThreeClassResult(result = extractNcctThreeClassInfo()) {
+    const classEl = document.getElementById('value-ncct-class');
+    if (classEl) classEl.textContent = result.label || '--';
+    const confidenceEl = document.getElementById('value-ncct-confidence');
+    if (confidenceEl) {
+        confidenceEl.textContent = result.status === 'completed' ? result.confidence : '--';
+        confidenceEl.style.color = result.status === 'completed'
+            ? ncctConfidenceColor(result.confidenceValue)
+            : '';
     }
-
-    const currentSliceData = currentRgbFiles[currentSlice] || {};
-    const currentLabel = String(currentSliceData.three_class_label_cn || currentSliceData.three_class_label || '').trim();
-    const currentConf = Number(currentSliceData.three_class_confidence);
-    if (currentLabel) {
-        return {
-            label: currentLabel,
-            confidence: Number.isFinite(currentConf) ? formatNcctConfidence(currentConf) : '--'
-        };
-    }
-
-    let bestSlice = null; // AI辅助生成：GLM-5, 2026-04-19
-    currentRgbFiles.forEach((slice) => {
-        const label = String(slice?.three_class_label_cn || slice?.three_class_label || '').trim();
-        const conf = Number(slice?.three_class_confidence);
-        if (!label || !Number.isFinite(conf)) return;
-        if (!bestSlice || conf > bestSlice.confidence) {
-            bestSlice = { label, confidence: conf };
-        }
-    });
-
-    if (bestSlice) {
-        return {
-            label: bestSlice.label,
-            confidence: formatNcctConfidence(bestSlice.confidence)
-        };
-    }
-
-    return fallback;
+    return result;
 }
 
 function startStrokeAnalysis() {
@@ -1241,16 +1326,8 @@ function displayAnalysisResults() {
     document.getElementById('analysisMetrics').classList.add('show'); // AI辅助生成：GLM-5, 2026-04-21
     updateStrokeImage();
     const report = analysisResults.report?.summary;
-    const ncctThreeClass = extractNcctThreeClassInfo();
-    const ncctClassEl = document.getElementById('value-ncct-class');
-    const ncctConfidenceEl = document.getElementById('value-ncct-confidence');
-    if (ncctClassEl) {
-        ncctClassEl.textContent = ncctThreeClass.label;
-    }
+    const ncctThreeClass = renderNcctThreeClassResult();
     renderVesselOcclusionResult();
-    if (ncctConfidenceEl) {
-        ncctConfidenceEl.textContent = ncctThreeClass.confidence;
-    }
     if (report) {
         const penumbra = report.penumbra_volume_ml?.toFixed(1) || '--';
         const core = report.core_volume_ml?.toFixed(1) || '--';
@@ -1292,7 +1369,13 @@ function displayAnalysisResults() {
         has_mismatch: analysisResults.report?.summary?.has_mismatch || false,
         hemisphere: lesionHemisphere,
         three_class_label_cn: ncctThreeClass.label,
-        three_class_confidence: ncctThreeClass.confidence,
+        three_class_confidence: ncctThreeClass.confidenceValue,
+        three_class_status: ncctThreeClass.status,
+        three_class_result: {
+            status: ncctThreeClass.status,
+            three_class_label_cn: ncctThreeClass.label === '--' ? null : ncctThreeClass.label,
+            three_class_confidence: ncctThreeClass.confidenceValue,
+        },
         vessel_occlusion_result: vesselOcclusionContract,
         vessel_occlusion_status: vesselOcclusionContract.status
     };
@@ -1561,6 +1644,102 @@ function getReportCacheState(fileId = currentFileId) {
         return { status: 'error', errorMessage, hasReport: false, isGenerating: false, reportText: '' };
     }
     return { status: 'idle', errorMessage: '', hasReport: false, isGenerating: false, reportText: '' };
+}
+
+function escapeReportHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function readStructuredReportFromCache(fileId = currentFileId) {
+    try {
+        const raw = localStorage.getItem(getReportStorageKeys(fileId).payload);
+        const payload = raw ? JSON.parse(raw) : null;
+        const report = payload && payload.structured_report_v2;
+        return report && typeof report === 'object' ? report : null;
+    } catch (_error) {
+        return null;
+    }
+}
+
+function buildStructuredViewerSummaryHtml(report, reportUrl = '') {
+    if (!report || typeof report !== 'object') return '';
+    const meta = report.report_meta || {};
+    const review = report.clinician_review || {};
+    const fields = Array.isArray(report.patient_summary?.fields) ? report.patient_summary.fields : [];
+    const metrics = Array.isArray(report.quantitative_metrics) ? report.quantitative_metrics : [];
+    const allMetrics = [...fields, ...metrics];
+    const metricIds = [
+        'age',
+        'onset_to_admission_hours',
+        'admission_nihss',
+        'core_infarct_volume',
+        'penumbra_volume',
+        'mismatch_ratio',
+    ];
+    const byId = {};
+    allMetrics.forEach((item) => {
+        const id = item.field_id || item.metric_id;
+        if (id) byId[id] = item;
+    });
+    const metricHtml = metricIds
+        .map((id) => byId[id])
+        .filter(Boolean)
+        .slice(0, 6)
+        .map((item) => {
+            const value = item.value === null || item.value === undefined || item.value === ''
+                ? '未获得'
+                : `${escapeReportHtml(item.value)}${item.unit ? ` ${escapeReportHtml(item.unit)}` : ''}`;
+            return `
+                <div style="border:1px solid #334155;border-radius:7px;padding:9px;background:#111827;">
+                    <div style="font-size:10px;color:#94a3b8;margin-bottom:4px;">${escapeReportHtml(item.display_name || item.field_id || item.metric_id)}</div>
+                    <strong style="font-size:15px;color:#f1f5f9;">${value}</strong>
+                </div>
+            `;
+        })
+        .join('');
+    const statusText = {
+        low: '低风险',
+        medium: '中风险',
+        high: '高风险',
+        routine: '常规',
+        attention: '需关注',
+        urgent: '紧急',
+        pending: '待确认',
+        confirmed: '已确认',
+    };
+    const risk = String(meta.risk_level || 'unknown').toLowerCase();
+    const urgency = String(meta.urgency || 'unknown').toLowerCase();
+    const reviewStatus = String(review.overall_status || meta.review_status || 'pending').toLowerCase();
+    const missingCount = Array.isArray(report.missing_information) ? report.missing_information.length : 0;
+    const conflictCount = [
+        ...(Array.isArray(report.warnings) ? report.warnings : []),
+        ...(Array.isArray(report.uncertainties) ? report.uncertainties : []),
+    ].filter((item) => String(item?.status || '').toLowerCase() === 'conflict').length;
+    const safeUrl = escapeReportHtml(reportUrl || '#');
+    return `
+        <div class="viewer-structured-report-summary" style="background:#0f172a;border:1px solid #334155;border-left:3px solid #64748b;padding:12px;border-radius:8px;color:#e2e8f0;">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px;">
+                <div>
+                    <div style="font-size:11px;font-weight:700;color:#93c5fd;">StrokeClaw 结构化报告</div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:4px;">
+                        风险：${escapeReportHtml(statusText[risk] || risk)} ·
+                        紧急程度：${escapeReportHtml(statusText[urgency] || urgency)} ·
+                        审核：${escapeReportHtml(statusText[reviewStatus] || reviewStatus)}
+                    </div>
+                </div>
+                <a href="${safeUrl}" target="_blank" rel="noopener" style="color:#bfdbfe;border:1px solid #486184;border-radius:6px;padding:6px 10px;text-decoration:none;font-size:11px;">查看完整报告</a>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:7px;">${metricHtml}</div>
+            <div style="margin-top:10px;padding-top:9px;border-top:1px solid #334155;font-size:11px;color:#cbd5e1;">
+                缺失项 ${missingCount} · 冲突 ${conflictCount} · 最终诊疗决策需医生确认
+            </div>
+        </div>
+    `;
 }
 
 function getTopbarReportButton() {
@@ -1847,7 +2026,7 @@ async function generateAIReport(options = {}) {
     setReportStatus('generating');
 
     try {
-        console.log(`[MedGemma][Viewer] start generate source=${source} patient_id=${currentPatientId} file_id=${currentFileId}`);
+        console.log(`[Report][Viewer] start generate source=${source} patient_id=${currentPatientId} file_id=${currentFileId}`);
 
         const aiReportSection = document.getElementById('aiReportSection');
         const aiReportContent = document.getElementById('aiReportContent');
@@ -1880,9 +2059,9 @@ async function generateAIReport(options = {}) {
             data = { status: 'error', message: `Invalid JSON response: ${parseErr.message}` };
         }
 
-        console.log('[MedGemma][Viewer] API response:', data);
+        console.log('[Report][Viewer] API response:', data);
         if (data.json_path) {
-            console.log(`[MedGemma][Viewer] report json path: ${data.json_path}`);
+            console.log(`[Report][Viewer] report json path: ${data.json_path}`);
         }
 
         if (response.ok && data.status === 'success') {
@@ -1917,7 +2096,7 @@ async function generateAIReport(options = {}) {
         }
 
         const errorMessage = data.message || `HTTP ${response.status}`;
-        console.warn(`[MedGemma][Viewer] generate failed: ${errorMessage}`);
+        console.warn(`[Report][Viewer] generate failed: ${errorMessage}`);
         localStorage.setItem(keys.error, errorMessage);
         setReportGenerating(currentFileId, false);
         setReportStatus('error', `自动生成失败�?{errorMessage}`, errorMessage);
@@ -1933,7 +2112,7 @@ async function generateAIReport(options = {}) {
         return { success: false, message: errorMessage, data };
     } catch (err) {
         const errorMessage = err.message || 'Unknown error';
-        console.error(`[MedGemma][Viewer] generate exception: ${errorMessage}`);
+        console.error(`[Report][Viewer] generate exception: ${errorMessage}`);
         localStorage.setItem(keys.error, errorMessage);
         setReportGenerating(currentFileId, false);
         setReportStatus('error', `自动生成失败�?{errorMessage}`, errorMessage);
@@ -1957,6 +2136,17 @@ function displayAIReport(report, isMock) {
     
     if (!aiReportSection || !aiReportContent) return;
     aiReportSection.style.display = 'block';
+
+    const structuredReport = readStructuredReportFromCache(currentFileId);
+    const structuredSummary = buildStructuredViewerSummaryHtml(
+        structuredReport,
+        getReportUrl()
+    );
+    if (structuredSummary) {
+        aiReportContent.innerHTML = structuredSummary;
+        removeLegacyValidationBlocks();
+        return;
+    }
 
     aiReportContent.innerHTML = `
         <div style="background: #eff6ff; padding: 12px; border-radius: 6px; border-left: 3px solid #2563eb; margin-bottom: 8px;">
@@ -2003,7 +2193,7 @@ async function triggerGenerateReportFromTopBar() {
         return;
     }
 
-    console.log(`[MedGemma][Viewer] triggerGenerateReportFromTopBar patient_id=${currentPatientId} file_id=${currentFileId}`);
+    console.log(`[Report][Viewer] triggerGenerateReportFromTopBar patient_id=${currentPatientId} file_id=${currentFileId}`);
     const cache = getReportCacheState(currentFileId);
 
     if (cache.status === 'ready') {
@@ -2082,9 +2272,15 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         agentRunMatchesCase,
         normalizeViewerVesselOcclusionResult,
+        normalizeNcctConfidence,
+        normalizeViewerThreeClassResult,
+        resolveViewerThreeClassResult,
+        formatNcctConfidence,
+        ncctConfidenceColor,
         toggleAnalysisPanel,
         validateAgentRunForCase,
         viewerDataMatchesFileId,
+        buildStructuredViewerSummaryHtml,
     };
 }
 
