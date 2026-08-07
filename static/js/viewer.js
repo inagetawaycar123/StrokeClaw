@@ -19,6 +19,29 @@ let viewerLayoutMode = 'full';
 let currentRunId = '';
 let reportGeneratingWatcher = null;
 let currentViewerData = null;
+const ACUTE_IMAGING_UI = (() => {
+    if (typeof window !== 'undefined' && window.StrokeClawImagingResults) {
+        return window.StrokeClawImagingResults;
+    }
+    if (typeof require === 'function') {
+        try { return require('./imaging_results.js'); } catch (_error) { return null; }
+    }
+    return null;
+})();
+let currentAgentAcuteImagingResult = null;
+const MRS_PROGNOSIS_UI = (() => {
+    if (typeof window !== 'undefined' && window.StrokeClawMrsPrognosis) {
+        return window.StrokeClawMrsPrognosis;
+    }
+    if (typeof require === 'function') {
+        try { return require('./mrs_prognosis.js'); } catch (_error) { return null; }
+    }
+    return null;
+})();
+let currentMrsPrognosisResult = MRS_PROGNOSIS_UI
+    ? MRS_PROGNOSIS_UI.normalizeMrsPrognosisResult(null)
+    : null;
+let currentMrsPrognosisPriority = 0;
 const REPORT_GENERATING_TIMEOUT_MS = 90000;
 
 // Markdown �?HTML 瑙ｆ瀽鍑芥暟
@@ -288,7 +311,12 @@ if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded
 
 function initializeViewer(data) {
     currentViewerData = data && typeof data === 'object' ? data : {};
+    currentAgentAcuteImagingResult = null;
     currentFileId = data.file_id;
+    currentMrsPrognosisPriority = 0;
+    currentMrsPrognosisResult = MRS_PROGNOSIS_UI
+        ? MRS_PROGNOSIS_UI.normalizeMrsPrognosisResult(null)
+        : null;
     currentRgbFiles = data.rgb_files;
     totalSlices = data.total_slices;
     hasAI = data.has_ai || false;
@@ -304,6 +332,8 @@ function initializeViewer(data) {
     // stroke analysis. Missing/failed results must not inherit another case's
     // prediction from the shared analysis_data storage key.
     applyVesselOcclusionResult(data.vessel_occlusion_result, 'viewer_data');
+    applyMrsPrognosisResult(data.mrs_prognosis_result, 'viewer_data');
+    hydrateMrsPrognosisFromReportCache();
 
     // 浠庡悗绔暟鎹簱鑾峰彇 hemisphere锛坧atient_imaging 琛�?
     currentHemisphere = 'both';
@@ -349,6 +379,7 @@ function initializeViewer(data) {
         // Agent Run is the freshest source and may safely override viewer_data.
         hydrateVesselOcclusionFromRun(currentRunId);
     }
+    hydrateMrsPrognosisFromReportContext();
 
     // 妫€娴婥TP鐏屾敞鍥炬暟鎹槸鍚﹀瓨鍦?
     function hasCTPData() {
@@ -1155,7 +1186,7 @@ function renderVesselOcclusionResult() {
     const classEl = document.getElementById('value-vessel-occlusion-class');
     if (classEl) {
         classEl.textContent = completed ? currentVesselOcclusionResult.label : VESSEL_OCCLUSION_CLASS_RESULT;
-        classEl.style.color = completed ? '#4fc3f7' : '';
+        classEl.style.color = '';
     }
 
     const confidenceEl = document.getElementById('value-vessel-occlusion-confidence');
@@ -1163,12 +1194,13 @@ function renderVesselOcclusionResult() {
         const confidence = currentVesselOcclusionResult.confidence;
         if (completed && confidence != null) {
             confidenceEl.textContent = (confidence * 100).toFixed(1) + '%';
-            confidenceEl.style.color = confidence >= 0.7 ? '#51cf66' : confidence >= 0.5 ? '#ffd43b' : '#ff6b6b';
+            confidenceEl.style.color = '#4dabf7';
         } else {
             confidenceEl.textContent = '--';
             confidenceEl.style.color = '';
         }
     }
+    renderViewerAcuteImagingResults();
 }
 
 function applyVesselOcclusionResult(rawResult, source = 'viewer_data') {
@@ -1177,8 +1209,364 @@ function applyVesselOcclusionResult(rawResult, source = 'viewer_data') {
     syncVesselOcclusionStorage();
 }
 
+const MRS_SOURCE_PRIORITY = Object.freeze({
+    viewer_data: 1,
+    report_cache: 2,
+    report_context: 3,
+    agent_run: 4,
+});
+
+function setMrsText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value == null || value === '' ? '--' : String(value);
+}
+
+function renderMrsList(id, values) {
+    const list = document.getElementById(id);
+    if (!list) return;
+    list.replaceChildren();
+    const items = Array.isArray(values) && values.length ? values : ['未提供'];
+    items.forEach((value) => {
+        const item = document.createElement('li');
+        item.textContent = String(value);
+        list.appendChild(item);
+    });
+}
+
+function renderMrsPrognosisResult() {
+    if (!MRS_PROGNOSIS_UI || !currentMrsPrognosisResult) return;
+    const result = currentMrsPrognosisResult;
+    const card = document.getElementById('mrs-prognosis-card');
+    if (!card) return;
+    const tone = MRS_PROGNOSIS_UI.prognosisTone(result);
+    card.classList.remove('good', 'poor', 'unavailable');
+    card.classList.add(tone);
+
+    if (!result.available) {
+        setMrsText('mrs-prognosis-class', '未生成');
+        setMrsText('mrs-prognosis-mode', result.displayMode || '--');
+        setMrsText('mrs-good-probability', '--');
+        setMrsText('mrs-poor-risk', '--');
+        const confidenceElement = document.getElementById('mrs-confidence-level');
+        if (confidenceElement) {
+            confidenceElement.textContent = '--';
+            confidenceElement.className = 'confidence-unknown';
+        }
+        setMrsText('mrs-prognosis-message', result.reason || '当前病例尚未获得有效的 90 天 mRS 预测。');
+        setMrsText('mrs-decision-threshold', '--');
+        setMrsText('mrs-threshold-margin', '--');
+        setMrsText('mrs-ensemble-std', '--');
+        setMrsText('mrs-model-version', '--');
+        setMrsText('mrs-calibration-status', '--');
+        setMrsText('mrs-validation-status', '--');
+        const goodBar = document.getElementById('mrs-good-bar');
+        const poorBar = document.getElementById('mrs-poor-bar');
+        const marker = document.getElementById('mrs-threshold-marker');
+        if (goodBar) goodBar.style.width = '0%';
+        if (poorBar) poorBar.style.width = '0%';
+        if (marker) marker.hidden = true;
+        renderMrsList('mrs-clinical-evidence', []);
+        renderMrsList('mrs-imaging-evidence', []);
+        renderMrsList('mrs-review-items', [result.reason || '模型结果不可用，请勿使用启发式结果替代。']);
+        setMrsText('mrs-attribution-notice', '模型结果不可用，不得使用启发式概率替代。');
+        return;
+    }
+
+    const prediction = result.prediction;
+    const confidence = result.confidence;
+    setMrsText('mrs-prognosis-class', `${prediction.classRange} · ${prediction.classLabel}`);
+    setMrsText('mrs-prognosis-mode', result.displayMode);
+    setMrsText('mrs-good-probability', MRS_PROGNOSIS_UI.formatProbability(prediction.goodProbability));
+    setMrsText('mrs-poor-risk', MRS_PROGNOSIS_UI.formatProbability(prediction.poorRisk));
+    const confidenceElement = document.getElementById('mrs-confidence-level');
+    if (confidenceElement) {
+        confidenceElement.textContent = MRS_PROGNOSIS_UI.confidenceLabel(confidence.level);
+        confidenceElement.className = `confidence-${MRS_PROGNOSIS_UI.confidenceTone(confidence.level)}`;
+    }
+    setMrsText('mrs-prognosis-message', result.deterministicSummary);
+    setMrsText('mrs-decision-threshold', MRS_PROGNOSIS_UI.formatProbability(prediction.decisionThreshold));
+    setMrsText('mrs-threshold-margin', confidence.thresholdMargin == null ? '--' : confidence.thresholdMargin.toFixed(3));
+    setMrsText('mrs-ensemble-std', confidence.ensembleStd == null ? '--' : confidence.ensembleStd.toFixed(3));
+    setMrsText('mrs-model-version', result.model.modelVersion || result.model.bundleVersion || '--');
+    setMrsText('mrs-calibration-status', prediction.probabilityCalibrated ? '已校准' : '未确认');
+    setMrsText(
+        'mrs-validation-status',
+        result.model.externalValidationCompleted && result.model.productionApproved
+            ? '外部验证完成 · 已批准'
+            : result.model.externalValidationCompleted
+                ? '外部验证完成 · 未批准'
+                : '外部验证未完成 · 未批准',
+    );
+
+    const goodBar = document.getElementById('mrs-good-bar');
+    const poorBar = document.getElementById('mrs-poor-bar');
+    const marker = document.getElementById('mrs-threshold-marker');
+    if (goodBar) goodBar.style.width = `${(prediction.goodProbability * 100).toFixed(3)}%`;
+    if (poorBar) poorBar.style.width = `${(prediction.poorRisk * 100).toFixed(3)}%`;
+    if (marker) {
+        marker.hidden = false;
+        marker.style.left = `${((1 - prediction.decisionThreshold) * 100).toFixed(3)}%`;
+        marker.title = `不良预后判定阈值 ${MRS_PROGNOSIS_UI.formatProbability(prediction.decisionThreshold)}`;
+    }
+
+    const clinicalItems = result.clinicalEvidence.map((item) => {
+        const direction = item.direction === 'increase_poor_prognosis_risk'
+            ? '与较高不良预后风险相关'
+            : item.direction === 'decrease_poor_prognosis_risk'
+                ? '与较低不良预后风险相关'
+                : '关联方向中性';
+        const value = item.value == null ? '' : `（值 ${item.value}）`;
+        return `${item.displayName}${value}：${direction}`;
+    });
+    const imagingItems = result.imagingEvidence.map((item) => (
+        `${item.regionLabel}${item.attentionScore == null ? '' : `（关注权重 ${MRS_PROGNOSIS_UI.formatProbability(item.attentionScore)}）`}：${item.interpretation}`
+    ));
+    const reviewItems = [
+        ...confidence.reasons,
+        ...result.missingClinicalFields.map((item) => `缺失临床字段：${item}`),
+        ...result.imageQualityWarnings.map((item) => `图像质量提示：${item}`),
+        ...(result.fallbackUsed ? [`已降级评估：${result.fallbackReason || '24小时更新模型不可用'}`] : []),
+        ...result.reviewItems,
+    ];
+    renderMrsList('mrs-clinical-evidence', clinicalItems);
+    renderMrsList('mrs-imaging-evidence', imagingItems);
+    renderMrsList('mrs-review-items', reviewItems);
+    setMrsText('mrs-attribution-notice', result.attributionNotice);
+}
+
+function applyMrsPrognosisResult(rawResult, source = 'viewer_data') {
+    if (!MRS_PROGNOSIS_UI || !rawResult || typeof rawResult !== 'object') {
+        renderMrsPrognosisResult();
+        return false;
+    }
+    const priority = MRS_SOURCE_PRIORITY[source] || 0;
+    if (priority < currentMrsPrognosisPriority) return false;
+    currentMrsPrognosisResult = MRS_PROGNOSIS_UI.normalizeMrsPrognosisResult(rawResult);
+    currentMrsPrognosisPriority = priority;
+    renderMrsPrognosisResult();
+    return true;
+}
+
+function persistMrsPrognosisForCurrentCase(rawResult, source = 'agent_run') {
+    if (!rawResult || typeof rawResult !== 'object' || !currentFileId) return false;
+    applyMrsPrognosisResult(rawResult, source);
+    if (currentViewerData && viewerDataMatchesFileId(currentViewerData, currentFileId)) {
+        currentViewerData.mrs_prognosis_result = rawResult;
+        if (typeof setViewerData === 'function') setViewerData(currentViewerData);
+    }
+    [sessionStorage, localStorage].forEach((storage) => {
+        try {
+            const parsed = JSON.parse(storage.getItem('analysis_data') || '{}');
+            if (parsed && typeof parsed === 'object' && normalizeCaseIdentifier(parsed.file_id) === normalizeCaseIdentifier(currentFileId)) {
+                parsed.mrs_prognosis_result = rawResult;
+                storage.setItem('analysis_data', JSON.stringify(parsed));
+            }
+        } catch (_error) {}
+    });
+    return true;
+}
+
+function hydrateMrsPrognosisFromReportCache() {
+    if (!currentFileId) return false;
+    try {
+        const raw = localStorage.getItem(`ai_report_payload_${currentFileId}`);
+        const payload = raw ? JSON.parse(raw) : null;
+        const mrs = payload?.mrs_prognosis_result || payload?.structured_report_v2?.prognosis_assessment;
+        return applyMrsPrognosisResult(mrs, 'report_cache');
+    } catch (_error) {
+        return false;
+    }
+}
+
+async function hydrateMrsPrognosisFromReportContext() {
+    if (!currentFileId) return false;
+    const query = new URLSearchParams({ file_id: String(currentFileId) });
+    if (currentPatientId) query.set('patient_id', String(currentPatientId));
+    if (currentRunId) query.set('run_id', String(currentRunId));
+    try {
+        const response = await fetch(`/api/report/context?${query.toString()}`);
+        if (!response.ok) return false;
+        const data = await response.json();
+        if (!data?.success) return false;
+        const mrs = data.report_payload?.mrs_prognosis_result || data.structured_report?.prognosis_assessment;
+        return applyMrsPrognosisResult(mrs, 'report_context');
+    } catch (_error) {
+        return false;
+    }
+}
+
 // Case-scoped safe default. A model failure must never imply an LVO diagnosis.
 let currentVesselOcclusionResult = normalizeViewerVesselOcclusionResult(null, 'unavailable');
+
+function acuteFirstPresent(...values) {
+    return values.find((value) => value !== null && value !== undefined && value !== '');
+}
+
+function acuteText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value == null || value === '' ? '--' : String(value);
+}
+
+function acuteCountsText(counts) {
+    const safe = counts && typeof counts === 'object' && !Array.isArray(counts) ? counts : {};
+    const entries = Object.entries(safe).filter(([, value]) => Number.isFinite(Number(value)));
+    return entries.length ? entries.map(([key, value]) => `${key} ${Number(value)}`).join(' · ') : '';
+}
+
+function setAcuteDetailRow(rowId, value) {
+    const row = document.getElementById(rowId);
+    if (row) row.hidden = value === null || value === undefined || value === '';
+}
+
+function setAcuteCardState(cardId, status, tone) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+    card.classList.remove('completed', 'normal', 'attention', 'danger', 'failed', 'skipped', 'unavailable');
+    if (status === 'completed' && ['normal', 'attention', 'danger'].includes(tone)) card.classList.add(tone);
+    else card.classList.add(status || 'unavailable');
+}
+
+function buildViewerModalityFindings() {
+    const agentModalities = currentAgentAcuteImagingResult?.modalities?.map((item) => item.label) || [];
+    const available = agentModalities.length ? agentModalities : acuteFirstPresent(
+        currentViewerData?.available_modalities,
+        currentViewerData?.modalities,
+        []
+    );
+    const names = Array.isArray(available) ? available : [];
+    const findings = names.map((name) => {
+        const key = String(name || '').trim().toLowerCase();
+        if (['cbf', 'cbv', 'tmax'].includes(key)) {
+            return { finding_id: `${key}_availability`, display_name: key.toUpperCase(), value: '已获得输入', status: 'completed' };
+        }
+        if (key.includes('cta')) {
+            return { finding_id: 'cta_assessment', display_name: String(name).toUpperCase(), value: '已获得输入', status: 'completed' };
+        }
+        return null;
+    }).filter(Boolean);
+    const firstSlice = Array.isArray(currentRgbFiles) ? currentRgbFiles[0] || {} : {};
+    ['cbf', 'cbv', 'tmax'].forEach((key) => {
+        if ((firstSlice[`${key}_image`] || firstSlice[`${key}_npy_url`]) && !findings.some((item) => item.finding_id === `${key}_availability`)) {
+            findings.push({ finding_id: `${key}_availability`, display_name: key.toUpperCase(), value: '已获得输入', status: 'completed' });
+        }
+    });
+    return findings;
+}
+
+function buildViewerAcuteImagingResult() {
+    if (!ACUTE_IMAGING_UI) return null;
+    const summary = analysisResults?.report?.summary || {};
+    const analysis = analysisResults && typeof analysisResults === 'object' ? analysisResults : {};
+    const viewer = currentViewerData && typeof currentViewerData === 'object' ? currentViewerData : {};
+    const agent = currentAgentAcuteImagingResult || {};
+    const agentPerfusion = agent.perfusion && agent.perfusion.status !== 'unavailable' ? agent.perfusion : {};
+    const agentNcct = agent.ncct && agent.ncct.status !== 'unavailable' ? agent.ncct : null;
+    const agentVessel = agent.vessel && agent.vessel.status !== 'unavailable' ? agent.vessel : null;
+    const viewerPerfusion = viewer.analysis_result && typeof viewer.analysis_result === 'object'
+        ? viewer.analysis_result
+        : viewer;
+    const perfusion = {
+        ...viewerPerfusion,
+        ...agentPerfusion,
+        status: acuteFirstPresent(
+            agentPerfusion.status,
+            analysis.status,
+            summary.core_volume_ml != null || summary.penumbra_volume_ml != null || summary.mismatch_ratio != null ? 'completed' : null,
+            viewerPerfusion.status
+        ),
+        core_infarct_volume: acuteFirstPresent(agentPerfusion.core, summary.core_volume_ml, analysis.core_infarct_volume, viewerPerfusion.core_infarct_volume, viewerPerfusion.core_volume),
+        penumbra_volume: acuteFirstPresent(agentPerfusion.penumbra, summary.penumbra_volume_ml, analysis.penumbra_volume, viewerPerfusion.penumbra_volume),
+        mismatch_ratio: acuteFirstPresent(agentPerfusion.mismatch, summary.mismatch_ratio, analysis.mismatch_ratio, viewerPerfusion.mismatch_ratio),
+        has_mismatch: acuteFirstPresent(summary.has_mismatch, analysis.has_mismatch, viewerPerfusion.has_mismatch),
+        safety_gate: acuteFirstPresent(agentPerfusion.safetyGate, analysis.safety_gate, viewer.three_class_result?.safety_gate, viewerPerfusion.safety_gate),
+        source: acuteFirstPresent(agentPerfusion.source, analysis.source, 'CTPAnalysisAgent'),
+    };
+    const ncctRaw = agentNcct || viewer.three_class_result || analysis.three_class_result || viewer;
+    const vesselRaw = agentVessel || {
+        ...buildVesselOcclusionContract(),
+        source: currentVesselOcclusionResult?.source,
+        input_phases: viewer.available_modalities || viewer.modalities || [],
+    };
+    return ACUTE_IMAGING_UI.normalizeAcuteImagingResults({
+        perfusion,
+        ncct: ncctRaw,
+        vessel: vesselRaw,
+        modalityFindings: buildViewerModalityFindings(),
+    });
+}
+
+function renderViewerAcuteImagingResults() {
+    const result = buildViewerAcuteImagingResult();
+    if (!result || !ACUTE_IMAGING_UI) return result;
+    const statusLabels = { completed: 'Completed', skipped: 'Skipped', failed: 'Failed', unavailable: 'Unavailable' };
+
+    const perfusion = result.perfusion;
+    const perfusionTone = perfusion.status === 'completed'
+        ? (perfusion.mismatchEvaluation.status === 'attention' ? 'attention' : perfusion.coreEvaluation.status === 'met' ? 'normal' : 'completed')
+        : perfusion.status;
+    setAcuteCardState('perfusion-result-card', perfusion.status, perfusionTone);
+    acuteText('perfusion-result-status', statusLabels[perfusion.status] || 'Unavailable');
+    acuteText('value-core', ACUTE_IMAGING_UI.formatVolume(perfusion.core));
+    acuteText('value-penumbra', ACUTE_IMAGING_UI.formatVolume(perfusion.penumbra));
+    acuteText('value-ratio', ACUTE_IMAGING_UI.formatRatio(perfusion.mismatch));
+    acuteText('value-status', perfusion.status === 'completed' ? (perfusion.mismatchStatus || '已完成') : perfusion.status === 'skipped' ? (perfusion.limitations[0] || '已跳过') : perfusion.status === 'failed' ? '生成失败' : '未生成');
+    const coreThreshold = document.getElementById('core-threshold-state');
+    if (coreThreshold) {
+        coreThreshold.textContent = perfusion.core == null ? '内部参考：< 70 mL' : `${perfusion.coreEvaluation.label}（< 70 mL）`;
+        coreThreshold.className = perfusion.coreEvaluation.status;
+    }
+    const mismatchThreshold = document.getElementById('mismatch-threshold-state');
+    if (mismatchThreshold) {
+        mismatchThreshold.textContent = perfusion.mismatch == null ? '内部提示：> 1.80' : `${perfusion.mismatchEvaluation.label}（> 1.80）`;
+        mismatchThreshold.className = perfusion.mismatchEvaluation.status;
+    }
+    acuteText('perfusion-result-source', perfusion.source || '--');
+    acuteText('perfusion-result-limitations', perfusion.limitations.join('；') || '未提供额外限制');
+    const modalityList = document.getElementById('perfusion-modality-list');
+    if (modalityList) {
+        modalityList.replaceChildren();
+        result.modalities.forEach((item) => {
+            const chip = document.createElement('span');
+            chip.className = 'acute-modality-chip';
+            chip.textContent = item.label;
+            modalityList.appendChild(chip);
+        });
+        modalityList.hidden = result.modalities.length === 0;
+    }
+
+    const ncct = result.ncct;
+    setAcuteCardState('ncct-result-card', ncct.status, ncct.tone);
+    acuteText('ncct-result-status', statusLabels[ncct.status] || 'Unavailable');
+    acuteText('value-ncct-class', ncct.status === 'completed' ? ncct.label : ncct.status === 'skipped' ? '已跳过' : ncct.status === 'failed' ? '分类失败' : '未生成');
+    acuteText('value-ncct-confidence', ACUTE_IMAGING_UI.formatConfidence(ncct.confidence));
+    const ncctBar = document.getElementById('ncct-confidence-bar');
+    if (ncctBar) ncctBar.style.width = ncct.confidence == null ? '0%' : `${Math.max(0, Math.min(100, ncct.confidence * 100))}%`;
+    const ncctCounts = acuteCountsText(ncct.classCounts);
+    acuteText('ncct-total-slices', ncct.totalSlices == null ? '--' : ncct.totalSlices);
+    acuteText('ncct-class-counts', ncctCounts || '--');
+    setAcuteDetailRow('ncct-total-slices-row', ncct.totalSlices);
+    setAcuteDetailRow('ncct-class-counts-row', ncctCounts);
+    acuteText('ncct-safety-gate', ncct.safetyGate?.blocked ? `已阻断：${ncct.safetyGate.reason || '疑似出血'}` : '未触发');
+    acuteText('ncct-result-source', ncct.source || '--');
+
+    const vessel = result.vessel;
+    setAcuteCardState('vessel-result-card', vessel.status, vessel.tone);
+    acuteText('vessel-result-status', statusLabels[vessel.status] || 'Unavailable');
+    acuteText('value-vessel-occlusion-class', vessel.status === 'completed' ? vessel.label : vessel.status === 'skipped' ? '已跳过' : vessel.status === 'failed' ? '分类失败' : '未生成');
+    acuteText('value-vessel-occlusion-confidence', ACUTE_IMAGING_UI.formatConfidence(vessel.confidence));
+    const vesselBar = document.getElementById('vessel-confidence-bar');
+    if (vesselBar) vesselBar.style.width = vessel.confidence == null ? '0%' : `${Math.max(0, Math.min(100, vessel.confidence * 100))}%`;
+    const vesselCounts = acuteCountsText(vessel.classCounts);
+    const inputPhases = vessel.inputPhases.join('、');
+    acuteText('vessel-valid-predictions', vessel.validPredictions == null ? '--' : vessel.validPredictions);
+    acuteText('vessel-class-counts', vesselCounts || '--');
+    acuteText('vessel-input-phases', inputPhases || '--');
+    setAcuteDetailRow('vessel-valid-predictions-row', vessel.validPredictions);
+    setAcuteDetailRow('vessel-class-counts-row', vesselCounts);
+    setAcuteDetailRow('vessel-input-phases-row', inputPhases);
+    acuteText('vessel-result-source', vessel.source || '--');
+    return result;
+}
 
 const NCCT_LABEL_CN = Object.freeze({
     normal: '\u6b63\u5e38',
@@ -1282,7 +1670,7 @@ function formatNcctConfidence(value) {
 function ncctConfidenceColor(value) {
     const confidence = normalizeNcctConfidence(value);
     if (confidence === null) return '';
-    return confidence >= 0.7 ? '#51cf66' : confidence >= 0.5 ? '#ffd43b' : '#ff6b6b';
+    return '#4dabf7';
 }
 
 function extractNcctThreeClassInfo() {
@@ -1305,6 +1693,7 @@ function renderNcctThreeClassResult(result = extractNcctThreeClassInfo()) {
             ? ncctConfidenceColor(result.confidenceValue)
             : '';
     }
+    renderViewerAcuteImagingResults();
     return result;
 }
 
@@ -1325,30 +1714,17 @@ function displayAnalysisResults() {
     document.getElementById('analysisResults').classList.add('show');
     document.getElementById('analysisMetrics').classList.add('show'); // AI辅助生成：GLM-5, 2026-04-21
     updateStrokeImage();
-    const report = analysisResults.report?.summary;
-    const ncctThreeClass = renderNcctThreeClassResult();
-    renderVesselOcclusionResult();
-    if (report) {
-        const penumbra = report.penumbra_volume_ml?.toFixed(1) || '--';
-        const core = report.core_volume_ml?.toFixed(1) || '--';
-        const ratio = report.mismatch_ratio?.toFixed(2) || '--';
-        document.getElementById('value-penumbra').textContent = penumbra + ' ml';
-        document.getElementById('value-core').textContent = core + ' ml';
-        document.getElementById('value-ratio').textContent = ratio;
-        document.getElementById('metric-penumbra').textContent = penumbra; // AI辅助生成：GLM-5, 2026-04-23
-        document.getElementById('metric-core').textContent = core;
-        document.getElementById('metric-mismatch').textContent = ratio;
-        const statusEl = document.getElementById('value-status');
+    const acute = renderViewerAcuteImagingResults();
+    renderMrsPrognosisResult();
+    if (acute) {
+        const metricPenumbra = document.getElementById('metric-penumbra');
+        const metricCore = document.getElementById('metric-core');
+        const metricMismatch = document.getElementById('metric-mismatch');
         const mismatchContainer = document.getElementById('metric-mismatch-container');
-        if (report.has_mismatch) {
-            statusEl.textContent = '\u5b58\u5728\u663e\u8457\u4e0d\u5339\u914d';
-            statusEl.className = 'metric-value alert';
-            mismatchContainer.classList.add('warning');
-        } else {
-            statusEl.textContent = '\u672a\u89c1\u663e\u8457\u4e0d\u5339\u914d'; // AI辅助生成：GLM-5, 2026-03-01
-            statusEl.className = 'metric-value good';
-            mismatchContainer.classList.remove('warning');
-        }
+        if (metricPenumbra) metricPenumbra.textContent = acute.perfusion.penumbra == null ? '--' : acute.perfusion.penumbra.toFixed(1);
+        if (metricCore) metricCore.textContent = acute.perfusion.core == null ? '--' : acute.perfusion.core.toFixed(1);
+        if (metricMismatch) metricMismatch.textContent = acute.perfusion.mismatch == null ? '--' : acute.perfusion.mismatch.toFixed(2);
+        if (mismatchContainer) mismatchContainer.classList.toggle('warning', acute.perfusion.mismatchEvaluation.status === 'attention');
     }
 
     // 淇濆瓨鍒嗘瀽鏁版嵁�?localStorage锛屼緵鎶ュ憡椤甸潰浣跨敤锛堣法鏍囩椤靛叡浜級
@@ -1361,23 +1737,34 @@ function displayAnalysisResults() {
     const lesionHemisphere = hemisphereMap[currentHemisphere] || 'both';
     
     const vesselOcclusionContract = buildVesselOcclusionContract();
+    const perfusion = acute?.perfusion || {};
+    const ncct = acute?.ncct || {};
     const analysisStorageData = {
         file_id: currentFileId,
-        core_infarct_volume: analysisResults.report?.summary?.core_volume_ml || 0,
-        penumbra_volume: analysisResults.report?.summary?.penumbra_volume_ml || 0,
-        mismatch_ratio: analysisResults.report?.summary?.mismatch_ratio || 0,
-        has_mismatch: analysisResults.report?.summary?.has_mismatch || false,
+        core_infarct_volume: perfusion.core ?? null,
+        penumbra_volume: perfusion.penumbra ?? null,
+        mismatch_ratio: perfusion.mismatch ?? null,
+        has_mismatch: perfusion.mismatch == null ? null : perfusion.mismatch > (ACUTE_IMAGING_UI?.RULES?.mismatch_ratio?.threshold ?? 1.8),
         hemisphere: lesionHemisphere,
-        three_class_label_cn: ncctThreeClass.label,
-        three_class_confidence: ncctThreeClass.confidenceValue,
-        three_class_status: ncctThreeClass.status,
+        three_class_label_cn: ncct.label || null,
+        three_class_confidence: ncct.confidence ?? null,
+        three_class_status: ncct.status || 'unavailable',
         three_class_result: {
-            status: ncctThreeClass.status,
-            three_class_label_cn: ncctThreeClass.label === '--' ? null : ncctThreeClass.label,
-            three_class_confidence: ncctThreeClass.confidenceValue,
+            status: ncct.status || 'unavailable',
+            three_class_label_cn: ncct.label || null,
+            three_class_confidence: ncct.confidence ?? null,
+            class_counts: ncct.classCounts || {},
+            total_slices: ncct.totalSlices ?? null,
+            safety_gate: ncct.safetyGate || {},
         },
-        vessel_occlusion_result: vesselOcclusionContract,
-        vessel_occlusion_status: vesselOcclusionContract.status
+        vessel_occlusion_result: {
+            ...vesselOcclusionContract,
+            source: acute?.vessel?.source || currentVesselOcclusionResult.source || null,
+            input_phases: acute?.vessel?.inputPhases || [],
+        },
+        vessel_occlusion_status: vesselOcclusionContract.status,
+        available_modalities: currentViewerData?.available_modalities || currentViewerData?.modalities || [],
+        mrs_prognosis_result: currentViewerData?.mrs_prognosis_result || null,
     };
     if (vesselOcclusionContract.status === 'completed') {
         analysisStorageData.vessel_occlusion_class_result = vesselOcclusionContract.vessel_occlusion_class_result;
@@ -1443,12 +1830,17 @@ async function saveAnalysisToDB() {
         'both': 'both'
     };
     const lesionHemisphere = hemisphereMap[currentHemisphere] || 'both'; // AI辅助生成：GLM-5, 2026-03-05
+    const summary = analysisResults.report?.summary || {};
+    const roundedOrNull = (value, digits) => {
+        const numeric = value === null || value === undefined || value === '' ? NaN : Number(value);
+        return Number.isFinite(numeric) ? Number(numeric.toFixed(digits)) : null;
+    };
 
     const payload = {
         patient_id: currentPatientId,
-        core_infarct_volume: analysisResults.report?.summary?.core_volume_ml ? parseFloat(analysisResults.report.summary.core_volume_ml.toFixed(1)) : null,
-        penumbra_volume: analysisResults.report?.summary?.penumbra_volume_ml ? parseFloat(analysisResults.report.summary.penumbra_volume_ml.toFixed(1)) : null,
-        mismatch_ratio: analysisResults.report?.summary?.mismatch_ratio ? parseFloat(analysisResults.report.summary.mismatch_ratio.toFixed(2)) : null,
+        core_infarct_volume: roundedOrNull(summary.core_volume_ml, 1),
+        penumbra_volume: roundedOrNull(summary.penumbra_volume_ml, 1),
+        mismatch_ratio: roundedOrNull(summary.mismatch_ratio, 2),
         hemisphere: lesionHemisphere,
         analysis_status: 'completed'
     };
@@ -1588,12 +1980,26 @@ async function hydrateVesselOcclusionFromRun(runId) {
             });
             return false;
         }
+        const mrsResult = MRS_PROGNOSIS_UI
+            ? MRS_PROGNOSIS_UI.extractRunMrsPrognosisResult(data.run)
+            : null;
+        if (mrsResult) {
+            persistMrsPrognosisForCurrentCase(mrsResult, 'agent_run');
+        }
+        const acuteResult = ACUTE_IMAGING_UI
+            ? ACUTE_IMAGING_UI.extractRunAcuteImagingResult(data.run)
+            : null;
+        if (acuteResult) {
+            currentAgentAcuteImagingResult = acuteResult;
+            renderViewerAcuteImagingResults();
+        }
         const vesselResult = extractRunVesselOcclusionResult(data.run);
         if (vesselResult) {
             applyVesselOcclusionResult(vesselResult, 'agent_run');
             console.log('[Vessel] Hydrated from agent run:', currentVesselOcclusionResult);
             return true;
         }
+        return !!(mrsResult || acuteResult);
     } catch (error) {
         console.warn('[Vessel] Agent run hydration failed:', error);
     }
@@ -2281,6 +2687,8 @@ if (typeof module !== 'undefined' && module.exports) {
         validateAgentRunForCase,
         viewerDataMatchesFileId,
         buildStructuredViewerSummaryHtml,
+        applyMrsPrognosisResult,
+        persistMrsPrognosisForCurrentCase,
     };
 }
 

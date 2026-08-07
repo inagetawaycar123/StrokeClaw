@@ -479,6 +479,281 @@
     color: #d8ac73 !important;
 }
 
+/* 统一模型量化与预测结果 */
+.unified-model-section { border-left: 4px solid #4c78a8; }
+.section-description { margin: 5px 0 0; color: var(--report-muted); font-size: 11px; font-weight: 400; }
+.unified-model-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.unified-model-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    padding: 15px;
+    border: 1px solid var(--report-border);
+    border-top: 3px solid #60738c;
+    border-radius: 10px;
+    background: var(--report-surface-soft);
+    color: var(--report-text);
+}
+.unified-model-card.full-width { grid-column: 1 / -1; }
+.unified-model-card.normal,
+.unified-model-card.good { border-top-color: #36a878; }
+.unified-model-card.attention { border-top-color: #d29a43; }
+.unified-model-card.danger,
+.unified-model-card.poor,
+.unified-model-card.failed { border-top-color: #d26952; }
+.unified-model-card.skipped { border-style: dashed; border-top-color: #d29a43; }
+.unified-model-card.unavailable { border-style: dashed; border-top-color: #66758a; }
+.unified-model-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.unified-model-header h4,
+.unified-model-kicker { display: block; }
+.unified-model-header h4 { margin: 5px 0 0; color: #f3f7fc; font-size: 16px; }
+.unified-model-kicker { color: #8fb8ec; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.unified-model-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.unified-model-status,
+.unified-model-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border: 1px solid #4b5e78;
+    border-radius: 999px;
+    color: #c7d4e5;
+    background: #172236;
+    font-size: 9px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.unified-model-status.completed { border-color: #32785c; color: #8ee0bc; background: #153326; }
+.unified-model-status.skipped { border-color: #86652d; color: #e8c477; background: #342b1c; }
+.unified-model-status.failed { border-color: #8f4650; color: #f2a6ae; background: #371e24; }
+.unified-model-status.unavailable { color: #a8b4c4; background: #202a39; }
+.unified-model-badge.research { border-color: #806844; color: #e0c38d; background: #342a1b; }
+.unified-model-badge.mode { border-color: #506e92; color: #bcd5f4; background: #172a42; }
+.unified-model-primary {
+    min-height: 78px;
+    margin-top: 13px;
+    padding: 13px;
+    border: 1px solid #293a52;
+    border-radius: 8px;
+    background: #0d1422;
+}
+.unified-model-card.full-width .unified-model-primary { min-height: auto; }
+.unified-model-primary > strong { color: #f8fafc; font-size: 20px; }
+.unified-model-card.normal .unified-model-primary > strong,
+.unified-model-card.good .unified-model-primary > strong { color: #72d7ab; }
+.unified-model-card.attention .unified-model-primary > strong { color: #e5b967; }
+.unified-model-card.danger .unified-model-primary > strong,
+.unified-model-card.poor .unified-model-primary > strong { color: #e58d7a; }
+.unified-model-primary p { margin: 8px 0 0; color: #b9c6d7; line-height: 1.55; }
+.unified-model-facts,
+.unified-model-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); gap: 8px; margin-top: 11px; }
+.unified-model-fact { min-width: 0; padding: 9px; border: 1px solid #2a3a52; border-radius: 7px; background: #111b2b; }
+.unified-model-fact span,
+.unified-model-fact strong { display: block; }
+.unified-model-fact span { margin-bottom: 5px; color: var(--report-muted); font-size: 10px; }
+.unified-model-fact strong { color: #f2f6fb; overflow-wrap: anywhere; }
+.unified-model-fact.met strong,
+.unified-model-fact.normal strong { color: #72d7ab; }
+.unified-model-fact.attention strong { color: #e5b967; }
+.unified-model-fact.not_met strong,
+.unified-model-fact.danger strong { color: #e58d7a; }
+.unified-model-fact.confidence-high strong { color: #8bb8ff; }
+.unified-model-fact.confidence-medium strong { color: #c4a7ff; }
+.unified-model-fact.confidence-low strong { color: #f2a6a6; }
+.unified-confidence { margin-top: 12px; }
+.unified-confidence > div:first-child { display: flex; justify-content: space-between; gap: 12px; color: #aebdd0; font-size: 10px; }
+.unified-confidence > div:first-child strong { color: #f3f7fc; }
+.unified-confidence-track { height: 9px; margin-top: 7px; overflow: hidden; border-radius: 999px; background: #26344a; }
+.unified-confidence-track span { display: block; height: 100%; border-radius: inherit; background: #4dabf7; }
+.unified-modality-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+.unified-modality-chips span { padding: 4px 8px; border: 1px solid #365477; border-radius: 999px; color: #b9d8fa; background: #12253d; font-size: 9px; }
+.unified-model-list-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
+.unified-model-list { padding: 12px; border: 1px solid #2a3a52; border-radius: 8px; background: #111b2b; }
+.unified-model-list p,
+.unified-model-list ul { margin: 8px 0 0; color: #bdc9d9; line-height: 1.55; }
+.unified-model-list ul { padding-left: 18px; }
+.unified-mrs-probability-bar { position: relative; display: flex; height: 13px; margin-top: 14px; overflow: visible; border-radius: 999px; background: #222c3b; }
+.unified-mrs-probability-bar .good { border-radius: 999px 0 0 999px; background: #36a878; }
+.unified-mrs-probability-bar .poor { border-radius: 0 999px 999px 0; background: #d26952; }
+.unified-mrs-probability-bar .threshold { position: absolute; top: -4px; width: 2px; height: 21px; background: #f2e4bd; box-shadow: 0 0 0 2px rgba(12, 18, 29, .65); }
+.unified-mrs-probability-values { display: flex; justify-content: space-between; gap: 16px; margin-top: 8px; color: #afbdd0; font-size: 11px; }
+.unified-mrs-probability-values strong { margin-left: 6px; color: #f3f7fc; }
+.unified-model-limitations { margin-top: 12px; padding: 11px 13px; border: 1px solid #67583c; border-radius: 8px; color: #d9c08f; background: #2b2519; }
+.unified-model-limitations ul { margin: 7px 0 0; padding-left: 18px; line-height: 1.5; }
+.unified-model-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 12px; color: #8293aa; font-size: 9px; }
+
+/* 90 天 mRS 研究性功能预后 */
+.mrs-report-section {
+    border-left: 4px solid #66758a;
+}
+
+.mrs-report-section.good { border-left-color: #2f9e73; }
+.mrs-report-section.poor { border-left-color: #d5674f; }
+.mrs-report-section.unavailable {
+    border-left-color: #66758a;
+    border-style: dashed;
+}
+
+.mrs-report-heading-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.mrs-report-mode-badge,
+.mrs-report-research-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px;
+    border: 1px solid #50627c;
+    border-radius: 999px;
+    color: #bfd0e6;
+    background: #17243a;
+    font-size: 10px;
+}
+
+.mrs-report-research-badge {
+    border-color: #806844;
+    color: #e0c38d;
+    background: #342a1b;
+}
+
+.mrs-report-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, .55fr);
+    gap: 16px;
+    padding: 15px;
+    border: 1px solid var(--report-border);
+    border-radius: 9px;
+    background: #0d1422;
+}
+
+.mrs-report-kicker,
+.mrs-report-class {
+    display: block;
+}
+
+.mrs-report-kicker {
+    margin-bottom: 5px;
+    color: #9cb0c9;
+    font-size: 11px;
+}
+
+.mrs-report-class {
+    font-size: 22px;
+}
+
+.mrs-report-summary p,
+.mrs-report-detail-card p,
+.mrs-report-safety-note p {
+    margin: 8px 0 0;
+    color: #bdc9d9;
+    line-height: 1.6;
+}
+
+.mrs-report-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.mrs-report-facts > div {
+    padding: 9px;
+    border: 1px solid #2a3a52;
+    border-radius: 7px;
+    background: #111b2b;
+}
+
+.mrs-report-facts span,
+.mrs-report-facts strong {
+    display: block;
+}
+
+.mrs-report-facts span {
+    margin-bottom: 4px;
+    color: var(--report-muted);
+    font-size: 10px;
+}
+
+.confidence-high { color: #8bb8ff; }
+.confidence-medium { color: #c4a7ff; }
+.confidence-low { color: #f2a6a6; }
+.confidence-unknown { color: #9aa9bb; }
+
+.mrs-report-probability-bar {
+    position: relative;
+    display: flex;
+    height: 13px;
+    margin-top: 15px;
+    overflow: visible;
+    border-radius: 999px;
+    background: #222c3b;
+}
+
+.mrs-report-good-bar {
+    border-radius: 999px 0 0 999px;
+    background: #36a878;
+}
+
+.mrs-report-poor-bar {
+    border-radius: 0 999px 999px 0;
+    background: #d26952;
+}
+
+.mrs-report-threshold-marker {
+    position: absolute;
+    top: -4px;
+    width: 2px;
+    height: 21px;
+    background: #f2e4bd;
+    box-shadow: 0 0 0 2px rgba(12, 18, 29, .65);
+}
+
+.mrs-report-probability-values {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 8px;
+    color: #afbdd0;
+    font-size: 11px;
+}
+
+.mrs-report-probability-values strong {
+    margin-left: 6px;
+    color: #f3f7fc;
+}
+
+.mrs-report-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.mrs-report-detail-card {
+    padding: 12px;
+    border: 1px solid var(--report-border);
+    border-radius: 8px;
+    background: var(--report-surface-soft);
+}
+
+.mrs-report-detail-card ul,
+.mrs-report-safety-note ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    color: #bdc9d9;
+    line-height: 1.55;
+}
+
+.mrs-report-safety-note,
+.mrs-report-disclaimer {
+    margin-top: 15px;
+    padding: 11px 13px;
+    border: 1px solid #67583c;
+    border-radius: 8px;
+    color: #d9c08f;
+    background: #2b2519;
+}
+
 .report-status,
 .source-tag {
     display: inline-flex;
@@ -633,6 +908,10 @@
 }
 
 /* ==================== 响应式 ==================== */
+@media (max-width: 1050px) {
+    .unified-model-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 768px) {
     .report-container {
         padding: 12px;
@@ -670,6 +949,16 @@
         grid-template-columns: 1fr;
     }
 
+    .mrs-report-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .unified-model-grid { grid-template-columns: 1fr; }
+    .unified-model-card.full-width { grid-column: auto; }
+    .unified-model-header,
+    .unified-model-footer { flex-direction: column; }
+    .unified-model-badges { justify-content: flex-start; }
+
     .hero-status-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -690,6 +979,20 @@
     .hero-status-grid {
         grid-template-columns: 1fr;
     }
+
+    .mrs-report-facts {
+        grid-template-columns: 1fr;
+    }
+
+    .mrs-report-probability-values {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .unified-mrs-probability-values {
+        flex-direction: column;
+        gap: 4px;
+    }
 }
 
 @media print {
@@ -707,6 +1010,7 @@
     .report-hero,
     .report-section,
     .clinical-disclaimer,
+    .unified-model-card,
     .metric-card,
     .finding-card,
     .claim-card,
@@ -718,6 +1022,18 @@
         color: #111 !important;
         box-shadow: none !important;
     }
+
+    .unified-model-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .unified-model-card.full-width { grid-column: 1 / -1; }
+    .unified-model-card,
+    .unified-model-primary,
+    .unified-model-fact,
+    .unified-model-list { background: #fff !important; color: #111 !important; }
+    .unified-model-primary p,
+    .unified-model-list p,
+    .unified-model-list ul,
+    .unified-model-footer,
+    .section-description { color: #333 !important; }
 
     .report-hero p,
     .finding-card p,

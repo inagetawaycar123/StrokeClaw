@@ -26,6 +26,38 @@ test("Viewer template exposes the NCCT confidence target beside the class result
     assert.match(template, /id="value-ncct-class"/);
     assert.match(template, /id="value-ncct-confidence"/);
     assert.equal((template.match(/id="value-ncct-confidence"/g) || []).length, 1);
+    assert.match(template, /id="perfusion-result-card"/);
+    assert.match(template, /id="ncct-result-card"/);
+    assert.match(template, /id="vessel-result-card"/);
+    assert.match(template, /static\/js\/imaging_results\.js/);
+});
+
+test("Viewer exposes compact mRS summary, expandable details, and safe text rendering", () => {
+    const template = fs.readFileSync(
+        path.join(__dirname, "../../backend/templates/patient/upload/viewer/index.html"),
+        "utf8"
+    );
+    const source = fs.readFileSync(
+        path.join(__dirname, "../../static/js/viewer.js"),
+        "utf8"
+    );
+    const renderStart = source.indexOf("function renderMrsPrognosisResult()");
+    const renderEnd = source.indexOf("function applyMrsPrognosisResult", renderStart);
+    const mrsRenderer = source.slice(renderStart, renderEnd);
+
+    for (const id of [
+        "mrs-prognosis-class",
+        "mrs-good-probability",
+        "mrs-poor-risk",
+        "mrs-confidence-level",
+        "mrs-prognosis-details",
+    ]) {
+        assert.match(template, new RegExp(`id="${id}"`));
+    }
+    assert.match(template, /研究性辅助预测，不能替代临床判断/);
+    assert.match(mrsRenderer, /textContent/);
+    assert.doesNotMatch(mrsRenderer, /innerHTML/);
+    assert.doesNotMatch(mrsRenderer, /currentSlice/);
 });
 
 test("NCCT confidence accepts probability, percent number, and percent text", () => {
@@ -109,10 +141,10 @@ test("failed or unavailable NCCT results never render a fake zero confidence", (
     }
 });
 
-test("NCCT confidence uses the same visual thresholds as vessel confidence", () => {
-    assert.equal(ncctConfidenceColor(0.70), "#51cf66");
-    assert.equal(ncctConfidenceColor(0.519), "#ffd43b");
-    assert.equal(ncctConfidenceColor(0.499), "#ff6b6b");
+test("NCCT confidence uses one neutral blue independent of clinical direction", () => {
+    assert.equal(ncctConfidenceColor(0.70), "#4dabf7");
+    assert.equal(ncctConfidenceColor(0.519), "#4dabf7");
+    assert.equal(ncctConfidenceColor(0.499), "#4dabf7");
     assert.equal(ncctConfidenceColor(null), "");
 });
 

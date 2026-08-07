@@ -20,6 +20,43 @@ def _example_context(**overrides):
     return context
 
 
+def _mrs_result(*, poor=0.316, mode="baseline"):
+    predicted_class = int(poor >= 0.55)
+    return {
+        "status": "completed",
+        "result_mode": mode,
+        "display_mode": "24小时更新评估" if mode == "update_24h" else "首诊初步评估",
+        "prediction": {
+            "good_prognosis_probability": 1 - poor,
+            "poor_prognosis_risk": poor,
+            "predicted_class": predicted_class,
+            "class_name": "mRS 3-6 / 不良预后" if predicted_class else "mRS 0-2 / 良好预后",
+            "decision_threshold": 0.55,
+            "probability_calibrated": True,
+        },
+        "confidence": {
+            "level": "medium",
+            "ensemble_std": 0.03,
+            "threshold_margin": abs(poor - 0.55),
+            "reasons": [],
+        },
+        "key_evidence": {"clinical": [], "imaging": []},
+        "data_quality": {
+            "missing_clinical_fields": [],
+            "image_quality_warnings": [],
+        },
+        "doctor_review_recommendation": {
+            "review_level": "routine_review",
+            "items": ["请结合临床资料复核。"],
+        },
+        "model": {
+            "model_version": "mrs-v1",
+            "external_validation_completed": False,
+            "production_approved": False,
+        },
+    }
+
+
 def _build(*, context=None, payload=None, icv=None, consensus=None, review=None):
     return build_structured_report_v2(
         run_id="run-example",
@@ -297,3 +334,58 @@ def test_ncct_algorithm_output_does_not_require_an_ekv_claim():
         for item in result["structured_report_v2"]["uncertainties"]
     )
     assert "NCCT 三分类结果: 外部知识验证未生成该结论" not in uncertainty_text
+
+
+def test_mrs_prognosis_is_optional_independent_assessment_with_evidence():
+    report = _build(payload={"mrs_prognosis_result": _mrs_result()})
+    prognosis = report["prognosis_assessment"]
+
+    assert prognosis["status"] == "completed"
+    assert prognosis["prediction"]["good_prognosis_probability"] == 0.684
+    assert prognosis["prediction"]["predicted_class"] == 0
+    assert prognosis["requires_clinician_review"] is True
+    assert prognosis["evidence_ids"]
+    evidence = {
+        item["evidence_id"]: item for item in report["evidence_catalog"]
+    }
+    assert evidence[prognosis["evidence_ids"][0]]["source_module"] == "MRSPrognosisAgent"
+
+
+def test_mrs_result_does_not_change_acute_risk_urgency_or_rules():
+    without_mrs = _build()
+    with_mrs = _build(payload={"mrs_prognosis_result": _mrs_result(poor=0.9)})
+
+    assert with_mrs["report_meta"]["risk_level"] == without_mrs["report_meta"]["risk_level"]
+    assert with_mrs["report_meta"]["urgency"] == without_mrs["report_meta"]["urgency"]
+    assert with_mrs["rule_evaluations"] == without_mrs["rule_evaluations"]
+    assert with_mrs["recommendations"] == without_mrs["recommendations"]
+
+
+def test_missing_mrs_is_nonblocking_and_not_fabricated():
+    report = _build(payload={"mrs_prognosis_result": {"status": "failed"}})
+    prognosis = report["prognosis_assessment"]
+
+    assert prognosis["status"] == "unavailable"
+    assert prognosis["prediction"] is None
+    assert prognosis["requires_clinician_review"] is False
+    assert prognosis["review_status"] == "not_applicable"
+
+
+def test_mrs_review_section_status_is_applied_when_result_exists():
+    review = {
+        "all_confirmed": False,
+        "sections": [
+            {
+                "section_id": "prognosis_assessment",
+                "review_status": "confirmed",
+            }
+        ],
+    }
+    report = _build(
+        payload={"mrs_prognosis_result": _mrs_result(mode="update_24h")},
+        review=review,
+    )
+
+    assert report["prognosis_assessment"]["display_mode"] == "24小时更新评估"
+    assert report["prognosis_assessment"]["review_status"] == "confirmed"
+    assert report["prognosis_assessment"]["clinician_confirmed"] is True

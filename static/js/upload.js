@@ -195,6 +195,10 @@ function processFiles() {
     if (cbvFile) formData.append('cbv_file', cbvFile);
     if (tmaxFile) formData.append('tmax_file', tmaxFile);
     formData.append('patient_id', patientId);
+    const storedMrsClinicalRecord = localStorage.getItem(`mrs_clinical_record_${patientId}`);
+    if (storedMrsClinicalRecord) {
+        formData.append('mrs_clinical_record', storedMrsClinicalRecord);
+    }
 
     const modelType = document.getElementById('modelSelect')?.value || 'mrdpm';
     formData.append('model_type', modelType);

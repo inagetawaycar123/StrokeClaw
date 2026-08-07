@@ -1,5 +1,13 @@
 "use strict"; // AI辅助生成：GLM-5, 2026-03-25
 
+const MRS_PROGNOSIS_UI = (() => {
+    if (typeof window !== "undefined" && window.StrokeClawMrsPrognosis) return window.StrokeClawMrsPrognosis;
+    if (typeof require === "function") {
+        try { return require("./mrs_prognosis.js"); } catch (_error) { return null; }
+    }
+    return null;
+})();
+
 const UPLOAD_NODES = [
     { key: "archive_ready", title: "Case_Intake.parse()", subtitle: "病例接收与归档准备", chip: "Case_Intake", delegated: "" },
     { key: "image_quality_control", title: "Image_QC.validate()", subtitle: "图像质量控制", chip: "Image_QC", delegated: "image_quality_control" },
@@ -20,6 +28,7 @@ const VESSEL_OCCLUSION_INPUT = Object.freeze({
 const VESSEL_CLASS_KEYS = Object.freeze(["Class_0", "Class_1_LVO", "Class_2_MEVO"]);
 
 const TOOL_META = Object.freeze({
+    run_mrs_prognosis_prediction: ["MRS_Prognosis.predict()", "90天功能预后评估", "mRS_MVP"],
     human_review: ["Human_Confirm.await_action()", "人工复核节点", "Human_Review"],
     triage_planner: ["Triage_Planner.plan()", "任务编排生成", "Plan"],
     detect_modalities: ["ClinicalNER.extract()", "结构化提取与复核", "NER_Extract"],
@@ -37,6 +46,7 @@ const TOOL_META = Object.freeze({
 });
 
 const TEMPLATES = Object.freeze({
+    run_mrs_prognosis_prediction: ["正在加载真实MVP bundle并执行90天功能预后评估。", "根据24小时NIHSS可用性自动选择首诊或更新评估。", "输出校准风险、模型证据、置信度和复核建议。"],
     human_confirm: ["系统已进入人工复核节点。", "请逐段确认报告内容。", "确认完成后流程才会归档闭环。"],
     default: ["系统正在执行当前节点。", "处理节点输入并推进流程。", "形成可解释的临床链路。"],
     archive_ready: ["系统已接收病例并创建会话。", "归集 patient_id 与 file_id。", "确保全流程同一病例上下文。"],
@@ -308,6 +318,14 @@ const CLINICAL_NODE_CATALOG = Object.freeze({
         reviewRequired: true,
         tools: ["run_stroke_analysis"],
     },
+    mrs_prognosis: {
+        title: "90天功能预后评估",
+        description: "使用真实MVP bundle进行首诊初步评估或24小时更新评估。",
+        priority: "P0",
+        riskLevel: "high",
+        reviewRequired: true,
+        tools: ["run_mrs_prognosis_prediction"],
+    },
     internal_check: {
         title: "内部一致性校验",
         description: "检查影像、量化结果与报告结构之间的冲突，严重冲突可阻断。",
@@ -344,6 +362,7 @@ const SYSTEM_EXECUTION_META = Object.freeze({
     generate_ctp_maps: { agent: "Imaging Executor", skillId: "SKILL_PSEUDO_CTP", skillName: "pseudo_ctp_generation" },
     ctp_input_review: { agent: "Imaging Executor", skillId: "SKILL_IMG_QC", skillName: "image_quality_control" },
     run_stroke_analysis: { agent: "Imaging Executor", skillId: "SKILL_STROKE_ANALYSIS", skillName: "stroke_auto_analysis" },
+    run_mrs_prognosis_prediction: { agent: "Clinical Prognosis Agent", skillId: "SKILL_MRS_PROGNOSIS", skillName: "mrs_90day_prognosis_prediction" },
     icv: { agent: "Logic Reviewer", skillId: "SKILL_INTERNAL_CHECK", skillName: "internal_consistency_check" },
     consensus_lite: { agent: "Logic Reviewer", skillId: "SKILL_INTERNAL_CHECK", skillName: "internal_consistency_check" },
     ekv: { agent: "Guideline Fact Agent", skillId: "SKILL_GUIDELINE_CHECK", skillName: "external_guideline_check" },
@@ -380,26 +399,26 @@ function buildClinicalDag(values) {
         ncct_only: {
             label: "NCCT 单模态路径",
             note: "仅执行 NCCT 初筛与安全校验；血管和灌注结论不自动外推。",
-            layout: { image_qc: [1, 2], ncct_triage: [2, 2], internal_check: [3, 2], guideline_check: [4, 2], report: [5, 2] },
-            edges: [["image_qc", "ncct_triage"], ["ncct_triage", "internal_check"], ["internal_check", "guideline_check"], ["guideline_check", "report"]],
+            layout: { image_qc: [1, 2], ncct_triage: [2, 2], mrs_prognosis: [3, 2], internal_check: [4, 2], guideline_check: [5, 2], report: [6, 2] },
+            edges: [["image_qc", "ncct_triage"], ["ncct_triage", "mrs_prognosis"], ["mrs_prognosis", "internal_check"], ["internal_check", "guideline_check"], ["guideline_check", "report"]],
         },
         ncct_single_phase_cta: {
             label: "NCCT + 单期 CTA 路径",
             note: "加入血管闭塞识别；单期 CTA 不进入三期侧支评分或类 CTP 生成。",
-            layout: { image_qc: [1, 2], ncct_triage: [2, 2], vessel_occlusion: [3, 2], internal_check: [4, 2], guideline_check: [5, 2], report: [6, 2] },
-            edges: [["image_qc", "ncct_triage"], ["ncct_triage", "vessel_occlusion"], ["vessel_occlusion", "internal_check"], ["internal_check", "guideline_check"], ["guideline_check", "report"]],
+            layout: { image_qc: [1, 2], ncct_triage: [2, 2], vessel_occlusion: [3, 2], mrs_prognosis: [4, 2], internal_check: [5, 2], guideline_check: [6, 2], report: [7, 2] },
+            edges: [["image_qc", "ncct_triage"], ["ncct_triage", "vessel_occlusion"], ["vessel_occlusion", "mrs_prognosis"], ["mrs_prognosis", "internal_check"], ["internal_check", "guideline_check"], ["guideline_check", "report"]],
         },
         ncct_mcta: {
             label: "NCCT + 三期 mCTA · 类 CTP 路径",
             note: "血管与灌注分支并行，类 CTP 和侧支循环结果在一致性校验处汇合。",
-            layout: { image_qc: [1, 2], ncct_triage: [2, 2], vessel_occlusion: [3, 1], pseudo_ctp: [3, 3], collateral_score: [4, 1], stroke_analysis: [4, 3], internal_check: [5, 2], guideline_check: [6, 2], report: [7, 2] },
-            edges: [["image_qc", "ncct_triage"], ["ncct_triage", "vessel_occlusion"], ["ncct_triage", "pseudo_ctp"], ["vessel_occlusion", "collateral_score"], ["pseudo_ctp", "stroke_analysis"], ["collateral_score", "internal_check"], ["stroke_analysis", "internal_check"], ["internal_check", "guideline_check"], ["guideline_check", "report"]],
+            layout: { image_qc: [1, 2], ncct_triage: [2, 2], vessel_occlusion: [3, 1], pseudo_ctp: [3, 3], collateral_score: [4, 1], stroke_analysis: [4, 3], mrs_prognosis: [5, 2], internal_check: [6, 2], guideline_check: [7, 2], report: [8, 2] },
+            edges: [["image_qc", "ncct_triage"], ["ncct_triage", "vessel_occlusion"], ["ncct_triage", "pseudo_ctp"], ["vessel_occlusion", "collateral_score"], ["pseudo_ctp", "stroke_analysis"], ["collateral_score", "internal_check"], ["stroke_analysis", "mrs_prognosis"], ["mrs_prognosis", "internal_check"], ["internal_check", "guideline_check"], ["guideline_check", "report"]],
         },
         ncct_mcta_ctp: {
             label: "NCCT + 三期 mCTA + CTP 路径",
             note: "使用现有 CTP 灌注图并跳过类 CTP 生成，血管与灌注分支在一致性校验处汇合。",
-            layout: { image_qc: [1, 2], ncct_triage: [2, 2], vessel_occlusion: [3, 1], ctp_review: [3, 3], collateral_score: [4, 1], stroke_analysis: [4, 3], internal_check: [5, 2], guideline_check: [6, 2], report: [7, 2] },
-            edges: [["image_qc", "ncct_triage"], ["ncct_triage", "vessel_occlusion"], ["ncct_triage", "ctp_review"], ["vessel_occlusion", "collateral_score"], ["ctp_review", "stroke_analysis"], ["collateral_score", "internal_check"], ["stroke_analysis", "internal_check"], ["internal_check", "guideline_check"], ["guideline_check", "report"]],
+            layout: { image_qc: [1, 2], ncct_triage: [2, 2], vessel_occlusion: [3, 1], ctp_review: [3, 3], collateral_score: [4, 1], stroke_analysis: [4, 3], mrs_prognosis: [5, 2], internal_check: [6, 2], guideline_check: [7, 2], report: [8, 2] },
+            edges: [["image_qc", "ncct_triage"], ["ncct_triage", "vessel_occlusion"], ["ncct_triage", "ctp_review"], ["vessel_occlusion", "collateral_score"], ["ctp_review", "stroke_analysis"], ["collateral_score", "internal_check"], ["stroke_analysis", "mrs_prognosis"], ["mrs_prognosis", "internal_check"], ["internal_check", "guideline_check"], ["guideline_check", "report"]],
         },
         incomplete: {
             label: "模态不完整 · 降级审阅路径",
@@ -517,6 +536,7 @@ function runtimeNodeForTool(toolName, nodes = state.nodes) {
         generate_ctp_maps: ["generate_ctp_maps", "ctp_generate"],
         ctp_input_review: ["load_patient_context", "modality_detect"],
         run_stroke_analysis: ["run_stroke_analysis", "stroke_analysis"],
+        run_mrs_prognosis_prediction: ["run_mrs_prognosis_prediction", "mrs_prognosis"],
         icv: ["icv"],
         consensus_lite: ["consensus_lite"],
         ekv: ["ekv"],
@@ -1360,6 +1380,7 @@ function buildNodes() {
     const nodes = [];
     const jobSteps = Object.create(null); (state.latestJob?.steps || []).forEach((s) => { if (s?.key) jobSteps[s.key] = s; });
     const runSteps = Object.create(null); (state.latestRun?.steps || []).forEach((s) => { if (s?.key) runSteps[s.key] = s; }); // AI辅助生成：GLM-5, 2026-03-16
+    const runResults = Object.create(null); (state.latestRun?.tool_results || []).forEach((item) => { if (item?.tool_name) runResults[item.tool_name] = item; });
     const threeClassStatus = normStatus(jobSteps.three_class?.status || "pending");
     UPLOAD_NODES.filter(() => !!state.latestJob).forEach((cfg, idx) => {
         const h = cfg.delegated ? state.hints[cfg.delegated] : null;
@@ -1429,6 +1450,9 @@ function buildNodes() {
         const key = t(s?.key, ""); if (!key || skip.has(key) || key === "triage_planner") return;
         const h = state.hints[key] || null;
         const directVesselResult = key === "vessel_occlusion" ? vesselOcclusionResult(null, h) : null;
+        const directMrsResult = key === "run_mrs_prognosis_prediction" && runResults[key]?.structured_output && typeof runResults[key].structured_output === "object"
+            ? runResults[key].structured_output
+            : null;
         let st = nodeStatus(s.status || h?.status || "pending");
         if (directVesselResult) {
             st = directVesselResult.status === "completed" ? "completed" : "issue";
@@ -1438,12 +1462,35 @@ function buildNodes() {
             ? vesselResultText(directVesselResult, t(s.message, defaultFallback))
             : t(s.message, defaultFallback);
         const meta = getMeta(key);
-        nodes.push({ id: `agent_${key}`, key, title: meta.title, subtitle: meta.subtitle, chip: meta.chip, status: st, group: "agent", order: order++, guide: templateFor(key)[0], summary: summaryTriplet(key, st, h, fallback), detailInput: h?.input ?? { run_id: state.runId, tool_name: key }, detailResult: directVesselResult || h?.output || fallback, riskLevel: token(h?.riskLevel || (st === "issue" ? "high" : "none")), riskItems: Array.isArray(h?.riskItems) ? h.riskItems : (st === "issue" ? [fallback] : []), actionRequired: t(h?.actionRequired, st === "waiting" ? "请医生确认该节点后继续。" : ""), actionLog: t(h?.actionLog, ""), meta: [s.attempts ? `attempt ${s.attempts}` : "", t(s.ended_at || s.started_at || h?.ts, "")].filter(Boolean), narrativeHint: h?.narrativeHint || "" });
+        nodes.push({ id: `agent_${key}`, key, title: meta.title, subtitle: meta.subtitle, chip: meta.chip, status: st, group: "agent", order: order++, guide: templateFor(key)[0], summary: summaryTriplet(key, st, h, fallback), detailInput: h?.input ?? { run_id: state.runId, tool_name: key }, detailResult: directVesselResult || directMrsResult || h?.output || fallback, riskLevel: token(h?.riskLevel || (st === "issue" ? "high" : "none")), riskItems: Array.isArray(h?.riskItems) ? h.riskItems : (st === "issue" ? [fallback] : []), actionRequired: t(h?.actionRequired, st === "waiting" ? "请医生确认该节点后继续。" : ""), actionLog: t(h?.actionLog, ""), meta: [s.attempts ? `attempt ${s.attempts}` : "", t(s.ended_at || s.started_at || h?.ts, "")].filter(Boolean), narrativeHint: h?.narrativeHint || "" });
     }); // AI辅助生成：GLM-5, 2026-03-20
     return nodes.sort((a, b) => a.order - b.order);
 }
 
 function tableRows(data) { if (data === null || data === undefined) return [{ k: "value", v: "-" }]; if (typeof data !== "object" || Array.isArray(data)) return [{ k: "value", v: summarize(data) }]; const keys = Object.keys(data); return (keys.length ? keys : ["value"]).slice(0, 16).map((k) => ({ k, v: summarize(keys.length ? data[k] : data) })); }
+
+function mrsPercent(value) {
+    if (value === null || value === undefined || value === "") return "-";
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "-";
+    return `${(number * 100).toFixed(1)}%`;
+}
+
+function mrsResultPanel(result) {
+    if (!result || typeof result !== "object") return "";
+    const prediction = result.prediction && typeof result.prediction === "object" ? result.prediction : null;
+    const confidence = result.confidence && typeof result.confidence === "object" ? result.confidence : {};
+    const line = (label, value) => `<div class="runtime-summary-row"><span class="runtime-summary-key">${escapeHtml(label)}</span><span class="runtime-summary-value">${escapeHtml(value ?? "-")}</span></div>`;
+    return `<div class="runtime-mrs-result">
+        ${line("当前状态", result.status || "unavailable")}
+        ${line("评估模式", result.display_mode || "-")}
+        ${line("良好预后概率", prediction ? mrsPercent(prediction.good_prognosis_probability) : "-")}
+        ${line("不良预后风险", prediction ? mrsPercent(prediction.poor_prognosis_risk) : "-")}
+        ${line("风险类别", prediction?.class_name || "-")}
+        ${line("置信度", confidence.level || "unavailable")}
+        ${line("Fallback", result.fallback_used === true ? `是：${result.fallback_reason || "未提供原因"}` : "否")}
+    </div>`;
+}
 
 function nodeCard(node, ctx = {}) {
     const card = document.createElement("article");
@@ -1476,6 +1523,9 @@ function nodeCard(node, ctx = {}) {
         </div>
         ${structuralFailure ? `<div class="runtime-review-error">结构性失败不可接受风险继续，只能退回重新上传。</div>` : ""}
       </div>` : "";
+    const mrsPanel = node.key === "run_mrs_prognosis_prediction"
+        ? mrsResultPanel(node.detailResult)
+        : "";
     const detail = `
       <div class="runtime-node-detail${expanded ? " expanded" : ""}">
         <div class="runtime-node-block"><div class="runtime-node-block-label">INPUT</div><table class="runtime-detail-table"><tbody>${tableRows(node.detailInput).map((x) => `<tr><th>${x.k}</th><td>${x.v}</td></tr>`).join("")}</tbody></table><pre class="runtime-node-pre">${pretty(node.detailInput)}</pre></div>
@@ -1492,6 +1542,7 @@ function nodeCard(node, ctx = {}) {
       ${node.riskItems.length ? `<div class="runtime-risk-box level-${riskClass}"><div class="runtime-risk-head">风险提示（${riskClass.toUpperCase()}）</div><ul class="runtime-risk-list">${node.riskItems.map((x) => `<li>${x}</li>`).join("")}</ul></div>` : ""}
       ${node.actionRequired ? `<div class="runtime-human-box"><div class="runtime-human-head">人工操作节点</div><div class="runtime-human-line">待执行动作：${node.actionRequired}</div>${node.actionLog ? `<div class="runtime-human-line">操作记录：${node.actionLog}</div>` : ""}</div>` : ""}
       ${qualityReviewForm}
+      ${mrsPanel}
       <button class="runtime-detail-toggle" type="button" data-toggle-node="${node.id}">${expanded ? "收起详情" : "展开详情"}</button>
       ${detail}
       <div class="runtime-node-meta">${(node.meta.length ? node.meta : [node.group === "upload" ? "upload_chain" : "agent_network"]).map((m) => `<span class="runtime-node-meta-item">${m}</span>`).join("")}</div>`;
@@ -1943,6 +1994,17 @@ function persistUpload(job) {
     const vesselResult = normalizeVesselOcclusionResult(result.vessel_occlusion_result)
         || normalizeVesselOcclusionResult(result)
         || vesselOcclusionResult();
+    const existingViewerData = typeof getViewerData === "function" ? getViewerData() : null;
+    const existingMrsResult = existingViewerData
+        && String(existingViewerData.file_id || "") === String(fileId)
+        && existingViewerData.mrs_prognosis_result
+        && typeof existingViewerData.mrs_prognosis_result === "object"
+        ? existingViewerData.mrs_prognosis_result
+        : null;
+    const mrsPrognosisResult = result.mrs_prognosis_result
+        && typeof result.mrs_prognosis_result === "object"
+        ? result.mrs_prognosis_result
+        : existingMrsResult;
     if (typeof setViewerData === "function") setViewerData({
         file_id: fileId,
         rgb_files: result.rgb_files || [],
@@ -1965,9 +2027,30 @@ function persistUpload(job) {
         predicted_class: vesselResult?.predicted_class || null,
         confidence: vesselResult?.confidence ?? null,
         class_counts: vesselResult?.class_counts || null,
+        mrs_prognosis_result: mrsPrognosisResult,
     });
     sessionStorage.setItem("current_file_id", fileId); localStorage.setItem("current_file_id", fileId);
     persistReport(fileId, { report: result.report, report_payload: result.report_payload }); // AI辅助生成：GLM-5, 2026-04-10
+}
+
+function persistMrsPrognosisFromRun(run) {
+    if (!MRS_PROGNOSIS_UI || !state.fileId || !run) return false;
+    const mrsResult = MRS_PROGNOSIS_UI.extractRunMrsPrognosisResult(run);
+    if (!mrsResult || typeof mrsResult !== "object") return false;
+    const current = typeof getViewerData === "function" ? getViewerData() : null;
+    if (!current || String(current.file_id || "") !== String(state.fileId)) return false;
+    const next = { ...current, mrs_prognosis_result: mrsResult };
+    if (typeof setViewerData === "function") setViewerData(next);
+    [sessionStorage, localStorage].forEach((storage) => {
+        try {
+            const analysis = JSON.parse(storage.getItem("analysis_data") || "{}");
+            if (analysis && typeof analysis === "object" && String(analysis.file_id || "") === String(state.fileId)) {
+                analysis.mrs_prognosis_result = mrsResult;
+                storage.setItem("analysis_data", JSON.stringify(analysis));
+            }
+        } catch (_error) {}
+    });
+    return true;
 }
 function showViewerBtns(show) { const display = show ? "inline-block" : "none"; $("runtimeOpenViewerBtn").style.display = display; $("runtimeTopViewerBtn").style.display = display; }
 function canNavigateViewer(requireReport = false) {
@@ -2237,7 +2320,7 @@ async function pollRun() {
         if (!state.fileId && state.latestRun.file_id) state.fileId = String(state.latestRun.file_id);
         if (!state.patientId && state.latestRun.patient_id !== undefined && state.latestRun.patient_id !== null) state.patientId = String(state.latestRun.patient_id);
         if (state.fileId && state.runId) localStorage.setItem(`latest_agent_run_${state.fileId}`, state.runId);
-        persistReport(state.fileId, runReport(state.latestRun)); state.events = Array.isArray(evData.events) ? evData.events : []; state.hints = hintIndex(state.events);
+        persistReport(state.fileId, runReport(state.latestRun)); persistMrsPrognosisFromRun(state.latestRun); state.events = Array.isArray(evData.events) ? evData.events : []; state.hints = hintIndex(state.events);
         const s = token(state.latestRun.status);
         if (!TERMINAL.has(s)) { state.awaitingReport = false; state.runTerminalAt = 0; state.reportResultRetryUntil = 0; }
         if (TERMINAL.has(s)) {
@@ -2396,6 +2479,7 @@ if (typeof module !== "undefined" && module.exports) {
         reviewRestoreEditorSnapshot,
         buildNodes,
         persistUpload,
+        persistMrsPrognosisFromRun,
         normalizeModalityList,
         clinicalPathForModalities,
         buildClinicalDag,

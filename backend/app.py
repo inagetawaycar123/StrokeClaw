@@ -34,6 +34,7 @@ try:
         has_non_overrideable_failure,
         run_image_quality_control,
     )
+    from .mrs_display import normalize_mrs_prognosis_result
     from .summary_assembler import build_summary_artifacts
     from .structured_report import ensure_structured_report_v2
     from .vessel_context import (
@@ -57,6 +58,7 @@ except ImportError:
         has_non_overrideable_failure,
         run_image_quality_control,
     )
+    from mrs_display import normalize_mrs_prognosis_result
     from summary_assembler import build_summary_artifacts
     from structured_report import ensure_structured_report_v2
     from vessel_context import (
@@ -162,16 +164,40 @@ def insert_patient_info(patient_data: dict):
     """
     if not SUPABASE_AVAILABLE:
         return (False, "Supabase unavailable")
+    payload = dict(patient_data or {})
+    payload.pop("create_time", None)
+    mrs_fields = {
+        key: payload.get(key)
+        for key in ("nihss_24h", "onset_to_ct_hours")
+        if key in payload
+    }
     try:
-        if "create_time" in patient_data:
-            del patient_data["create_time"]
-        response = supabase.table("patient_info").insert([patient_data]).execute() # AI辅助生成：GLM-5, 2026-04-20
+        response = supabase.table("patient_info").insert([payload]).execute() # AI辅助生成：GLM-5, 2026-04-20
         if response.data and len(response.data) > 0:
             return (True, response.data[0])
         else:
             return (False, "Insert failed: empty response from Supabase")
     except Exception as e:
-        return (False, f"Insert failed: {str(e)}")
+        missing_mrs_column = any(
+            _is_missing_column_error(e, field_name) for field_name in mrs_fields
+        )
+        if not missing_mrs_column:
+            return (False, f"Insert failed: {str(e)}")
+        legacy_payload = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"nihss_24h", "onset_to_ct_hours"}
+        }
+        try:
+            response = supabase.table("patient_info").insert([legacy_payload]).execute()
+            if not response.data:
+                return (False, "Insert failed: empty legacy-schema response from Supabase")
+            inserted = dict(response.data[0])
+            inserted.update(mrs_fields)
+            inserted["_clinical_schema_fallback"] = True
+            return (True, inserted)
+        except Exception as retry_exc:
+            return (False, f"Insert failed after legacy-schema retry: {str(retry_exc)}")
 
 
 def update_analysis_result(patient_id: int, analysis_data: dict):
@@ -2083,6 +2109,88 @@ def _resolve_vessel_result(run=None, imaging=None, structured=None):
     return vessel_result_from_sources(*sources)
 
 
+def _resolve_mrs_prognosis_result(run=None, imaging=None, structured=None):
+    """Resolve the current case mRS output without fabricating a probability."""
+
+    candidates = []
+    if isinstance(run, dict):
+        result = run.get("result") if isinstance(run.get("result"), dict) else {}
+        candidates.append(result.get("mrs_prognosis_result"))
+        report_result = (
+            result.get("report_result")
+            if isinstance(result.get("report_result"), dict)
+            else {}
+        )
+        report_payload = (
+            report_result.get("report_payload")
+            if isinstance(report_result.get("report_payload"), dict)
+            else {}
+        )
+        for item in reversed(run.get("tool_results") or []):
+            if not isinstance(item, dict):
+                continue
+            if item.get("tool_name") == "run_mrs_prognosis_prediction":
+                candidates.append(item.get("structured_output"))
+        candidates.append(report_payload.get("mrs_prognosis_result"))
+        planner_input = (
+            run.get("planner_input")
+            if isinstance(run.get("planner_input"), dict)
+            else {}
+        )
+        candidates.append(planner_input.get("mrs_prognosis_result"))
+    if isinstance(structured, dict):
+        candidates.extend(
+            [
+                structured.get("mrs_prognosis_result"),
+                (structured.get("structured_report_v2") or {}).get(
+                    "prognosis_assessment"
+                )
+                if isinstance(structured.get("structured_report_v2"), dict)
+                else None,
+            ]
+        )
+    if isinstance(imaging, dict):
+        analysis = (
+            imaging.get("analysis_result")
+            if isinstance(imaging.get("analysis_result"), dict)
+            else {}
+        )
+        report_payload = (
+            imaging.get("report_payload")
+            if isinstance(imaging.get("report_payload"), dict)
+            else {}
+        )
+        analysis_report_payload = (
+            analysis.get("report_payload")
+            if isinstance(analysis.get("report_payload"), dict)
+            else {}
+        )
+        candidates.extend(
+            [
+                analysis.get("mrs_prognosis_result"),
+                analysis_report_payload.get("mrs_prognosis_result"),
+                (analysis.get("structured_report_v2") or {}).get(
+                    "prognosis_assessment"
+                )
+                if isinstance(analysis.get("structured_report_v2"), dict)
+                else None,
+                report_payload.get("mrs_prognosis_result"),
+                imaging.get("mrs_prognosis_result"),
+            ]
+        )
+
+    first_unavailable = None
+    for candidate in candidates:
+        if not isinstance(candidate, dict) or not candidate:
+            continue
+        normalized = normalize_mrs_prognosis_result(candidate)
+        if normalized.get("status") == "completed":
+            return copy.deepcopy(candidate)
+        if first_unavailable is None:
+            first_unavailable = copy.deepcopy(candidate)
+    return first_unavailable or {}
+
+
 def _resolve_ncct_classification(run=None, imaging=None, structured=None):
     """Resolve a real NCCT classifier result without inventing an ischemia default."""
     sources = []
@@ -2667,6 +2775,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "load_patient_context",
         "image_quality_control",
         "detect_modalities",
+        "run_mrs_prognosis_prediction",
         "icv",
         "ekv",
         "consensus_lite",
@@ -2678,6 +2787,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "image_quality_control",
         "detect_modalities",
         "vessel_occlusion",
+        "run_mrs_prognosis_prediction",
         "icv",
         "ekv",
         "consensus_lite",
@@ -2691,6 +2801,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "vessel_occlusion",
         "generate_ctp_maps",
         "run_stroke_analysis",
+        "run_mrs_prognosis_prediction",
         "icv",
         "ekv",
         "consensus_lite",
@@ -2703,6 +2814,7 @@ AGENT_TOOL_SEQUENCE_MAP = {
         "detect_modalities",
         "vessel_occlusion",
         "run_stroke_analysis",
+        "run_mrs_prognosis_prediction",
         "icv",
         "ekv",
         "consensus_lite",
@@ -2716,6 +2828,7 @@ POST_UPLOAD_SUMMARY_TOOL_SEQUENCE = [
     "image_quality_control",
     "detect_modalities",
     "run_stroke_analysis",
+    "run_mrs_prognosis_prediction",
     "icv",
     "ekv",
     "consensus_lite",
@@ -2736,6 +2849,7 @@ AGENT_TOOL_STAGE_MAP = {
     "image_quality_control": "triage",
     "detect_modalities": "triage",
     "vessel_occlusion": "tooling",
+    "run_mrs_prognosis_prediction": "tooling",
     "icv": "icv",
     "ekv": "ekv",
     "consensus_lite": "consensus",
@@ -2750,6 +2864,7 @@ AGENT_TOOL_LABELS = {
     "vessel_occlusion": "Vessel_Occlusion.classify()",
     "generate_ctp_maps": "MRDPM_Generate.run()",
     "run_stroke_analysis": "Stroke_Analysis.segment()",
+    "run_mrs_prognosis_prediction": "90天功能预后评估",
     "icv": "Evidence_Check.icv()",
     "ekv": "Evidence_Check.ekv()",
     "consensus_lite": "Evidence_Check.consensus()",
@@ -2764,6 +2879,7 @@ AGENT_TOOL_DESCRIPTIONS = {
     "vessel_occlusion": "DINOv3 血管闭塞三分类（正常/LVO/MeVO）",
     "generate_ctp_maps": "按需生成 CTP 灌注图谱",
     "run_stroke_analysis": "执行卒中定量分析并产出关键指标",
+    "run_mrs_prognosis_prediction": "加载真实MVP bundle并评估90天功能预后",
     "icv": "执行内在一致性校验",
     "ekv": "执行外部证据与指南核验",
     "consensus_lite": "聚合校验结果形成一致性结论",
@@ -2825,6 +2941,7 @@ W0_TOOL_TITLE_MAP = {
     "vessel_occlusion": "Vessel_Occlusion.classify()",
     "generate_ctp_maps": "MRDPM_Generate.run()",
     "run_stroke_analysis": "Stroke_Analysis.segment()",
+    "run_mrs_prognosis_prediction": "90天功能预后评估",
     "icv": "Evidence_Check.icv()",
     "ekv": "Evidence_Check.ekv()",
     "consensus_lite": "Evidence_Check.consensus()",
@@ -3587,7 +3704,15 @@ REVIEW_SECTION_SPECS = [
         "guide": "确认关键结论的证据映射是否完整，检查高风险未映射项。",
     },
 ]
-REVIEW_SECTION_ID_SET = {item["section_id"] for item in REVIEW_SECTION_SPECS}
+PROGNOSIS_REVIEW_SECTION_SPEC = {
+    "section_id": "prognosis_assessment",
+    "title": "90 天功能预后预测",
+    "guide": "核对 mRS 0-2 与 mRS 3-6 分组概率、模型置信度、数据限制及复核建议。",
+}
+REVIEW_SECTION_ID_SET = {
+    item["section_id"]
+    for item in [*REVIEW_SECTION_SPECS, PROGNOSIS_REVIEW_SECTION_SPEC]
+}
 REVIEW_STATUS_SET = {"pending", "confirmed", "needs_edit"}
 
 
@@ -3671,6 +3796,10 @@ def _review_build_sections_from_run(run):
     qa = report_payload.get("question_answer") if isinstance(report_payload.get("question_answer"), dict) else {} # AI辅助生成：GLM-5, 2026-03-19
     final_report = report_payload.get("final_report") if isinstance(report_payload.get("final_report"), dict) else {}
     traceability = report_payload.get("traceability") if isinstance(report_payload.get("traceability"), dict) else {}
+    prognosis = normalize_mrs_prognosis_result(
+        report_payload.get("mrs_prognosis_result")
+        or run_result.get("mrs_prognosis_result")
+    )
 
     core_val = (
         analysis_result.get("core_infarct_volume")
@@ -3786,6 +3915,19 @@ def _review_build_sections_from_run(run):
         trace_lines.append("证据引用ID：")
         trace_lines.extend([f"- {item}" for item in evidence_refs[:10]])
 
+    prognosis_lines = []
+    if prognosis.get("status") == "completed":
+        prognosis_prediction = prognosis.get("prediction") or {}
+        prognosis_confidence = prognosis.get("confidence") or {}
+        prognosis_lines = [
+            str(prognosis.get("deterministic_summary") or ""),
+            f"评估模式：{_review_text(prognosis.get('display_mode'), '-')}",
+            f"良好预后概率（mRS 0-2）：{float(prognosis_prediction.get('good_prognosis_probability')) * 100:.1f}%",
+            f"不良预后风险（mRS 3-6）：{float(prognosis_prediction.get('poor_prognosis_risk')) * 100:.1f}%",
+            f"模型置信度：{_review_text(prognosis_confidence.get('level'), 'unknown')}",
+            "该结果为研究性辅助预测，不代表具体 mRS 分数，也不直接决定治疗。",
+        ]
+
     raw_section_text = {
         "patient_context": _review_join_lines(patient_lines),
         "imaging_summary": _review_join_lines(imaging_lines),
@@ -3795,6 +3937,10 @@ def _review_build_sections_from_run(run):
         "next_steps": _review_join_lines(next_lines),
         "evidence_trace": _review_join_lines(trace_lines),
     }
+    if prognosis_lines:
+        raw_section_text["prognosis_assessment"] = _review_join_lines(
+            prognosis_lines
+        )
 
     section_risk_level = {
         "patient_context": "low",
@@ -3805,6 +3951,8 @@ def _review_build_sections_from_run(run):
         "next_steps": "medium",
         "evidence_trace": "medium",
     }
+    if prognosis_lines:
+        section_risk_level["prognosis_assessment"] = "medium"
 
     section_evidence_map = {
         "patient_context": evidence_refs[:3],
@@ -3815,9 +3963,16 @@ def _review_build_sections_from_run(run):
         "next_steps": evidence_refs[:6],
         "evidence_trace": evidence_refs[:10],
     }
+    if prognosis_lines:
+        section_evidence_map["prognosis_assessment"] = list(
+            prognosis.get("evidence_ids") or []
+        )
 
     sections = []
-    for spec in REVIEW_SECTION_SPECS:
+    review_specs = list(REVIEW_SECTION_SPECS)
+    if prognosis_lines:
+        review_specs.insert(3, PROGNOSIS_REVIEW_SECTION_SPEC)
+    for spec in review_specs:
         sid = spec["section_id"] # AI辅助生成：GLM-5, 2026-03-26
         sections.append(
             {
@@ -3850,7 +4005,10 @@ def _review_recompute_state(review_state):
             continue
         current_lookup[sid] = item
 
-    for spec in REVIEW_SECTION_SPECS:
+    review_specs = list(REVIEW_SECTION_SPECS)
+    if "prognosis_assessment" in current_lookup:
+        review_specs.insert(3, PROGNOSIS_REVIEW_SECTION_SPEC)
+    for spec in review_specs:
         sid = spec["section_id"]
         src = current_lookup.get(sid, {}) # AI辅助生成：GLM-5, 2026-03-28
         review_status = _review_text(src.get("review_status"), "pending").lower()
@@ -4217,6 +4375,7 @@ def _create_agent_run(
     execution_mode="default",
     trigger_source="api",
     question=None,
+    mrs_clinical_record=None,
 ):
     normalized_hemisphere, warning = _canonicalize_hemisphere(hemisphere)
     planner_input = {
@@ -4233,6 +4392,8 @@ def _create_agent_run(
         normalized_question = str(question).strip()
         planner_input["question"] = normalized_question
         planner_input["goal_question"] = normalized_question
+    if isinstance(mrs_clinical_record, dict) and mrs_clinical_record:
+        planner_input["mrs_clinical_record"] = copy.deepcopy(mrs_clinical_record)
     run = {
         "run_id": run_id,
         "patient_id": patient_id,
@@ -4475,6 +4636,15 @@ def _build_agent_event_clinical_fields(event):
         summary["input_summary"] = "执行卒中区域分割与体积测量。"
         summary["result_summary"] = _agent_compact_value(output_ref or "卒中分析已完成")
         summary["clinical_impact"] = "为治疗决策提供病灶侧别与体积证据。"
+    elif tool_name in {"run_mrs_prognosis_prediction"}:
+        prediction = output_ref.get("prediction") if isinstance(output_ref, dict) else {}
+        mode = output_ref.get("display_mode") if isinstance(output_ref, dict) else None
+        risk = prediction.get("poor_prognosis_risk") if isinstance(prediction, dict) else None
+        confidence_level = ((output_ref.get("confidence") or {}).get("level")) if isinstance(output_ref, dict) else None
+        risk_text = f"{float(risk):.1%}" if isinstance(risk, (int, float)) else "-"
+        summary["input_summary"] = "读取当前病例结构化临床字段及所需NCCT输入，加载真实MVP bundle。"
+        summary["result_summary"] = f"{mode or '90天功能预后评估'}；不良预后风险 {risk_text}；置信度 {confidence_level or '-'}"
+        summary["clinical_impact"] = "提供研究型MVP的90天功能预后辅助风险分层，尚未完成外部验证。"
     elif tool_name in {"icv"}:
         summary["input_summary"] = "对院内关键指标进行一致性核验。" # AI辅助生成：GLM-5, 2026-03-13
         summary["result_summary"] = _agent_compact_value(output_ref or "ICV 校验完成")
@@ -4965,6 +5135,12 @@ def _tool_load_patient_context(run):
                 "patient_age": patient_data.get("patient_age"),
                 "patient_sex": patient_data.get("patient_sex"),
                 "admission_nihss": patient_data.get("admission_nihss"),
+                "nihss_24h": (
+                    patient_data.get("nihss_24h")
+                    if patient_data.get("nihss_24h") is not None
+                    else patient_data.get("NIHSS 24 HOURS")
+                ),
+                "onset_to_ct_hours": patient_data.get("onset_to_ct_hours"),
                 "onset_to_admission_hours": onset_to_admission_hours,
             },
             "imaging": {
@@ -5440,6 +5616,56 @@ def _tool_run_stroke_analysis(run):
     )
 
 
+def _tool_run_mrs_prognosis_prediction(run):
+    """Execute the fixed 90-day mRS MVP route for the current Agent case."""
+
+    planner_input = run.get("planner_input") or {}
+    patient_id = planner_input.get("patient_id") or run.get("patient_id")
+    file_id = planner_input.get("file_id") or run.get("file_id")
+    if not patient_id or not file_id:
+        return (
+            False,
+            None,
+            _tool_error_contract("TOOL_INPUT_INVALID", "Missing patient_id or file_id"),
+        )
+    try:
+        try:
+            from .mrs_prognosis import run_mrs_prognosis_prediction
+        except ImportError:
+            from mrs_prognosis import run_mrs_prognosis_prediction
+
+        patient_data = get_patient_by_id(patient_id) or {}
+        files = _collect_case_upload_files(file_id)
+        ncct_path = ((files.get("ncct_file") or {}).get("path"))
+        output = run_mrs_prognosis_prediction(
+            run=run,
+            patient_data=patient_data,
+            ncct_path=ncct_path,
+            baseline_bundle=os.getenv("MRS_BASELINE_BUNDLE_PATH")
+            or os.path.join(PROJECT_ROOT, "outputs", "mrs_model", "mrs_baseline_mvp.pt"),
+            update24h_bundle=os.getenv("MRS_UPDATE24H_BUNDLE_PATH")
+            or os.path.join(PROJECT_ROOT, "outputs", "mrs_model", "mrs_update24h_mvp.pt"),
+        )
+    except Exception as exc:
+        return (
+            False,
+            None,
+            _tool_error_contract("TOOL_EXECUTION_FAILED", f"mRS prediction exception: {exc}"),
+        )
+    if output.get("status") != "completed":
+        return (
+            False,
+            output,
+            _tool_error_contract(
+                "TOOL_DEPENDENCY_MISSING"
+                if "BUNDLE" in str(output.get("error_code") or "")
+                else "TOOL_EXECUTION_FAILED",
+                str(output.get("message") or "mRS prognosis result unavailable"),
+            ),
+        )
+    return True, output, None
+
+
 def _tool_icv(run):
     try:
         run_id = run.get("run_id") or run.get("id") or "unknown"
@@ -5851,6 +6077,7 @@ def _tool_generate_report(run):
     ekv_failed_result = None # AI辅助生成：GLM-5, 2026-03-08
     consensus_payload = None
     consensus_failed_result = None
+    mrs_prognosis_payload = None
     try:
         run_results = run.get("tool_results") or []
         for r in run_results:
@@ -5866,6 +6093,10 @@ def _tool_generate_report(run):
                 consensus_payload = r.get("structured_output") or r.get("raw_ref")
             if r.get("tool_name") == "consensus_lite" and r.get("status") == "failed":
                 consensus_failed_result = r
+            if r.get("tool_name") == "run_mrs_prognosis_prediction":
+                candidate = r.get("structured_output")
+                if isinstance(candidate, dict):
+                    mrs_prognosis_payload = candidate
     except Exception:
         icv_payload = None
         icv_failed_result = None
@@ -5873,6 +6104,7 @@ def _tool_generate_report(run):
         ekv_failed_result = None
         consensus_payload = None
         consensus_failed_result = None
+        mrs_prognosis_payload = None
 
     report_payload = data.get("report_payload") or {}
     if isinstance(report_payload, dict):
@@ -5957,6 +6189,12 @@ def _tool_generate_report(run):
         try:
             report_payload = dict(report_payload)
             report_payload["consensus"] = consensus_payload
+        except Exception:
+            pass
+    if mrs_prognosis_payload is not None:
+        try:
+            report_payload = dict(report_payload)
+            report_payload["mrs_prognosis_result"] = mrs_prognosis_payload
         except Exception:
             pass
 
@@ -6121,6 +6359,7 @@ def _build_pipeline_result(run, planner_output=None, tool_sequence=None):
         "patient_context": context.get("patient_context"),
         "quality_control_result": context.get("quality_control_result"),
         "analysis_result": context.get("analysis_result"),
+        "mrs_prognosis_result": context.get("mrs_prognosis_result"),
         "vessel_occlusion_result": context.get("vessel_occlusion_result"),
         "icv": context.get("icv_result"),
         "ekv": context.get("ekv_result"),
@@ -6398,6 +6637,9 @@ def _execute_agent_tool(run_id, tool_name):
         elif tool_name == "run_stroke_analysis":
             ok, output, err = _tool_run_stroke_analysis(run)
             agent_name = "Clinical Tool Agent"
+        elif tool_name == "run_mrs_prognosis_prediction":
+            ok, output, err = _tool_run_mrs_prognosis_prediction(run)
+            agent_name = "Clinical Prognosis Agent"
         elif tool_name == "icv":
             ok, output, err = _tool_icv(run)
             agent_name = "ICV Agent"
@@ -6500,6 +6742,8 @@ def _execute_agent_tool(run_id, tool_name):
         "structured_output": (
             normalize_vessel_occlusion_result(output)
             if tool_name == "vessel_occlusion" and isinstance(output, dict)
+            else output
+            if tool_name == "run_mrs_prognosis_prediction" and isinstance(output, dict)
             else None
         ),
         "raw_ref": {"tool_name": tool_name},
@@ -6541,6 +6785,7 @@ def _build_context_from_completed_tools(run):
             (run.get("planner_input") or {}).get("quality_control_result") or {}
         ),
         "analysis_result": None,
+        "mrs_prognosis_result": None,
         "vessel_occlusion_result": planner_vessel_result,
         "icv_result": None,
         "ekv_result": None,
@@ -6560,6 +6805,8 @@ def _build_context_from_completed_tools(run):
             )
         if tool_name in {"human_confirm", "human_review"} and isinstance(output, dict):
             context["human_confirm_result"] = output
+        if tool_name == "run_mrs_prognosis_prediction" and isinstance(output, dict):
+            context["mrs_prognosis_result"] = output
         if result.get("status") != "completed":
             continue # AI辅助生成：GLM-5, 2026-03-25
         if tool_name == "load_patient_context":
@@ -6568,6 +6815,8 @@ def _build_context_from_completed_tools(run):
             context["quality_control_result"] = output
         elif tool_name == "run_stroke_analysis":
             context["analysis_result"] = output
+        elif tool_name == "run_mrs_prognosis_prediction":
+            context["mrs_prognosis_result"] = output
         elif tool_name == "vessel_occlusion":
             context["vessel_occlusion_result"] = normalize_vessel_occlusion_result(output)
         elif tool_name == "icv":
@@ -6701,7 +6950,13 @@ def _run_agent_pipeline(run_id, start_tool=None):
                 )
             return
         if not ok:
-            if tool_name in {"icv", "ekv", "consensus_lite", "vessel_occlusion"}:
+            if tool_name in {
+                "icv",
+                "ekv",
+                "consensus_lite",
+                "vessel_occlusion",
+                "run_mrs_prognosis_prediction",
+            }:
                 # Keep verification tools non-blocking.
                 _agent_log(
                     run_id=run_id,
@@ -6751,6 +7006,7 @@ def _run_agent_pipeline(run_id, start_tool=None):
         "patient_context": context.get("patient_context"),
         "quality_control_result": context.get("quality_control_result"),
         "analysis_result": context.get("analysis_result"),
+        "mrs_prognosis_result": context.get("mrs_prognosis_result"),
         "vessel_occlusion_result": context.get("vessel_occlusion_result"),
         "icv": context.get("icv_result"),
         "ekv": context.get("ekv_result"),
@@ -7879,6 +8135,10 @@ def api_generate_report(patient_id):
             )
             or {}
         )
+        mrs_prognosis_result = _resolve_mrs_prognosis_result(
+            run=run_state,
+            imaging=imaging_data,
+        )
         structured_data = {
             "id": patient_data.get("id"),
             "ID": patient_data.get("id"),
@@ -7903,6 +8163,7 @@ def api_generate_report(patient_id):
             "vessel_occlusion_confidence": vessel_result.get("confidence"),
             "analysis_status": patient_data.get("analysis_status", "pending"),
             "quality_control_result": quality_control_result,
+            "mrs_prognosis_result": mrs_prognosis_result,
         }
 
         if structured_data.get("admission_nihss") is None:
@@ -8186,6 +8447,14 @@ def api_generate_report_from_data():
             return jsonify(
                 {"status": "error", "message": f"Imaging case {file_id} not found"}
             ), 404
+
+        data["mrs_prognosis_result"] = _resolve_mrs_prognosis_result(
+            run=_get_agent_run(str(data.get("run_id") or "").strip())
+            if data.get("run_id")
+            else None,
+            imaging=imaging_data,
+            structured=data,
+        )
 
         result = generate_report(
             data, imaging_data, file_id, output_format
@@ -11468,6 +11737,15 @@ def api_upload_start():
 
         agent_run_id = None
         upload_question = (request.form.get("question") or "").strip() # AI辅助生成：GLM-5, 2026-03-28
+        mrs_clinical_record = None
+        raw_mrs_clinical_record = request.form.get("mrs_clinical_record")
+        if raw_mrs_clinical_record:
+            try:
+                parsed_mrs_record = json.loads(raw_mrs_clinical_record)
+                if isinstance(parsed_mrs_record, dict):
+                    mrs_clinical_record = parsed_mrs_record
+            except Exception:
+                return jsonify({"success": False, "error": "Invalid mrs_clinical_record"}), 400
         if str(request.form.get("start_agent_run", "false")).lower() == "true":
             agent_run_id = str(uuid.uuid4())
             _create_agent_run(
@@ -11481,6 +11759,7 @@ def api_upload_start():
                 execution_mode="post_upload_summary",
                 trigger_source="upload_start",
                 question=upload_question or None,
+                mrs_clinical_record=mrs_clinical_record,
             )
 
         payload["agent_run_id"] = agent_run_id
@@ -13151,14 +13430,24 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
             updated_at = imaging.get("updated_at") or updated_at or imaging.get("created_at")
 
         planner_sequence = list(AGENT_TOOL_SEQUENCE_MAP.get("ncct_mcta", []))
+        recovered_mrs = report_payload.get("mrs_prognosis_result")
+        recovered_mrs = recovered_mrs if isinstance(recovered_mrs, dict) else None
         recovered_steps = [] # AI辅助生成：GLM-5, 2026-04-05
         for step_key in planner_sequence:
+            recovered_status = "completed"
+            recovered_message = "Recovered from stored case data"
+            if step_key == "run_mrs_prognosis_prediction":
+                if recovered_mrs and recovered_mrs.get("status") == "completed":
+                    recovered_message = "Recovered mRS prognosis result from stored case data"
+                else:
+                    recovered_status = "unavailable"
+                    recovered_message = "Historical case has no completed mRS prognosis result"
             recovered_steps.append(
                 {
                     "key": step_key,
                     "stage": _stage_for_tool(step_key),
-                    "status": "completed",
-                    "message": "Recovered from stored case data",
+                    "status": recovered_status,
+                    "message": recovered_message,
                     "attempts": 1,
                     "retryable": False,
                 }
@@ -13184,7 +13473,23 @@ def _resolve_cockpit_run_and_events(run_id="", file_id="", patient_id=None):
                 "imaging_path": "",
             },
             "steps": recovered_steps,
+            "tool_results": (
+                [
+                    {
+                        "tool_name": "run_mrs_prognosis_prediction",
+                        "status": "completed"
+                        if recovered_mrs and recovered_mrs.get("status") == "completed"
+                        else "failed",
+                        "structured_output": recovered_mrs,
+                        "retryable": False,
+                        "attempt": 1,
+                    }
+                ]
+                if recovered_mrs
+                else []
+            ),
             "result": {
+                "mrs_prognosis_result": recovered_mrs,
                 "report_result": {
                     "report": str(
                         report_payload.get("final_confirmed_report")
@@ -13369,6 +13674,12 @@ def _build_cockpit_dag(run, events):
                 node_message = "共识裁决已完成（策略性跳过）"
         input_payload = evt.get("input_ref") or {}
         output_payload = evt.get("output_ref") or {}
+        if not output_payload:
+            stored_output = (latest_result_by_tool.get(tool_name) or {}).get(
+                "structured_output"
+            )
+            if isinstance(stored_output, dict):
+                output_payload = stored_output
         if tool_name == "generate_ctp_maps" and status == "completed":
             if not input_payload:
                 input_payload = {
@@ -13940,6 +14251,12 @@ def api_report_context():
         run=run, imaging=imaging, structured=report_payload
     )
     patient_context["vessel_occlusion_result"] = vessel_context_value
+    mrs_context_value = _resolve_mrs_prognosis_result(
+        run=run, imaging=imaging, structured=report_payload
+    )
+    if isinstance(report_payload, dict) and mrs_context_value:
+        report_payload = copy.deepcopy(report_payload)
+        report_payload["mrs_prognosis_result"] = mrs_context_value
 
     normalized_payload = ensure_structured_report_v2(
         report_payload,
@@ -14775,6 +15092,13 @@ def api_save_and_generate_report():
             ), 404
         vessel_result = _resolve_vessel_result(imaging=imaging_data)
         ncct_result = _resolve_ncct_classification(imaging=imaging_data)
+        mrs_prognosis_result = _resolve_mrs_prognosis_result(
+            run=_get_agent_run(str(data.get("run_id") or "").strip())
+            if data.get("run_id")
+            else None,
+            imaging=imaging_data,
+            structured=structured_data,
+        )
         if structured_data.get("onset_to_admission_hours") is None:
             onset_time = structured_data.get("onset_exact_time")
             admission_time = structured_data.get("admission_time")
@@ -14798,6 +15122,7 @@ def api_save_and_generate_report():
             "vessel_occlusion_class_result"
         )
         structured_data["vessel_occlusion_confidence"] = vessel_result.get("confidence")
+        structured_data["mrs_prognosis_result"] = mrs_prognosis_result
 
         # 3. Generate the AI report through Baichuan M3.
         print("[BaichuanReport] auto-generate report after save")

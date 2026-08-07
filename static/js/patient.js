@@ -26,6 +26,8 @@ async function submitPatientBasicInfo() {
     showLoading(true, '正在保存患者信息...');
 
     try {
+        const nihss24Value = document.getElementById('nihss_24h')?.value;
+        const onsetToCtValue = document.getElementById('onset_to_ct_hours')?.value;
         const data = {
             patient_name: document.getElementById('patient_name').value.trim(),
             patient_age: parseInt(document.getElementById('patient_age').value, 10),
@@ -36,6 +38,8 @@ async function submitPatientBasicInfo() {
             admission_nihss: parseInt(document.getElementById('admission_nihss').value, 10),
             create_time: new Date().toISOString()
         };
+        if (nihss24Value !== '') data.nihss_24h = Number(nihss24Value);
+        if (onsetToCtValue !== '') data.onset_to_ct_hours = Number(onsetToCtValue);
 
         const res = await $.ajax({
             url: '/api/insert_patient',
@@ -50,6 +54,17 @@ async function submitPatientBasicInfo() {
         }
 
         setCurrentPatientId(patientId); // AI辅助生成：GLM-5, 2026-03-24
+        const mrsClinicalRecord = {
+            patient_sex: data.patient_sex,
+            patient_age: data.patient_age,
+            admission_nihss: data.admission_nihss,
+            onset_to_ct_hours: data.onset_to_ct_hours ?? null,
+            nihss_24h: data.nihss_24h ?? null
+        };
+        localStorage.setItem(
+            `mrs_clinical_record_${patientId}`,
+            JSON.stringify(mrsClinicalRecord)
+        );
         showMsg(`患者信息已成功保存（ID: ${patientId}）`, 'success');
         window.location.href = '/upload?patient_id=' + patientId;
     } catch (err) {

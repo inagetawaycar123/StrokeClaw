@@ -64,8 +64,61 @@ function completedVesselResult() {
 test.afterEach(() => {
     resetState();
     delete global.setViewerData;
+    delete global.getViewerData;
     delete global.sessionStorage;
     delete global.localStorage;
+});
+
+test("latest Agent Run mRS result is persisted only into the current case", () => {
+    const stores = new Map([
+        ["analysis_data", JSON.stringify({ file_id: "case-mrs" })],
+    ]);
+    const storage = {
+        getItem: (key) => stores.get(key) || null,
+        setItem: (key, value) => stores.set(key, value),
+    };
+    const current = {
+        status: "completed",
+        prediction: {
+            good_prognosis_probability: 0.684,
+            poor_prognosis_risk: 0.316,
+            predicted_class: 0,
+            class_name: "mRS 0-2 / 良好预后",
+            decision_threshold: 0.55,
+        },
+    };
+    let savedViewer = null;
+    processing.state.fileId = "case-mrs";
+    global.getViewerData = () => ({ file_id: "case-mrs" });
+    global.setViewerData = (value) => { savedViewer = value; };
+    global.sessionStorage = storage;
+    global.localStorage = storage;
+
+    const persisted = processing.persistMrsPrognosisFromRun({
+        result: { mrs_prognosis_result: current },
+    });
+
+    assert.equal(persisted, true);
+    assert.equal(savedViewer.mrs_prognosis_result, current);
+    assert.deepEqual(
+        JSON.parse(stores.get("analysis_data")).mrs_prognosis_result,
+        current,
+    );
+});
+
+test("mRS result from another case cannot overwrite viewer_data", () => {
+    processing.state.fileId = "case-current";
+    global.getViewerData = () => ({ file_id: "case-other" });
+    global.setViewerData = () => assert.fail("must not persist another case");
+    global.sessionStorage = { getItem: () => null, setItem: () => {} };
+    global.localStorage = global.sessionStorage;
+
+    assert.equal(
+        processing.persistMrsPrognosisFromRun({
+            result: { mrs_prognosis_result: { status: "completed" } },
+        }),
+        false,
+    );
 });
 
 test("normStatus keeps issue idempotent", () => {
@@ -76,10 +129,10 @@ test("normStatus keeps issue idempotent", () => {
 
 test("clinical DAG builder covers all four supported imaging paths with stable ids", () => {
     const cases = [
-        [["ncct"], "ncct_only", 5],
-        [["ncct", "mcta"], "ncct_single_phase_cta", 6],
-        [["ncct", "mcta", "vcta", "dcta"], "ncct_mcta", 9],
-        [["ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"], "ncct_mcta_ctp", 9],
+        [["ncct"], "ncct_only", 6],
+        [["ncct", "mcta"], "ncct_single_phase_cta", 7],
+        [["ncct", "mcta", "vcta", "dcta"], "ncct_mcta", 10],
+        [["ncct", "mcta", "vcta", "dcta", "cbf", "cbv", "tmax"], "ncct_mcta_ctp", 10],
     ];
     cases.forEach(([modalities, path, nodeCount]) => {
         const first = processing.buildClinicalDag(modalities);
@@ -118,7 +171,7 @@ test("clinical DAG uses the server descriptor and keeps collateral capability in
     assert.equal(processing.normStatus("review_rejected"), "issue");
 });
 
-test("three-phase mCTA preserves the dev_zhao nine-node visual DAG", () => {
+test("three-phase mCTA keeps the visual DAG and adds the existing mRS node", () => {
     const dag = processing.buildClinicalDag(["ncct", "mcta", "vcta", "dcta"]);
     const nodes = new Map(dag.nodes.map((node) => [node.id, node]));
 
@@ -129,9 +182,10 @@ test("three-phase mCTA preserves the dev_zhao nine-node visual DAG", () => {
             "出血 / 缺血排查",
             "血管闭塞识别",
             "类 CTP 生成",
-            "侧支循环评估",
-            "卒中定量分析",
-            "内部一致性校验",
+        "侧支循环评估",
+        "卒中定量分析",
+        "90天功能预后评估",
+        "内部一致性校验",
             "外部指南一致性校验",
             "结构化报告生成",
         ],

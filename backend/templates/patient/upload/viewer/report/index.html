@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>临床诊断报告 | StrokeClaw</title>
-    <link rel="stylesheet" href="/static/css/report.css">
+    <link rel="stylesheet" href="/static/css/report.css?v=20260807_unified_models_v1">
     <style>
         body {
             margin: 0;
@@ -19,17 +19,19 @@
 
     <script src="/static/vendor/react/react.production.min.js"></script>
     <script src="/static/vendor/react/react-dom.production.min.js"></script>
+    <script src="/static/js/imaging_results.js?v=20260807_acute_imaging_v1"></script>
+    <script src="/static/js/mrs_prognosis.js?v=20260807_mrs_display_v1"></script>
 
     <!-- 引入编译后的 report.js -->
-    <script src="/static/js/report.js?v=20260724_structured_report_v2"></script>
+    <script src="/static/js/report.js?v=20260807_unified_models_v1"></script>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
-        
+
         // 从 URL 路径获取 patient_id: /report/123
         const pathParts = window.location.pathname.split('/');
         const patientId = parseInt(pathParts[pathParts.length - 1]) || null;
-        
+
         const fileId = urlParams.get('file_id') || null;
         const runId = urlParams.get('run_id') || null;
         const firstPresent = (...values) => values.find(
@@ -61,8 +63,12 @@
             hemisphere: firstPresent(viewerData.hemisphere, null),
             three_class_label: firstPresent(viewerData.three_class_label, null),
             three_class_label_cn: firstPresent(viewerData.three_class_label_cn, null),
+            three_class_status: viewerData.three_class_status || 'unavailable',
+            three_class_confidence: viewerData.three_class_confidence != null ? viewerData.three_class_confidence : null,
+            three_class_result: viewerData.three_class_result || null,
             three_class_display: viewerData.three_class_display || '',
             three_class_counts: viewerData.three_class_counts || null,
+            three_class_total_slices: viewerData.three_class_total_slices != null ? viewerData.three_class_total_slices : null,
             vessel_occlusion_result: viewerData.vessel_occlusion_result || null,
             vessel_occlusion_status: viewerData.vessel_occlusion_status || 'unavailable',
             vessel_occlusion_class_result: viewerData.vessel_occlusion_class_result || null,
@@ -70,6 +76,8 @@
             vessel_occlusion_predicted_class: viewerData.vessel_occlusion_predicted_class || null,
             vessel_occlusion_class_counts: viewerData.vessel_occlusion_class_counts || null,
             vessel_occlusion_valid_predictions: viewerData.vessel_occlusion_valid_predictions || 0,
+            available_modalities: viewerData.available_modalities || viewerData.modalities || [],
+            mrs_prognosis_result: viewerData.mrs_prognosis_result || null,
         };
 
         const root = ReactDOM.createRoot(document.getElementById('report-root'));

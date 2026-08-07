@@ -55,6 +55,61 @@ def _imaging():
     }
 
 
+def _mrs_result():
+    return {
+        "status": "completed",
+        "patient_id": "patient-123",
+        "file_id": "case-secret-456",
+        "run_id": "run-secret",
+        "result_mode": "baseline",
+        "display_mode": "首诊初步评估",
+        "prediction": {
+            "good_prognosis_probability": 0.684,
+            "poor_prognosis_risk": 0.316,
+            "predicted_class": 0,
+            "class_name": "mRS 0-2 / 良好预后",
+            "decision_threshold": 0.55,
+            "probability_calibrated": True,
+        },
+        "confidence": {
+            "level": "medium",
+            "ensemble_std": 0.03,
+            "threshold_margin": 0.234,
+            "reasons": ["研究性模型"],
+        },
+        "key_evidence": {
+            "clinical": [
+                {
+                    "feature": "NIHSS Baseline",
+                    "display_name": "入院 NIHSS",
+                    "value": 12,
+                    "direction": "increase_poor_prognosis_risk",
+                }
+            ],
+            "imaging": [
+                {
+                    "source_file": "E:/private/case-secret-456/ncct.nii",
+                    "attention_score": 0.75,
+                    "interpretation": "模型关注区域，不代表确定病灶。",
+                }
+            ],
+        },
+        "data_quality": {
+            "missing_clinical_fields": [],
+            "image_quality_warnings": [],
+        },
+        "doctor_review_recommendation": {
+            "review_level": "routine_review",
+            "items": ["请结合临床资料复核。"],
+        },
+        "model": {
+            "model_version": "mrs-v1",
+            "external_validation_completed": False,
+            "production_approved": False,
+        },
+    }
+
+
 def test_baichuan_request_is_deidentified_and_contains_clinical_evidence(tmp_path):
     captured = {}
 
@@ -89,6 +144,40 @@ def test_baichuan_request_is_deidentified_and_contains_clinical_evidence(tmp_pat
     assert result["report_payload"]["provider"] == "baichuan_m3"
     assert result["report_payload"]["is_mock"] is False
     assert result["json_path"].startswith(str(tmp_path))
+
+
+def test_mrs_prompt_is_deidentified_restricted_and_preserved_in_payload(tmp_path):
+    captured = {}
+    structured = _structured()
+    structured["mrs_prognosis_result"] = _mrs_result()
+
+    def fake_post(_url, **kwargs):
+        captured.update(kwargs)
+        return FakeResponse({"choices": [{"message": {"content": "结构化报告正文"}}]})
+
+    result = report_generation.generate_report(
+        structured,
+        _imaging(),
+        "case-secret-456",
+        results_dir=str(tmp_path),
+        api_key="test-key",
+        http_post=fake_post,
+    )
+
+    outbound = json.dumps(captured["json"], ensure_ascii=False)
+    prompt = captured["json"]["messages"][-1]["content"]
+    assert result["success"] is True
+    assert '"good_prognosis_probability":0.684' in prompt
+    assert '"poor_prognosis_risk":0.316' in prompt
+    assert "不得推断具体mRS分数" in prompt
+    assert "不得据此直接生成治疗决策" in prompt
+    assert "patient-123" not in outbound
+    assert "case-secret-456" not in outbound
+    assert "run-secret" not in outbound
+    assert "E:/private" not in outbound
+    assert result["report_payload"]["mrs_prognosis_result"]["prediction"][
+        "good_prognosis_probability"
+    ] == 0.684
 
 
 def test_quality_control_risks_and_override_reach_prompt_and_payload(tmp_path):

@@ -89,6 +89,7 @@ const DAG_LANES = [
 ];
 
 const TOOL_TITLE_MAP = {
+    run_mrs_prognosis_prediction: '90天功能预后评估',
     triage_planner: 'Planner',
     detect_modalities: '模态识别',
     load_patient_context: '病例上下文',
@@ -112,6 +113,7 @@ const TOOL_TITLE_MAP = {
 };
 
 const TOOL_LANE_MAP = {
+    run_mrs_prognosis_prediction: 'L4',
     triage_planner: 'L1',
     detect_modalities: 'L1',
     load_patient_context: 'L1',
@@ -162,6 +164,7 @@ const NCCT_STEP_KEY = 'run_ncct_classification';
 const CONTEXT_STEP_KEY = 'load_patient_context';
 const VESSEL_OCCLUSION_STEP_KEY = 'run_vessel_occlusion_classification'; // AI辅助生成：GLM-5, 2026-03-03
 const STROKE_ANALYSIS_STEP_KEY = 'run_stroke_analysis';
+const MRS_PROGNOSIS_STEP_KEY = 'run_mrs_prognosis_prediction';
 const CTP_SKIP_MESSAGE = '已提供CTP或本次无需生成，跳过类CTP生成';
 const VESSEL_OCCLUSION_DEFAULT = '等待模型预测';
 const VESSEL_OCCLUSION_DEFAULT_MESSAGE = '结果：等待 DINOv3 模型预测...';
@@ -239,6 +242,35 @@ function formatPercentFromFraction(value) {
     const n = Number(value); // AI辅助生成：GLM-5, 2026-03-07
     if (!Number.isFinite(n)) return '-';
     return `${(n * 100).toFixed(1)}%`;
+}
+
+function formatMrsPercent(value) {
+    if (value === null || value === undefined || value === '') return '-';
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '-';
+    return `${(number * 100).toFixed(1)}%`;
+}
+
+function mrsPrognosisSummary(result) {
+    if (!result || typeof result !== 'object') return '90天功能预后结果不可用';
+    const prediction = result.prediction && typeof result.prediction === 'object' ? result.prediction : null;
+    return `${result.display_mode || '90天功能预后评估'}；不良预后风险 ${prediction ? formatMrsPercent(prediction.poor_prognosis_risk) : '-'}；置信度 ${(result.confidence || {}).level || 'unavailable'}；状态 ${result.status || 'unavailable'}`;
+}
+
+function mrsPrognosisDetail(result) {
+    if (!result || typeof result !== 'object') return '状态：unavailable';
+    const prediction = result.prediction && typeof result.prediction === 'object' ? result.prediction : null;
+    const confidence = result.confidence && typeof result.confidence === 'object' ? result.confidence : {};
+    const lines = [
+        `当前状态：${result.status || 'unavailable'}`,
+        `评估模式：${result.display_mode || '-'}`,
+        `良好预后概率：${prediction ? formatMrsPercent(prediction.good_prognosis_probability) : '-'}`,
+        `不良预后风险：${prediction ? formatMrsPercent(prediction.poor_prognosis_risk) : '-'}`,
+        `风险类别：${prediction?.class_name || '-'}`,
+        `置信度：${confidence.level || 'unavailable'}`,
+        `Fallback：${result.fallback_used === true ? `是（${result.fallback_reason || '未提供原因'}）` : '否'}`,
+    ];
+    return lines.join('\n');
 }
 
 function formatConfidence(value) {
@@ -1059,6 +1091,10 @@ function buildGraphModel(run, events, resultResp = null) {
         const stage = String(step.phase || evt?.stage || run?.stage || '').trim().toLowerCase();
         const laneKey = laneForStep(stepKey, stage); // AI辅助生成：GLM-5, 2026-03-02
         const isVesselOcclusion = stepKey === VESSEL_OCCLUSION_STEP_KEY;
+        const isMrsPrognosis = stepKey === MRS_PROGNOSIS_STEP_KEY;
+        const mrsResult = isMrsPrognosis
+            ? (evt?.output_ref || toolResult?.structured_output || step?.output_payload || null)
+            : null;
         const node = {
             step_key: stepKey,
             tool_key: stepKey,
@@ -1109,6 +1145,11 @@ function buildGraphModel(run, events, resultResp = null) {
             secondary_deps: 0,
             primary_parent: '',
         };
+        if (isMrsPrognosis) {
+            node.mrs_result_detail = mrsResult;
+            node.clinical_summary = mrsPrognosisSummary(mrsResult);
+            node.output_summary = mrsPrognosisDetail(mrsResult);
+        }
         nodes.push(node);
         nodeByKey.set(stepKey, node);
     });

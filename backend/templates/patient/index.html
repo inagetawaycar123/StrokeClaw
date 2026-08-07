@@ -31,6 +31,8 @@
                     <div class="group-title">📊 入院NIHSS评分</div>
                     <div class="form-grid">
                         <div class="form-item"><label class="form-label required">评分 (0-42)</label><input type="number" id="admission_nihss" class="form-input" min="0" max="42" required></div>
+                        <div class="form-item"><label class="form-label">24小时 NIHSS (0-42)</label><input type="number" id="nihss_24h" class="form-input" min="0" max="42"></div>
+                        <div class="form-item"><label class="form-label">发病至CT时间（小时）</label><input type="number" id="onset_to_ct_hours" class="form-input" min="0" step="0.01"></div>
                     </div>
                 </div>
             </form>
@@ -40,5 +42,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/patient.js"></script>
+<script src="/static/js/patient.js?v=20260807_mrs_clinical_record"></script>
 {% endblock %}
