@@ -121,35 +121,128 @@
         </div>
     </div>
     <div class="panel-section analysis-results" id="analysisMetrics">
-        <div class="section-title">量化结果</div>
-        <div class="metrics-list">
-            <div class="metric-row">
-                <span class="metric-label">半暗带体积</span>
-                <span class="metric-value" id="value-penumbra">-- ml</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">核心梗死体积</span>
-                <span class="metric-value" id="value-core">-- ml</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">不匹配比例</span>
-                <span class="metric-value" id="value-ratio">--</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">不匹配状态</span>
-                <span class="metric-value" id="value-status">--</span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">NCCT 三分类结果</span>
-                <span class="metric-value" id="value-ncct-class">--</span>
-                <span class="metric-sub" id="value-ncct-confidence" style="font-size:12px;opacity:0.75;margin-left:4px;"></span>
-            </div>
-            <div class="metric-row">
-                <span class="metric-label">血管堵塞三分类结果</span>
-                <span class="metric-value" id="value-vessel-occlusion-class">--</span>
-                <span class="metric-sub" id="value-vessel-occlusion-confidence" style="font-size:12px;opacity:0.75;margin-left:4px;"></span>
-            </div>
+        <div class="section-title">急性期影像量化与模型结果</div>
+        <div class="acute-viewer-stack" id="acute-imaging-results" aria-live="polite">
+            <section class="acute-viewer-card unavailable" id="perfusion-result-card">
+                <div class="acute-viewer-heading">
+                    <div>
+                        <span class="acute-viewer-eyebrow">灌注定量</span>
+                        <strong id="value-status">未生成</strong>
+                    </div>
+                    <span class="acute-status-badge" id="perfusion-result-status">Unavailable</span>
+                </div>
+                <div class="acute-metric-grid">
+                    <div><span>核心梗死体积</span><strong id="value-core">--</strong><small id="core-threshold-state">内部参考：&lt; 70 mL</small></div>
+                    <div><span>半暗带体积</span><strong id="value-penumbra">--</strong><small>仅展示实测值</small></div>
+                    <div><span>不匹配比值</span><strong id="value-ratio">--</strong><small id="mismatch-threshold-state">内部提示：&gt; 1.80</small></div>
+                </div>
+                <details class="acute-viewer-details">
+                    <summary>查看灌注来源与限制</summary>
+                    <div class="acute-modality-list" id="perfusion-modality-list"></div>
+                    <dl class="acute-detail-list">
+                        <div><dt>来源</dt><dd id="perfusion-result-source">--</dd></div>
+                        <div><dt>限制</dt><dd id="perfusion-result-limitations">--</dd></div>
+                    </dl>
+                </details>
+            </section>
+
+            <section class="acute-viewer-card unavailable" id="ncct-result-card">
+                <div class="acute-viewer-heading">
+                    <div>
+                        <span class="acute-viewer-eyebrow">NCCT 三分类</span>
+                        <strong id="value-ncct-class">未生成</strong>
+                    </div>
+                    <span class="acute-status-badge" id="ncct-result-status">Unavailable</span>
+                </div>
+                <div class="acute-confidence-row">
+                    <span>分类置信度</span>
+                    <strong id="value-ncct-confidence">--</strong>
+                </div>
+                <div class="acute-confidence-track" aria-hidden="true"><span id="ncct-confidence-bar" style="width:0%"></span></div>
+                <details class="acute-viewer-details">
+                    <summary>查看分类依据与安全门控</summary>
+                    <dl class="acute-detail-list">
+                        <div id="ncct-total-slices-row"><dt>切片总数</dt><dd id="ncct-total-slices">--</dd></div>
+                        <div id="ncct-class-counts-row"><dt>类别计数</dt><dd id="ncct-class-counts">--</dd></div>
+                        <div><dt>安全门控</dt><dd id="ncct-safety-gate">--</dd></div>
+                        <div><dt>来源</dt><dd id="ncct-result-source">--</dd></div>
+                    </dl>
+                </details>
+            </section>
+
+            <section class="acute-viewer-card unavailable" id="vessel-result-card">
+                <div class="acute-viewer-heading">
+                    <div>
+                        <span class="acute-viewer-eyebrow">血管闭塞三分类</span>
+                        <strong id="value-vessel-occlusion-class">未生成</strong>
+                    </div>
+                    <span class="acute-status-badge" id="vessel-result-status">Unavailable</span>
+                </div>
+                <div class="acute-confidence-row">
+                    <span>分类置信度</span>
+                    <strong id="value-vessel-occlusion-confidence">--</strong>
+                </div>
+                <div class="acute-confidence-track" aria-hidden="true"><span id="vessel-confidence-bar" style="width:0%"></span></div>
+                <details class="acute-viewer-details">
+                    <summary>查看分类输入与来源</summary>
+                    <dl class="acute-detail-list">
+                        <div id="vessel-valid-predictions-row"><dt>有效预测数</dt><dd id="vessel-valid-predictions">--</dd></div>
+                        <div id="vessel-class-counts-row"><dt>类别计数</dt><dd id="vessel-class-counts">--</dd></div>
+                        <div id="vessel-input-phases-row"><dt>输入期相</dt><dd id="vessel-input-phases">--</dd></div>
+                        <div><dt>来源</dt><dd id="vessel-result-source">--</dd></div>
+                    </dl>
+                </details>
+            </section>
         </div>
+        <section class="mrs-viewer-card unavailable" id="mrs-prognosis-card" aria-live="polite">
+            <div class="mrs-viewer-heading">
+                <div>
+                    <span class="mrs-viewer-eyebrow">90 天功能预后预测</span>
+                    <strong id="mrs-prognosis-class">未生成</strong>
+                </div>
+                <span class="mrs-viewer-mode" id="mrs-prognosis-mode">--</span>
+            </div>
+            <div class="mrs-probability-bar" id="mrs-probability-bar" aria-label="良好与不良预后概率">
+                <span class="mrs-probability-good" id="mrs-good-bar" style="width:0%"></span>
+                <span class="mrs-probability-poor" id="mrs-poor-bar" style="width:0%"></span>
+                <span class="mrs-threshold-marker" id="mrs-threshold-marker" hidden></span>
+            </div>
+            <div class="mrs-probability-values">
+                <span>良好预后（mRS 0–2） <strong id="mrs-good-probability">--</strong></span>
+                <span>不良预后风险（mRS 3–6） <strong id="mrs-poor-risk">--</strong></span>
+            </div>
+            <div class="mrs-viewer-meta">
+                <span>模型置信度 <strong id="mrs-confidence-level">--</strong></span>
+                <span class="mrs-research-badge">研究性 MVP</span>
+            </div>
+            <p class="mrs-viewer-message" id="mrs-prognosis-message">当前病例尚未获得有效的 90 天 mRS 预测。</p>
+            <details class="mrs-viewer-details" id="mrs-prognosis-details">
+                <summary>查看模型详情与限制</summary>
+                <p class="mrs-confidence-explainer">“不良预后风险”是模型预测概率；“模型置信度”综合反映集成一致性、阈值距离、字段缺失与图像质量，不代表预后方向。</p>
+                <div class="mrs-detail-grid">
+                    <div><span>决策阈值</span><strong id="mrs-decision-threshold">--</strong></div>
+                    <div><span>阈值距离</span><strong id="mrs-threshold-margin">--</strong></div>
+                    <div><span>集成标准差</span><strong id="mrs-ensemble-std">--</strong></div>
+                    <div><span>模型版本</span><strong id="mrs-model-version">--</strong></div>
+                    <div><span>概率校准</span><strong id="mrs-calibration-status">--</strong></div>
+                    <div><span>验证与批准</span><strong id="mrs-validation-status">--</strong></div>
+                </div>
+                <div class="mrs-detail-block">
+                    <strong>主要临床影响因素</strong>
+                    <ul id="mrs-clinical-evidence"><li>未提供</li></ul>
+                </div>
+                <div class="mrs-detail-block">
+                    <strong>影像关注摘要</strong>
+                    <ul id="mrs-imaging-evidence"><li>未提供</li></ul>
+                </div>
+                <div class="mrs-detail-block">
+                    <strong>数据质量与复核提示</strong>
+                    <ul id="mrs-review-items"><li>未提供</li></ul>
+                </div>
+                <p class="mrs-attribution-notice" id="mrs-attribution-notice">模型归因不代表因果关系。</p>
+            </details>
+            <p class="mrs-viewer-disclaimer">研究性辅助预测，不能替代临床判断；不代表具体 mRS 分数。</p>
+        </section>
     </div>
     <!-- 手动触发 AI 报告按钮 -->
     <div class="panel-section" style="margin-top: 20px;">
@@ -198,7 +291,9 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/viewer.js?v=20260712_case_scope_v2"></script>
+<script src="/static/js/imaging_results.js?v=20260807_acute_imaging_v1"></script>
+<script src="/static/js/mrs_prognosis.js?v=20260807_mrs_display_v1"></script>
+<script src="/static/js/viewer.js?v=20260807_acute_imaging_v1"></script>
 
 <script>
 // 跳转到AI问诊独立页面

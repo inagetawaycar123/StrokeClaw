@@ -7,8 +7,10 @@ import math
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 try:
+    from .mrs_display import normalize_mrs_prognosis_result
     from .vessel_context import vessel_result_from_sources
 except ImportError:
+    from mrs_display import normalize_mrs_prognosis_result
     from vessel_context import vessel_result_from_sources
 
 
@@ -28,6 +30,7 @@ REVIEW_SECTION_BY_DOMAIN = {
     "patient": "patient_context",
     "imaging": "imaging_summary",
     "ctp": "ctp_quant",
+    "prognosis": "prognosis_assessment",
     "assessment": "question_answer",
     "risk": "risk_uncertainty",
     "recommendation": "next_steps",
@@ -545,6 +548,12 @@ def build_structured_report_v2(
         _as_dict(payload.get("meta")).get("timestamp"),
         _now_iso(),
     )
+    prognosis_assessment = normalize_mrs_prognosis_result(
+        _first_present(
+            payload.get("mrs_prognosis_result"),
+            _as_dict(patient_context).get("mrs_prognosis_result"),
+        )
+    )
 
     patient_fields = [
         _clinical_value(
@@ -616,6 +625,44 @@ def build_structured_report_v2(
         )
         evidence_by_field[field["field_id"]] = _append_unique_evidence(
             catalog, evidence_lookup, ev
+        )
+
+    if prognosis_assessment.get("status") == "completed":
+        prediction = _as_dict(prognosis_assessment.get("prediction"))
+        prognosis_evidence = _evidence_item(
+            evidence_type="algorithm_output",
+            display_name="90 天 mRS 功能预后预测",
+            value={
+                "class_name": prediction.get("class_name"),
+                "good_prognosis_probability": prediction.get(
+                    "good_prognosis_probability"
+                ),
+                "poor_prognosis_risk": prediction.get("poor_prognosis_risk"),
+                "decision_threshold": prediction.get("decision_threshold"),
+            },
+            source_module="MRSPrognosisAgent",
+            source_record="run_mrs_prognosis_prediction.prediction",
+            generated_at=generated_at,
+        )
+        prognosis_evidence_id = _append_unique_evidence(
+            catalog, evidence_lookup, prognosis_evidence
+        )
+        prognosis_assessment["evidence_ids"] = [prognosis_evidence_id]
+        prognosis_assessment["requires_clinician_review"] = True
+        prognosis_assessment.update(
+            _review_status(section_map, REVIEW_SECTION_BY_DOMAIN["prognosis"])
+        )
+    else:
+        prognosis_assessment.update(
+            {
+                "evidence_ids": [],
+                "requires_clinician_review": False,
+                "review_status": "not_applicable",
+                "clinician_confirmed": False,
+                "review_section_id": None,
+                "clinician_note": None,
+                "reviewed_at": None,
+            }
         )
 
     metric_specs = [
@@ -1511,6 +1558,7 @@ def build_structured_report_v2(
             "fields": [],
         },
         "quality_control": _as_dict(payload.get("quality_control_result")),
+        "prognosis_assessment": prognosis_assessment,
         "imaging_findings": imaging_findings,
         "quantitative_metrics": metrics,
         "rule_evaluations": rules,

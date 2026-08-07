@@ -1,5 +1,13 @@
 "use strict"; // AI辅助生成：GLM-5, 2026-03-25
 
+const MRS_PROGNOSIS_UI = (() => {
+    if (typeof window !== "undefined" && window.StrokeClawMrsPrognosis) return window.StrokeClawMrsPrognosis;
+    if (typeof require === "function") {
+        try { return require("./mrs_prognosis.js"); } catch (_error) { return null; }
+    }
+    return null;
+})();
+
 const UPLOAD_NODES = [
     { key: "archive_ready", title: "Case_Intake.parse()", subtitle: "病例接收与归档准备", chip: "Case_Intake", delegated: "" },
     { key: "image_quality_control", title: "Image_QC.validate()", subtitle: "图像质量控制", chip: "Image_QC", delegated: "image_quality_control" },
@@ -1986,6 +1994,17 @@ function persistUpload(job) {
     const vesselResult = normalizeVesselOcclusionResult(result.vessel_occlusion_result)
         || normalizeVesselOcclusionResult(result)
         || vesselOcclusionResult();
+    const existingViewerData = typeof getViewerData === "function" ? getViewerData() : null;
+    const existingMrsResult = existingViewerData
+        && String(existingViewerData.file_id || "") === String(fileId)
+        && existingViewerData.mrs_prognosis_result
+        && typeof existingViewerData.mrs_prognosis_result === "object"
+        ? existingViewerData.mrs_prognosis_result
+        : null;
+    const mrsPrognosisResult = result.mrs_prognosis_result
+        && typeof result.mrs_prognosis_result === "object"
+        ? result.mrs_prognosis_result
+        : existingMrsResult;
     if (typeof setViewerData === "function") setViewerData({
         file_id: fileId,
         rgb_files: result.rgb_files || [],
@@ -2008,9 +2027,30 @@ function persistUpload(job) {
         predicted_class: vesselResult?.predicted_class || null,
         confidence: vesselResult?.confidence ?? null,
         class_counts: vesselResult?.class_counts || null,
+        mrs_prognosis_result: mrsPrognosisResult,
     });
     sessionStorage.setItem("current_file_id", fileId); localStorage.setItem("current_file_id", fileId);
     persistReport(fileId, { report: result.report, report_payload: result.report_payload }); // AI辅助生成：GLM-5, 2026-04-10
+}
+
+function persistMrsPrognosisFromRun(run) {
+    if (!MRS_PROGNOSIS_UI || !state.fileId || !run) return false;
+    const mrsResult = MRS_PROGNOSIS_UI.extractRunMrsPrognosisResult(run);
+    if (!mrsResult || typeof mrsResult !== "object") return false;
+    const current = typeof getViewerData === "function" ? getViewerData() : null;
+    if (!current || String(current.file_id || "") !== String(state.fileId)) return false;
+    const next = { ...current, mrs_prognosis_result: mrsResult };
+    if (typeof setViewerData === "function") setViewerData(next);
+    [sessionStorage, localStorage].forEach((storage) => {
+        try {
+            const analysis = JSON.parse(storage.getItem("analysis_data") || "{}");
+            if (analysis && typeof analysis === "object" && String(analysis.file_id || "") === String(state.fileId)) {
+                analysis.mrs_prognosis_result = mrsResult;
+                storage.setItem("analysis_data", JSON.stringify(analysis));
+            }
+        } catch (_error) {}
+    });
+    return true;
 }
 function showViewerBtns(show) { const display = show ? "inline-block" : "none"; $("runtimeOpenViewerBtn").style.display = display; $("runtimeTopViewerBtn").style.display = display; }
 function canNavigateViewer(requireReport = false) {
@@ -2280,7 +2320,7 @@ async function pollRun() {
         if (!state.fileId && state.latestRun.file_id) state.fileId = String(state.latestRun.file_id);
         if (!state.patientId && state.latestRun.patient_id !== undefined && state.latestRun.patient_id !== null) state.patientId = String(state.latestRun.patient_id);
         if (state.fileId && state.runId) localStorage.setItem(`latest_agent_run_${state.fileId}`, state.runId);
-        persistReport(state.fileId, runReport(state.latestRun)); state.events = Array.isArray(evData.events) ? evData.events : []; state.hints = hintIndex(state.events);
+        persistReport(state.fileId, runReport(state.latestRun)); persistMrsPrognosisFromRun(state.latestRun); state.events = Array.isArray(evData.events) ? evData.events : []; state.hints = hintIndex(state.events);
         const s = token(state.latestRun.status);
         if (!TERMINAL.has(s)) { state.awaitingReport = false; state.runTerminalAt = 0; state.reportResultRetryUntil = 0; }
         if (TERMINAL.has(s)) {
@@ -2439,6 +2479,7 @@ if (typeof module !== "undefined" && module.exports) {
         reviewRestoreEditorSnapshot,
         buildNodes,
         persistUpload,
+        persistMrsPrognosisFromRun,
         normalizeModalityList,
         clinicalPathForModalities,
         buildClinicalDag,

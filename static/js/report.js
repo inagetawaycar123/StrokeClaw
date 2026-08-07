@@ -1,4 +1,22 @@
 const { useState, useEffect } = React; // AI辅助生成：GLM-5, 2026-04-23
+const ACUTE_IMAGING_UI = (() => {
+    if (typeof window !== 'undefined' && window.StrokeClawImagingResults) return window.StrokeClawImagingResults;
+    if (typeof require === 'function') {
+        try { return require('./imaging_results.js'); } catch (_error) { return null; }
+    }
+    return null;
+})();
+const MRS_PROGNOSIS_UI = (() => {
+    if (typeof window !== 'undefined' && window.StrokeClawMrsPrognosis) return window.StrokeClawMrsPrognosis;
+    if (typeof require === 'function') {
+        try { return require('./mrs_prognosis.js'); } catch (_error) { return null; }
+    }
+    return null;
+})();
+
+function firstDefined(...values) {
+    return values.find((value) => value !== null && value !== undefined && value !== '');
+}
 
 const PatientInfoModule = ({ data, isEditing, onUpdate }) => {
     if (!data) {
@@ -381,14 +399,403 @@ function withPerfusionFindingFallback(findings, metrics) {
     ));
 }
 
-const StructuredReportV2View = ({ report, legacyText, runId, fileId, patientId }) => {
+function buildReportAcuteFallback(sourceValue) {
+    const source = sourceValue && typeof sourceValue === 'object' ? sourceValue : {};
+    return {
+        perfusion: {
+            status: source.perfusion_status || source.analysis_status,
+            core_infarct_volume: firstDefined(source.core_volume, source.core_infarct_volume, source.sections?.ctp?.core_infarct_volume),
+            penumbra_volume: firstDefined(source.penumbra_volume, source.sections?.ctp?.penumbra_volume),
+            mismatch_ratio: firstDefined(source.mismatch_ratio, source.sections?.ctp?.mismatch_ratio),
+            has_mismatch: source.has_mismatch,
+            safety_gate: source.safety_gate || source.three_class_result?.safety_gate,
+            source: source.perfusion_source || 'CTPAnalysisAgent',
+        },
+        ncct: source.three_class_result || {
+            status: source.three_class_status,
+            three_class_label: source.three_class_label,
+            three_class_label_cn: source.three_class_label_cn,
+            three_class_confidence: source.three_class_confidence,
+            class_counts: source.three_class_counts,
+            total_slices: source.three_class_total_slices,
+            safety_gate: source.safety_gate,
+        },
+        vessel: source.vessel_occlusion_result || {
+            status: source.vessel_occlusion_status,
+            vessel_occlusion_class_result: source.vessel_occlusion_class_result,
+            confidence: source.vessel_occlusion_confidence,
+            predicted_class: source.vessel_occlusion_predicted_class,
+            class_counts: source.vessel_occlusion_class_counts,
+            valid_predictions: source.vessel_occlusion_valid_predictions,
+            input_phases: source.available_modalities,
+            source: source.vessel_occlusion_source,
+        },
+    };
+}
+
+function getReportAcuteImaging(report, fallback) {
+    if (!ACUTE_IMAGING_UI) return null;
+    return ACUTE_IMAGING_UI.fromStructuredReport(report, buildReportAcuteFallback(fallback));
+}
+
+function unifiedStatusLabel(status) {
+    return {
+        completed: '已完成',
+        skipped: '已跳过',
+        failed: '失败',
+        unavailable: '未生成',
+    }[status] || '未生成';
+}
+
+function unifiedCountsText(counts) {
+    const safe = counts && typeof counts === 'object' && !Array.isArray(counts) ? counts : {};
+    const entries = Object.entries(safe).filter(([, value]) => Number.isFinite(Number(value)));
+    return entries.length ? entries.map(([key, value]) => `${key} ${Number(value)}`).join(' · ') : '未提供';
+}
+
+function renderUnifiedFact(h, label, value, tone) {
+    return h('div', { className: `unified-model-fact ${tone || ''}` },
+        h('span', null, label),
+        h('strong', null, value == null || value === '' ? '未生成' : String(value))
+    );
+}
+
+function renderUnifiedStatus(h, status) {
+    return h('span', { className: `unified-model-status ${status || 'unavailable'}` }, unifiedStatusLabel(status));
+}
+
+function renderUnifiedModelCard(h, options) {
+    const details = Array.isArray(options.details) ? options.details.filter((item) => item && item.value != null && item.value !== '') : [];
+    const limitations = Array.isArray(options.limitations) ? options.limitations.filter(Boolean) : [];
+    return h('article', {
+        className: `unified-model-card ${options.tone || 'neutral'} ${options.status || 'unavailable'} ${options.fullWidth ? 'full-width' : ''}`,
+        key: options.key,
+    },
+    h('header', { className: 'unified-model-header' },
+        h('div', null,
+            h('span', { className: 'unified-model-kicker' }, options.kicker || '模型结果'),
+            h('h4', null, options.title)
+        ),
+        h('div', { className: 'unified-model-badges' },
+            ...(Array.isArray(options.badges) ? options.badges.map((badge, index) => h('span', { className: `unified-model-badge ${badge.tone || ''}`, key: `${options.key}-badge-${index}` }, badge.label)) : []),
+            renderUnifiedStatus(h, options.status)
+        )
+    ),
+    h('div', { className: 'unified-model-primary' },
+        h('strong', null, options.primary || '未生成'),
+        options.summary ? h('p', null, options.summary) : null
+    ),
+    options.facts?.length
+        ? h('div', { className: 'unified-model-facts' }, options.facts.map((fact, index) => h(React.Fragment, { key: `${options.key}-fact-${index}` }, renderUnifiedFact(h, fact.label, fact.value, fact.tone))))
+        : null,
+    options.bar || null,
+    details.length
+        ? h('div', { className: 'unified-model-details' }, details.map((item, index) => renderUnifiedFact(h, item.label, item.value, item.tone)))
+        : null,
+    options.extra || null,
+    limitations.length
+        ? h('div', { className: 'unified-model-limitations' },
+            h('strong', null, '限制与复核提示'),
+            h('ul', null, limitations.map((item, index) => h('li', { key: `${options.key}-limitation-${index}` }, item)))
+        )
+        : null,
+    h('footer', { className: 'unified-model-footer' },
+        h('span', null, `来源：${options.source || '未记录'}`),
+        h('span', null, `医生审核：${reportStatusText(options.reviewStatus || 'pending')}`)
+    ));
+}
+
+function renderAcuteImagingCards(h, acute) {
+    if (!acute || !ACUTE_IMAGING_UI) return [];
+    const perfusion = acute.perfusion;
+    const ncct = acute.ncct;
+    const vessel = acute.vessel;
+    const modalityChips = acute.modalities.length
+        ? h('div', { className: 'unified-modality-chips' }, acute.modalities.map((item) => h('span', { key: item.id }, item.label)))
+        : null;
+    const confidenceBar = (value, label) => {
+        const width = value == null ? 0 : Math.max(0, Math.min(100, value * 100));
+        return h('div', { className: 'unified-confidence' },
+            h('div', null, h('span', null, label), h('strong', null, ACUTE_IMAGING_UI.formatConfidence(value))),
+            h('div', { className: 'unified-confidence-track', 'aria-hidden': 'true' }, h('span', { style: { width: `${width}%` } }))
+        );
+    };
+    const perfusionTone = perfusion.status === 'completed'
+        ? (perfusion.mismatchEvaluation.status === 'attention' ? 'attention' : perfusion.coreEvaluation.status === 'met' ? 'normal' : 'neutral')
+        : perfusion.status;
+    return [
+        renderUnifiedModelCard(h, {
+            key: 'perfusion', kicker: '灌注定量', title: '缺血核心与半暗带', status: perfusion.status, tone: perfusionTone,
+            primary: perfusion.status === 'completed' ? (perfusion.mismatchStatus || '灌注定量已完成') : unifiedStatusLabel(perfusion.status),
+            summary: perfusion.summary,
+            facts: [
+                { label: '核心梗死体积', value: ACUTE_IMAGING_UI.formatVolume(perfusion.core), tone: perfusion.coreEvaluation.status },
+                { label: '半暗带体积', value: ACUTE_IMAGING_UI.formatVolume(perfusion.penumbra) },
+                { label: '不匹配比值', value: ACUTE_IMAGING_UI.formatRatio(perfusion.mismatch), tone: perfusion.mismatchEvaluation.status },
+            ],
+            details: [
+                { label: '核心内部参考', value: perfusion.core == null ? '< 70 mL' : `${perfusion.coreEvaluation.label}（< 70 mL）` },
+                { label: '不匹配内部提示', value: perfusion.mismatch == null ? '> 1.80' : `${perfusion.mismatchEvaluation.label}（> 1.80）` },
+            ],
+            extra: modalityChips,
+            limitations: perfusion.limitations,
+            source: perfusion.source,
+            reviewStatus: perfusion.reviewStatus,
+        }),
+        renderUnifiedModelCard(h, {
+            key: 'ncct', kicker: 'NCCT 三分类', title: '出血 / 缺血排查', status: ncct.status, tone: ncct.tone,
+            primary: ncct.label || unifiedStatusLabel(ncct.status),
+            summary: ncct.status === 'completed' ? `分类置信度 ${ACUTE_IMAGING_UI.formatConfidence(ncct.confidence)}。` : (ncct.limitations[0] || '未获得有效 NCCT 三分类结果。'),
+            bar: confidenceBar(ncct.confidence, '分类置信度'),
+            facts: [
+                { label: '分类结果', value: ncct.label || '未生成', tone: ncct.tone },
+                { label: '切片总数', value: ncct.totalSlices == null ? '未提供' : ncct.totalSlices },
+                { label: '安全门控', value: ncct.safetyGate?.blocked ? `已阻断：${ncct.safetyGate.reason || '疑似出血'}` : '未触发' },
+            ],
+            details: [{ label: '类别计数', value: unifiedCountsText(ncct.classCounts) }],
+            limitations: ncct.limitations,
+            source: ncct.source,
+            reviewStatus: ncct.reviewStatus,
+        }),
+        renderUnifiedModelCard(h, {
+            key: 'vessel', kicker: '血管闭塞三分类', title: '闭塞等级识别', status: vessel.status, tone: vessel.tone,
+            primary: vessel.label || unifiedStatusLabel(vessel.status),
+            summary: vessel.status === 'completed' ? `分类置信度 ${ACUTE_IMAGING_UI.formatConfidence(vessel.confidence)}。` : (vessel.limitations[0] || '未获得有效血管闭塞分类结果。'),
+            bar: confidenceBar(vessel.confidence, '分类置信度'),
+            facts: [
+                { label: '分类结果', value: vessel.label || '未生成', tone: vessel.tone },
+                { label: '有效预测数', value: vessel.validPredictions == null ? '未提供' : vessel.validPredictions },
+                { label: '输入期相', value: vessel.inputPhases.length ? vessel.inputPhases.join('、') : '未提供' },
+            ],
+            details: [{ label: '类别计数', value: unifiedCountsText(vessel.classCounts) }],
+            limitations: vessel.limitations,
+            source: vessel.source,
+            reviewStatus: vessel.reviewStatus,
+        }),
+    ];
+}
+
+function getReportMrsPrognosis(report, fallback) {
+    if (!MRS_PROGNOSIS_UI) return null;
+    const source = report?.prognosis_assessment || fallback || null;
+    return MRS_PROGNOSIS_UI.normalizeMrsPrognosisResult(source);
+}
+
+function renderLegacyMrsPrognosisReportSection(h, prognosis) {
+    if (!prognosis) return null;
+    if (!prognosis.available) {
+        return h('section', { className: 'report-section mrs-report-section unavailable' },
+            h('div', { className: 'section-heading' },
+                h('h3', null, '90 天功能预后预测'),
+                h('span', { className: 'mrs-report-research-badge' }, '研究性 MVP')
+            ),
+            h('div', { className: 'empty-state' }, prognosis.reason || '当前病例未生成有效的 90 天 mRS 预测。'),
+            h('p', { className: 'mrs-report-disclaimer' }, '未生成状态不会被替换为 0% 或启发式概率，也不新增阻塞性的医生必审分段。')
+        );
+    }
+
+    const prediction = prognosis.prediction;
+    const confidence = prognosis.confidence;
+    const confidenceLabel = MRS_PROGNOSIS_UI.confidenceLabel(confidence.level);
+    const clinicalItems = prognosis.clinicalEvidence.map((item) => {
+        const direction = item.direction === 'increase_poor_prognosis_risk'
+            ? '与较高不良预后风险相关'
+            : item.direction === 'decrease_poor_prognosis_risk'
+                ? '与较低不良预后风险相关'
+                : '关联方向中性';
+        return `${item.displayName}${item.value == null ? '' : `（值 ${item.value}）`}：${direction}`;
+    });
+    const imagingItems = prognosis.imagingEvidence.map((item) => (
+        `${item.regionLabel}${item.attentionScore == null ? '' : `（关注权重 ${MRS_PROGNOSIS_UI.formatProbability(item.attentionScore)}）`}：${item.interpretation}`
+    ));
+    const qualityItems = [
+        ...prognosis.missingClinicalFields.map((item) => `缺失临床字段：${item}`),
+        ...prognosis.imageQualityWarnings.map((item) => `图像质量提示：${item}`),
+        ...(prognosis.fallbackUsed ? [`已降级评估：${prognosis.fallbackReason || '24小时更新模型不可用'}`] : []),
+    ];
+    const list = (title, items) => h('div', { className: 'mrs-report-detail-card' },
+        h('strong', null, title),
+        items.length
+            ? h('ul', null, items.map((item, index) => h('li', { key: `${title}-${index}` }, item)))
+            : h('p', null, '未提供')
+    );
+
+    return h('section', { className: `report-section mrs-report-section ${MRS_PROGNOSIS_UI.prognosisTone(prognosis)}` },
+        h('div', { className: 'section-heading' },
+            h('h3', null, '90 天功能预后预测'),
+            h('div', { className: 'mrs-report-heading-badges' },
+                h('span', { className: 'mrs-report-mode-badge' }, prognosis.displayMode),
+                h('span', { className: 'mrs-report-research-badge' }, '研究性 MVP')
+            )
+        ),
+        h('div', { className: 'mrs-report-summary' },
+            h('div', null,
+                h('span', { className: 'mrs-report-kicker' }, prediction.classRange),
+                h('strong', { className: 'mrs-report-class' }, prediction.classLabel),
+                h('p', null, prognosis.deterministicSummary)
+            ),
+            h('div', { className: 'mrs-report-facts' },
+                h('div', null, h('span', null, '模型置信度'), h('strong', { className: `confidence-${MRS_PROGNOSIS_UI.confidenceTone(confidence.level)}` }, confidenceLabel)),
+                h('div', null, h('span', null, '决策阈值'), h('strong', null, MRS_PROGNOSIS_UI.formatProbability(prediction.decisionThreshold))),
+                h('div', null, h('span', null, '外部验证'), h('strong', null, prognosis.model.externalValidationCompleted ? '已完成' : '未完成')),
+                h('div', null, h('span', null, '生产批准'), h('strong', null, prognosis.model.productionApproved ? '已批准' : '未批准'))
+            )
+        ),
+        h('div', { className: 'mrs-report-probability-bar', 'aria-label': '90 天 mRS 两组预测概率' },
+            h('span', { className: 'mrs-report-good-bar', style: { width: `${prediction.goodProbability * 100}%` } }),
+            h('span', { className: 'mrs-report-poor-bar', style: { width: `${prediction.poorRisk * 100}%` } }),
+            h('span', {
+                className: 'mrs-report-threshold-marker',
+                style: { left: `${(1 - prediction.decisionThreshold) * 100}%` },
+                title: `mRS 3-6 判定阈值 ${MRS_PROGNOSIS_UI.formatProbability(prediction.decisionThreshold)}`,
+            })
+        ),
+        h('div', { className: 'mrs-report-probability-values' },
+            h('span', null, '良好预后（mRS 0–2）', h('strong', null, MRS_PROGNOSIS_UI.formatProbability(prediction.goodProbability))),
+            h('span', null, '不良预后风险（mRS 3–6）', h('strong', null, MRS_PROGNOSIS_UI.formatProbability(prediction.poorRisk)))
+        ),
+        h('div', { className: 'mrs-report-detail-grid' },
+            h('div', { className: 'mrs-report-detail-card' },
+                h('strong', null, '模型可靠性信息'),
+                h('p', null, `阈值距离：${confidence.thresholdMargin == null ? '--' : confidence.thresholdMargin.toFixed(3)}`),
+                h('p', null, `集成标准差：${confidence.ensembleStd == null ? '--' : confidence.ensembleStd.toFixed(3)}`),
+                h('p', null, `概率校准：${prediction.probabilityCalibrated ? '是' : '未确认'}`),
+                h('p', null, `模型版本：${prognosis.model.modelVersion || prognosis.model.bundleVersion || '--'}`),
+                confidence.reasons.length ? h('ul', null, confidence.reasons.map((item, index) => h('li', { key: `confidence-${index}` }, item))) : null
+            ),
+            list('主要临床影响因素', clinicalItems),
+            list('影像关注摘要', imagingItems),
+            list('数据质量', qualityItems),
+            list('医生复核建议', prognosis.reviewItems)
+        ),
+        h('div', { className: 'mrs-report-safety-note' },
+            h('strong', null, '使用限制'),
+            h('p', null, prognosis.attributionNotice),
+            h('ul', null, (prognosis.limitations.length ? prognosis.limitations : [
+                '该输出只表示 mRS 0-2 与 mRS 3-6 两组概率，不代表具体 mRS 分数。',
+                '该结果不改变本报告顶部急性期风险、紧急程度或治疗建议。',
+            ]).map((item, index) => h('li', { key: `limitation-${index}` }, item)))
+        )
+    );
+}
+
+function renderMrsPrognosisReportSection(h, prognosis) {
+    const unavailable = !prognosis || !prognosis.available;
+    if (unavailable) {
+        return renderUnifiedModelCard(h, {
+            key: 'mrs-prognosis',
+            kicker: '90 天功能预后预测',
+            title: '研究性功能预后评估',
+            status: 'unavailable',
+            tone: 'neutral',
+            fullWidth: true,
+            badges: [{ label: '研究性 MVP', tone: 'research' }],
+            primary: '未生成',
+            summary: prognosis?.reason || '当前病例未生成有效的 90 天 mRS 预测。',
+            limitations: [
+                '未生成状态不会被替换为 0% 或启发式概率。',
+                '该结果不改变报告顶部急性期风险、紧急程度或治疗建议。',
+            ],
+            source: 'mRS Prognosis Agent',
+            reviewStatus: 'not_applicable',
+        });
+    }
+
+    const prediction = prognosis.prediction;
+    const confidence = prognosis.confidence;
+    const confidenceLabel = MRS_PROGNOSIS_UI.confidenceLabel(confidence.level);
+    const clinicalItems = prognosis.clinicalEvidence.map((item) => {
+        const direction = item.direction === 'increase_poor_prognosis_risk'
+            ? '与较高不良预后风险相关'
+            : item.direction === 'decrease_poor_prognosis_risk'
+                ? '与较低不良预后风险相关'
+                : '关联方向中性';
+        return `${item.displayName}${item.value == null ? '' : `（值 ${item.value}）`}：${direction}`;
+    });
+    const imagingItems = prognosis.imagingEvidence.map((item) => (
+        `${item.regionLabel}${item.attentionScore == null ? '' : `（关注权重 ${MRS_PROGNOSIS_UI.formatProbability(item.attentionScore)}）`}：${item.interpretation}`
+    ));
+    const qualityItems = [
+        ...prognosis.missingClinicalFields.map((item) => `缺失临床字段：${item}`),
+        ...prognosis.imageQualityWarnings.map((item) => `图像质量提示：${item}`),
+        ...(prognosis.fallbackUsed ? [`已降级评估：${prognosis.fallbackReason || '24小时更新模型不可用'}`] : []),
+    ];
+    const detailList = (title, items) => h('div', { className: 'unified-model-list' },
+        h('strong', null, title),
+        items.length
+            ? h('ul', null, items.map((item, index) => h('li', { key: `${title}-${index}` }, item)))
+            : h('p', null, '未提供')
+    );
+    const probabilityBar = h(React.Fragment, null,
+        h('div', { className: 'unified-mrs-probability-bar', 'aria-label': '90 天 mRS 两组预测概率' },
+            h('span', { className: 'good', style: { width: `${prediction.goodProbability * 100}%` } }),
+            h('span', { className: 'poor', style: { width: `${prediction.poorRisk * 100}%` } }),
+            h('span', {
+                className: 'threshold',
+                style: { left: `${(1 - prediction.decisionThreshold) * 100}%` },
+                title: `mRS 3-6 判定阈值 ${MRS_PROGNOSIS_UI.formatProbability(prediction.decisionThreshold)}`,
+            })
+        ),
+        h('div', { className: 'unified-mrs-probability-values' },
+            h('span', null, '良好预后（mRS 0–2）', h('strong', null, MRS_PROGNOSIS_UI.formatProbability(prediction.goodProbability))),
+            h('span', null, '不良预后风险（mRS 3–6）', h('strong', null, MRS_PROGNOSIS_UI.formatProbability(prediction.poorRisk)))
+        )
+    );
+    const reliabilityItems = [
+        `阈值距离：${confidence.thresholdMargin == null ? '--' : confidence.thresholdMargin.toFixed(3)}`,
+        `集成标准差：${confidence.ensembleStd == null ? '--' : confidence.ensembleStd.toFixed(3)}`,
+        `概率校准：${prediction.probabilityCalibrated ? '是' : '未确认'}`,
+        `模型版本：${prognosis.model.modelVersion || prognosis.model.bundleVersion || '--'}`,
+        ...confidence.reasons,
+    ];
+    return renderUnifiedModelCard(h, {
+        key: 'mrs-prognosis',
+        kicker: '90 天功能预后预测',
+        title: '研究性功能预后评估',
+        status: 'completed',
+        tone: MRS_PROGNOSIS_UI.prognosisTone(prognosis),
+        fullWidth: true,
+        badges: [
+            { label: prognosis.displayMode, tone: 'mode' },
+            { label: '研究性 MVP', tone: 'research' },
+        ],
+        primary: `${prediction.classRange} · ${prediction.classLabel}`,
+        summary: prognosis.deterministicSummary,
+        facts: [
+            { label: '模型置信度', value: confidenceLabel, tone: `confidence-${MRS_PROGNOSIS_UI.confidenceTone(confidence.level)}` },
+            { label: '决策阈值', value: MRS_PROGNOSIS_UI.formatProbability(prediction.decisionThreshold) },
+            { label: '外部验证', value: prognosis.model.externalValidationCompleted ? '已完成' : '未完成' },
+            { label: '生产批准', value: prognosis.model.productionApproved ? '已批准' : '未批准' },
+        ],
+        bar: probabilityBar,
+        extra: h('div', { className: 'unified-model-list-grid' },
+            detailList('模型可靠性信息', reliabilityItems),
+            detailList('主要临床影响因素', clinicalItems),
+            detailList('影像关注摘要', imagingItems),
+            detailList('数据质量', qualityItems),
+            detailList('医生复核建议', prognosis.reviewItems)
+        ),
+        limitations: Array.from(new Set([
+            prognosis.attributionNotice,
+            ...(prognosis.limitations.length ? prognosis.limitations : [
+                '该输出只表示 mRS 0-2 与 mRS 3-6 两组概率，不代表具体 mRS 分数。',
+                '该结果不改变本报告顶部急性期风险、紧急程度或治疗建议。',
+            ]),
+        ].filter(Boolean))),
+        source: `mRS Prognosis Agent · ${prognosis.model.modelVersion || prognosis.model.bundleVersion || '未记录版本'}`,
+        reviewStatus: prognosis.reviewStatus || 'pending',
+    });
+}
+
+const StructuredReportV2View = ({ report, legacyText, runId, fileId, patientId, mrsFallback, acuteFallback }) => {
     const h = React.createElement;
     const summary = getStructuredReportSummary(report);
     const meta = report.report_meta || {};
     const fields = Array.isArray(report.patient_summary?.fields) ? report.patient_summary.fields : [];
     const metrics = Array.isArray(report.quantitative_metrics) ? report.quantitative_metrics : [];
     const rawImaging = Array.isArray(report.imaging_findings) ? report.imaging_findings : [];
-    const imaging = withPerfusionFindingFallback(rawImaging, metrics);
+    const acute = getReportAcuteImaging(report, acuteFallback);
+    const prognosis = getReportMrsPrognosis(report, mrsFallback);
     const rules = Array.isArray(report.rule_evaluations) ? report.rule_evaluations : [];
     const claims = Array.isArray(report.evidence_chain) ? report.evidence_chain : [];
     const evidence = Array.isArray(report.evidence_catalog) ? report.evidence_catalog : [];
@@ -503,34 +910,17 @@ const StructuredReportV2View = ({ report, legacyText, runId, fileId, patientId }
                 )
             ))
         ),
-        h('section', { className: 'report-section' },
-            h('div', { className: 'section-heading' }, h('h3', null, '关键定量指标')),
-            h('div', { className: 'metric-grid' }, metrics.map((metric) =>
-                h('article', { className: `metric-card ${metric.status}`, key: metric.metric_id },
-                    h('span', { className: 'metric-name' }, metric.display_name),
-                    h('strong', { className: 'metric-value' }, reportValue(metric.value, metric.unit)),
-                    metric.reference_value !== null && metric.reference_value !== undefined
-                        ? h('small', null, `内部参考：${metric.reference_operator || ''} ${reportValue(metric.reference_value, metric.unit)}`)
-                        : h('small', null, '未设置判断阈值'),
-                    statusBadge(metric.evaluation === 'above_threshold' || metric.evaluation === 'below_threshold' ? 'met' : metric.status)
+        h('section', { className: 'report-section unified-model-section' },
+            h('div', { className: 'section-heading' },
+                h('div', null,
+                    h('h3', null, '模型量化与预测结果'),
+                    h('p', { className: 'section-description' }, '急性期影像模型与研究性预后模型采用统一展示结构，指标医学含义保持独立。')
                 )
-            ))
-        ),
-        h('section', { className: 'report-section' },
-            h('div', { className: 'section-heading' }, h('h3', null, '影像与模型结果')),
-            h('div', { className: 'finding-grid' }, imaging.map((item) =>
-                h('article', { className: 'finding-card', key: item.finding_id },
-                    h('div', { className: 'finding-heading' }, h('strong', null, item.display_name), statusBadge(item.status)),
-                    h('div', { className: 'finding-value' },
-                        item.value
-                        || (item.status === 'skipped' ? (item.limitations?.[0] || '已由安全门控跳过')
-                            : item.status === 'not_run' ? '未运行'
-                                : '未获得模型结果')
-                    ),
-                    h('p', null, `来源：${item.source_module || '未知'} · 置信度：${item.confidence == null ? '未提供' : `${(Number(item.confidence) * 100).toFixed(1)}%`}`),
-                    item.limitations?.length ? h('p', { className: 'finding-limit' }, item.limitations.join('；')) : null
-                )
-            ))
+            ),
+            h('div', { className: 'unified-model-grid' },
+                ...renderAcuteImagingCards(h, acute),
+                renderMrsPrognosisReportSection(h, prognosis)
+            )
         ),
         h('section', { className: 'report-section' },
             h('div', { className: 'section-heading' }, h('h3', null, '规则评估')),
@@ -848,10 +1238,23 @@ const StructuredReport = ({ patientId, fileId, runId, analysisData }) => {
         question_answer: (reportPayload && reportPayload.question_answer) || (analysisData && analysisData.question_answer) || null,
         goal_question: (reportPayload && (reportPayload.goal_question || reportPayload.question)) || (analysisData && analysisData.goal_question) || '',
         three_class_label_cn: firstPresent(analysisData?.three_class_label_cn, reportPayload?.three_class_label_cn),
+        three_class_status: firstPresent(analysisData?.three_class_status, reportPayload?.three_class_status),
+        three_class_confidence: firstPresent(analysisData?.three_class_confidence, reportPayload?.three_class_confidence),
+        three_class_result: firstPresent(analysisData?.three_class_result, reportPayload?.three_class_result),
+        three_class_counts: firstPresent(analysisData?.three_class_counts, reportPayload?.three_class_counts),
+        three_class_total_slices: firstPresent(analysisData?.three_class_total_slices, reportPayload?.three_class_total_slices),
         vessel_occlusion_status: mergedVesselData.status,
         vessel_occlusion_class_result: mergedVesselData.label,
         vessel_occlusion_confidence: mergedVesselData.confidence,
+        available_modalities: firstPresent(analysisData?.available_modalities, reportPayload?.available_modalities, reportPayload?.modalities) || [],
     };
+    const mrsFallback = firstPresent(
+        reportPayload?.mrs_prognosis_result,
+        reportPayload?.prognosis_assessment,
+        analysisData?.mrs_prognosis_result,
+        analysisData?.prognosis_assessment,
+    ) || null;
+    const acuteFallback = mergedAnalysisData;
     
     const handlePatientUpdate = (field, value) => {
         setPatient((prev) => (prev ? { ...prev, [field]: value } : null));
@@ -945,11 +1348,27 @@ const StructuredReport = ({ patientId, fileId, runId, analysisData }) => {
                     runId: runId,
                     fileId: fileId,
                     patientId: patientId,
+                    mrsFallback: mrsFallback,
+                    acuteFallback: acuteFallback,
                 })
                 : React.createElement(React.Fragment, null,
                     React.createElement("div", { className: "legacy-banner" }, "当前为旧版报告展示，结构化证据链不可用。"),
                     React.createElement(PatientInfoModule, { data: patient, isEditing: isEditing, onUpdate: handlePatientUpdate }),
-                    React.createElement(ImageFindingsModule, { data: mergedAnalysisData || null, findings: findings, isEditing: isEditing, onUpdate: handleFindingsUpdate }),
+                    React.createElement('section', { className: 'report-section unified-model-section' },
+                        React.createElement('div', { className: 'section-heading' },
+                            React.createElement('div', null,
+                                React.createElement('h3', null, '模型量化与预测结果'),
+                                React.createElement('p', { className: 'section-description' }, '当前为旧版报告数据，结果按统一展示模型安全降级。')
+                            )
+                        ),
+                        React.createElement('div', { className: 'unified-model-grid' },
+                            ...renderAcuteImagingCards(React.createElement, getReportAcuteImaging(null, acuteFallback)),
+                            renderMrsPrognosisReportSection(
+                                React.createElement,
+                                getReportMrsPrognosis(null, mrsFallback),
+                            )
+                        )
+                    ),
                     !hasLegacyAnalysis
                         ? React.createElement("div", { className: "report-module empty-state" },
                             React.createElement("h3", null, "请先完成脑卒中分析"),
@@ -1000,6 +1419,13 @@ if (typeof module !== 'undefined' && module.exports) {
         reportValue,
         getStructuredReportSummary,
         withPerfusionFindingFallback,
+        getReportMrsPrognosis,
+        buildReportAcuteFallback,
+        getReportAcuteImaging,
+        unifiedStatusLabel,
+        renderAcuteImagingCards,
+        renderMrsPrognosisReportSection,
+        renderUnifiedModelCard,
     };
 }
 

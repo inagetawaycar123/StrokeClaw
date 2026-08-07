@@ -244,6 +244,99 @@ def test_cockpit_refresh_recovers_same_mrs_result():
     assert first_node["output_payload"] == second_node["output_payload"] == result
 
 
+def test_current_run_mrs_result_and_tool_output_outrank_stale_report_payload():
+    current = _inference("update_24h")
+    current.update(
+        {
+            "status": "completed",
+            "result_mode": "update_24h",
+            "display_mode": "24小时更新评估",
+        }
+    )
+    stale = _inference("baseline")
+    stale.update(
+        {
+            "status": "completed",
+            "result_mode": "baseline",
+            "display_mode": "首诊初步评估",
+        }
+    )
+    run = {
+        "result": {
+            "report_result": {
+                "report_payload": {"mrs_prognosis_result": stale}
+            }
+        },
+        "tool_results": [
+            {
+                "tool_name": "run_mrs_prognosis_prediction",
+                "status": "completed",
+                "structured_output": current,
+            }
+        ],
+    }
+
+    resolved = app_module._resolve_mrs_prognosis_result(run=run)
+
+    assert resolved["result_mode"] == "update_24h"
+    assert resolved["prediction"]["poor_prognosis_risk"] == 0.7
+
+
+def test_report_context_uses_current_run_mrs_before_stale_report_payload(monkeypatch):
+    run_id = "run-report-context-mrs"
+    current = _inference("update_24h")
+    current.update(
+        {
+            "status": "completed",
+            "result_mode": "update_24h",
+            "display_mode": "24小时更新评估",
+        }
+    )
+    stale = _inference("baseline")
+    stale.update(
+        {
+            "status": "completed",
+            "result_mode": "baseline",
+            "display_mode": "首诊初步评估",
+        }
+    )
+    app_module._create_agent_run(
+        run_id=run_id,
+        patient_id=7,
+        file_id="case-report-context",
+        available_modalities=["ncct"],
+    )
+
+    def prepare(run):
+        run["result"] = {
+            "mrs_prognosis_result": current,
+            "report_result": {
+                "report": "synthetic report",
+                "report_payload": {"mrs_prognosis_result": stale},
+            },
+        }
+
+    app_module._update_agent_run(run_id, prepare)
+    monkeypatch.setattr(app_module, "get_patient_by_id", lambda _patient_id: {})
+    monkeypatch.setattr(
+        app_module,
+        "get_imaging_by_case",
+        lambda _patient_id, _file_id: {"analysis_result": {}},
+    )
+
+    payload = app_module.app.test_client().get(
+        f"/api/report/context?run_id={run_id}"
+    ).get_json()
+
+    assert payload["success"] is True
+    assert payload["report_payload"]["mrs_prognosis_result"]["result_mode"] == (
+        "update_24h"
+    )
+    assert payload["structured_report"]["prognosis_assessment"]["prediction"][
+        "poor_prognosis_risk"
+    ] == 0.7
+
+
 def test_historical_case_does_not_fabricate_mrs_completion(monkeypatch):
     monkeypatch.setattr(
         app_module,
@@ -274,7 +367,7 @@ def test_frontend_formats_null_as_dash_and_exposes_required_fields():
     ).read_text(encoding="utf-8")
     assert 'value === null || value === undefined' in processing
     assert 'value === null || value === undefined' in cockpit
-    assert "processing.js?v=20260806_mrs_compact" in processing_template
+    assert "processing.js?v=20260807_mrs_display_v1" in processing_template
     assert "cockpit.js?v=20260806_mrs_compact" in cockpit_template
     for label in (
         "良好预后概率",

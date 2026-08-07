@@ -52,7 +52,7 @@ def _classification(*, blocked=False):
     }
 
 
-def _seed_report_run(run_id="run-human", *, blocked=False):
+def _seed_report_run(run_id="run-human", *, blocked=False, mrs_result=None):
     app_module._create_agent_run(
         run_id=run_id,
         patient_id=101,
@@ -83,6 +83,10 @@ def _seed_report_run(run_id="run-human", *, blocked=False):
             },
         },
     }
+    if isinstance(mrs_result, dict):
+        report_output["report_payload"]["mrs_prognosis_result"] = copy.deepcopy(
+            mrs_result
+        )
 
     def _prepare(run):
         run["status"] = "running"
@@ -217,6 +221,57 @@ def test_report_completion_pauses_run_at_waiting_human_node():
     review_payload = review_response.get_json()
     assert review_payload["run_status"] == "paused_review_required"
     assert review_payload["can_enter_viewer"] is False
+
+
+def test_completed_mrs_adds_independent_review_section_but_missing_mrs_does_not():
+    mrs_result = {
+        "status": "completed",
+        "result_mode": "baseline",
+        "display_mode": "首诊初步评估",
+        "prediction": {
+            "good_prognosis_probability": 0.68,
+            "poor_prognosis_risk": 0.32,
+            "predicted_class": 0,
+            "class_name": "mRS 0-2 / 良好预后",
+            "decision_threshold": 0.55,
+            "probability_calibrated": True,
+        },
+        "confidence": {
+            "level": "medium",
+            "ensemble_std": 0.03,
+            "threshold_margin": 0.23,
+            "reasons": [],
+        },
+        "key_evidence": {"clinical": [], "imaging": []},
+        "data_quality": {
+            "missing_clinical_fields": [],
+            "image_quality_warnings": [],
+        },
+        "doctor_review_recommendation": {
+            "review_level": "routine_review",
+            "items": ["请结合临床资料复核。"],
+        },
+        "model": {
+            "external_validation_completed": False,
+            "production_approved": False,
+        },
+    }
+    with_mrs = _pause_at_human_node(
+        _seed_report_run("run-human-mrs", mrs_result=mrs_result)
+    )
+    without_mrs = _pause_at_human_node(_seed_report_run("run-human-no-mrs"))
+
+    with_ids = [item["section_id"] for item in with_mrs["review_state"]["sections"]]
+    without_ids = [item["section_id"] for item in without_mrs["review_state"]["sections"]]
+    assert "prognosis_assessment" in with_ids
+    assert "prognosis_assessment" not in without_ids
+    prognosis_section = next(
+        item
+        for item in with_mrs["review_state"]["sections"]
+        if item["section_id"] == "prognosis_assessment"
+    )
+    assert "68.0%" in prognosis_section["draft_text"]
+    assert "不代表具体 mRS 分数" in prognosis_section["draft_text"]
 
 
 def test_completion_requires_all_sections_and_is_idempotent():

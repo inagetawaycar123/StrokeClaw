@@ -19,8 +19,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import requests
 
 try:
+    from .mrs_display import mrs_prompt_context
     from .vessel_context import vessel_result_from_sources
 except ImportError:  # pragma: no cover - direct-script compatibility
+    from mrs_display import mrs_prompt_context
     from vessel_context import vessel_result_from_sources
 
 
@@ -319,6 +321,9 @@ def _prompt_context(
             "penumbra_volume_ml": None if gate_blocked else penumbra,
             "mismatch_ratio": None if gate_blocked else mismatch,
         },
+        "mrs_90_day_prognosis": mrs_prompt_context(
+            structured_data.get("mrs_prognosis_result")
+        ),
         "clinical_question": _redact_known_identifiers(
             _first_present(
                 structured_data.get("question"),
@@ -338,6 +343,8 @@ def _build_prompt(context: Dict[str, Any], output_format: str) -> str:
         f"输出格式：{requested}。\n"
         "要求：只使用已提供的算法和临床字段；缺失内容必须明确写为“未提供/不可用”；"
         "不得推断原始影像中未被算法确认的征象；不得给出确定性治疗指令；"
+        "90天mRS仅可描述mRS 0-2与mRS 3-6两组概率，不得推断具体mRS分数，"
+        "不得将概率描述为确定结局，不得据此直接生成治疗决策，也不得宣称已经完成临床外部验证；"
         "结尾必须提示医生结合原始影像和临床资料复核。\n"
         "结构化数据：\n"
         + json.dumps(context, ensure_ascii=False, separators=(",", ":"))
@@ -532,6 +539,9 @@ def _build_report_payload(
             structured_data.get("quality_control_result")
             or structured_data.get("quality_control")
             or {}
+        ),
+        "mrs_prognosis_result": copy.deepcopy(
+            structured_data.get("mrs_prognosis_result") or {}
         ),
         "combo": combo,
         "sections": {
