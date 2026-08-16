@@ -1,0 +1,33 @@
+{
+  "feature_schema_version": "mrs-v0.2",
+  "label": {
+    "source_column": "90 Day MRS",
+    "class_0": "mRS 0-2 / good prognosis",
+    "class_1": "mRS 3-6 / poor prognosis"
+  },
+  "baseline": {
+    "raw_columns": ["Gender", "Age", "Onset to CT time", "NIHSS Baseline"],
+    "derived_features": [],
+    "onset_to_ct_handling": "onset_to_ct_hours derived as modulo-24h difference from source time cells"
+  },
+  "update_24h": {
+    "raw_columns": ["Gender", "Age", "Onset to CT time", "NIHSS Baseline", "NIHSS 24 HOURS"],
+    "derived_features": ["nihss_change_24h"],
+    "onset_to_ct_handling": "onset_to_ct_hours derived as modulo-24h difference from source time cells"
+  },
+  "reserved_not_used": {
+    "ctp_core_volume": "threshold/sentinel/deployment definition unresolved"
+  },
+  "image": {
+    "stored_shape": [256, 256, 4],
+    "stored_layout": "HWC",
+    "internal_channels": ["NCCT", "arterial_mCTA", "venous_mCTA", "delayed_mCTA"],
+    "v0_selected_internal_channel": 0
+  },
+  "time_assumptions": {
+    "model_unit": "hours",
+    "maximum_supported_interval": "less than 24 hours",
+    "source_columns": ["Time of Symptom onset", "Time of Initial CT_Osirix"],
+    "raw_column_preserved": "Onset to CT time"
+  }
+}

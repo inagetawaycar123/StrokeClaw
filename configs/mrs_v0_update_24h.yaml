@@ -1,0 +1,29 @@
+schema_version: mrs-v0.2
+model_mode: update_24h
+clinical_features:
+  - Gender
+  - Age
+  - Onset to CT time
+  - NIHSS Baseline
+  - NIHSS 24 HOURS
+derived_features:
+  - name: nihss_change_24h
+    formula: NIHSS 24 HOURS - NIHSS Baseline
+onset_to_ct_handling: modulo_24h_source_times_converted_to_hours
+image:
+  array_layout: HWC
+  expected_shape: [256, 256, 4]
+  selected_internal_channels: [0]
+  interpretation: NCCT
+  resize: [256, 256]
+model:
+  embedding_dim: 64
+  attention_dim: 32
+  base_channels: 16
+  fusion_dim: 64
+  dropout: 0.2
+validation:
+  strategy: patient_stratified_5_fold
+  folds: 5
+  seed: 20260806
+production_approved: false

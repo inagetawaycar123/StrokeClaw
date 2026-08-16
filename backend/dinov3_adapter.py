@@ -49,21 +49,21 @@ def _ensure_dynamo_config_compat(config_module=None) -> None:
     key = "accumulated_cache_size_limit"
     default_value = 1024
     if config_module is None:
-        # Resolve this before any DINO import hook is installed. Torch exposes
+        # Resolve this before any DINO import hook is installed.  Torch exposes
         # ``_dynamo.config`` lazily, and resolving it later can be intercepted
-        # by an import hook intended for ``dinov3.hub.backbones``.
+        # by an importlib hook intended for ``dinov3.hub.backbones``.
         config_module = _TORCH_DYNAMO_CONFIG
         if config_module is None:
             return
 
     config = getattr(config_module, "_config", None)
-    # Modern PyTorch represents configuration values with _ConfigEntry
-    # objects. Avoid replacing an existing visible entry with a plain int.
+    # Modern PyTorch implements this setting as a ConfigEntry (sometimes an
+    # alias).  Check the installed entry directly before a DINO import hook is
+    # active and never replace a visible entry with a plain integer.
     if isinstance(config, dict) and key in config:
         entry = config[key]
         if not bool(getattr(entry, "hide", False)):
             return
-
     try:
         getattr(config_module, key)
         return
@@ -73,8 +73,9 @@ def _ensure_dynamo_config_compat(config_module=None) -> None:
     defaults = getattr(config_module, "_default", None)
     allowed_keys = getattr(config_module, "_allowed_keys", None)
 
-    # PyTorch 2.1 stores plain values in ``_config``. PyTorch 2.10 stores
-    # private _ConfigEntry objects and is corrupted if a plain int is inserted.
+    # PyTorch 2.1 stores plain values in ``_config``.  PyTorch 2.10 switched
+    # that container to private ``_ConfigEntry`` objects; inserting an int in
+    # the newer container corrupts ConfigModule and makes ``setattr`` fail.
     if isinstance(config, dict):
         sample_entry = next(iter(config.values()), None)
         if sample_entry is not None and hasattr(sample_entry, "alias"):
@@ -97,6 +98,9 @@ def _ensure_dynamo_config_compat(config_module=None) -> None:
         allowed_keys.add(key)
 
     try:
+        # Modern ConfigModule entries already expose their default after the
+        # registration above.  The assignment remains necessary for the
+        # PyTorch 2.1-style strict module (and its compatibility test double).
         if not hasattr(config_module, key):
             setattr(config_module, key, default_value)
     except (AttributeError, TypeError) as exc:

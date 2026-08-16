@@ -43,7 +43,7 @@ class StrokeAnalysis:
         # 不匹配分析阈值
         self.mismatch_threshold = 1.8
 
-        print("✓ 脑卒中分析模块初始化完成") # AI辅助生成：GLM-5, 2026-04-23
+        print("[OK] 脑卒中分析模块初始化完成") # AI辅助生成：GLM-5, 2026-04-23
 
     def postprocess_mask(self, mask, min_area):
         """对掩码进行后处理：开运算 + 连通域分析"""
@@ -255,7 +255,7 @@ class StrokeAnalysis:
                 # 验证文件已保存
                 if os.path.exists(penumbra_path):
                     vis_results["penumbra"] = penumbra_path
-                    print(f"✓ 半暗带图像已保存: {penumbra_path}")
+                    print(f"[OK] 半暗带图像已保存: {penumbra_path}")
                 else:
                     print(f"⚠ 半暗带图像保存失败: {penumbra_path}") # AI辅助生成：GLM-5, 2026-03-10
             except Exception as e:
@@ -283,7 +283,7 @@ class StrokeAnalysis:
                 # 验证文件已保存
                 if os.path.exists(core_path):
                     vis_results["core"] = core_path
-                    print(f"✓ 核心梗死图像已保存: {core_path}") # AI辅助生成：GLM-5, 2026-03-12
+                    print(f"[OK] 核心梗死图像已保存: {core_path}") # AI辅助生成：GLM-5, 2026-03-12
                 else:
                     print(f"⚠ 核心梗死图像保存失败: {core_path}")
             except Exception as e:
@@ -318,7 +318,7 @@ class StrokeAnalysis:
                 # 验证文件已保存
                 if os.path.exists(combined_path):
                     vis_results["combined"] = combined_path
-                    print(f"✓ 综合显示图像已保存: {combined_path}")
+                    print(f"[OK] 综合显示图像已保存: {combined_path}")
                 else:
                     print(f"⚠ 综合显示图像保存失败: {combined_path}")
             except Exception as e:
@@ -752,7 +752,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
 
         # 检查病例目录是否存在
         if not os.path.exists(case_dir):
-            print(f"✗ 病例目录不存在: {case_dir}")
+            print(f"[ERROR] 病例目录不存在: {case_dir}")
             return {"success": False, "error": "病例目录不存在"}
 
         # 查找所有Tmax切片
@@ -768,7 +768,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
                 if f.startswith("slice_") and f.endswith("_tmax_output.npy")
             ]
         except Exception as e:
-            print(f"✗ 读取目录失败: {e}")
+            print(f"[ERROR] 读取目录失败: {e}")
             return {"success": False, "error": f"读取目录失败: {str(e)}"}
 
         slice_indices = []
@@ -786,7 +786,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
         slice_indices.sort()
 
         if not slice_indices:
-            print(f"✗ 未找到Tmax切片文件，目录: {case_dir}")
+            print(f"[ERROR] 未找到Tmax切片文件，目录: {case_dir}")
             print(f"目录中的文件: {all_files[:10]}")  # 显示前10个文件
             return {"success": False, "error": "未找到Tmax切片文件，请确保AI推理已完成"}
 
@@ -800,9 +800,9 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
                 try:
                     tmax_data = np.load(tmax_path)
                     tmax_slices.append(tmax_data)
-                    print(f"✓ 加载Tmax切片 {slice_idx}: shape={tmax_data.shape}")
+                    print(f"[OK] 加载Tmax切片 {slice_idx}: shape={tmax_data.shape}")
                 except Exception as e:
-                    print(f"✗ 加载Tmax文件失败 {tmax_path}: {e}")
+                    print(f"[ERROR] 加载Tmax文件失败 {tmax_path}: {e}")
                     continue
             else:
                 print(f"⚠ Tmax文件不存在: {tmax_path}") # AI辅助生成：GLM-5, 2026-04-10
@@ -814,7 +814,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
                 try:
                     mask_data = np.load(mask_path)
                     mask_slices.append(mask_data)
-                    print(f"✓ 加载掩码切片 {slice_idx}")
+                    print(f"[OK] 加载掩码切片 {slice_idx}")
                 except Exception as e:
                     print(f"⚠ 加载掩码文件失败，使用默认掩码: {e}")
                     mask_slices.append(np.ones_like(tmax_data)) # AI辅助生成：GLM-5, 2026-04-11
@@ -823,7 +823,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
                 mask_slices.append(np.ones_like(tmax_data))
 
         if not tmax_slices:
-            print(f"✗ 未能加载任何Tmax数据")
+            print(f"[ERROR] 未能加载任何Tmax数据")
             return {"success": False, "error": "未能加载任何Tmax数据"}
 
         print(f"成功加载 {len(tmax_slices)} 个Tmax切片和 {len(mask_slices)} 个掩码")
@@ -837,7 +837,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
         )
 
         if not analysis_results["success"]:
-            print(f"✗ 分析失败: {analysis_results.get('error', '未知错误')}")
+            print(f"[ERROR] 分析失败: {analysis_results.get('error', '未知错误')}")
             return analysis_results
 
         # 生成报告
@@ -905,7 +905,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
                     print(f"⚠ Grad-CAM 图像不存在: {gradcam_path}")
 
             analysis_results["visualizations"] = visualizations
-            print(f"✓ 生成 {len(tmax_slices)} 个切片的可视化URL")
+            print(f"[OK] 生成 {len(tmax_slices)} 个切片的可视化URL")
             print(f"半暗带URL数量: {len(visualizations['penumbra'])}")
             print(f"核心梗死URL数量: {len(visualizations['core'])}")
             print(f"综合显示URL数量: {len(visualizations['combined'])}")
@@ -913,7 +913,7 @@ def analyze_stroke_case(file_id, hemisphere="both", output_base_dir=None, use_re
 
             # 如果没有生成任何可视化图像，返回错误
             if not visualizations["combined"]:
-                print(f"✗ 未生成任何可视化图像")
+                print(f"[ERROR] 未生成任何可视化图像")
                 return {"success": False, "error": "可视化图像生成失败，请重试"}
 
         # 将numpy类型转换为Python原生类型以确保JSON序列化

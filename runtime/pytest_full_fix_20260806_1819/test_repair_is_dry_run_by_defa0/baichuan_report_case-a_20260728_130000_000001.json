@@ -1,0 +1,2114 @@
+{
+  "meta": {
+    "file_id": "case-a"
+  },
+  "report": "repaired",
+  "report_payload": {
+    "patient_id": 1,
+    "patient_age": 60,
+    "patient_sex": "female",
+    "modalities": [
+      "ncct",
+      "mcta",
+      "vcta",
+      "dcta"
+    ],
+    "core_infarct_volume": 6.14,
+    "penumbra_volume": 17.21,
+    "mismatch_ratio": 2.8,
+    "review_state": {
+      "all_confirmed": false,
+      "confirmed_count": 0,
+      "sections": [
+        {
+          "section_id": "imaging_summary",
+          "review_status": "pending",
+          "doctor_note": "保留备注",
+          "clinician_confirmed": false,
+          "updated_at": "2026-08-06T10:21:21.545480+00:00"
+        }
+      ],
+      "pending_count": 1,
+      "current_section_id": "imaging_summary"
+    },
+    "structured_report_v2": {
+      "schema_version": "2.0",
+      "report_meta": {
+        "schema_version": "2.0",
+        "report_id": "report_d086c52e603453163e6a",
+        "run_id": "repair:ncct-perfusion-v1",
+        "file_id": "case-a",
+        "generated_at": "2026-08-06T10:21:21Z",
+        "risk_level": "medium",
+        "urgency": "attention",
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "legacy_mode": false,
+        "evidence_coverage": 0.6667
+      },
+      "patient_summary": {
+        "fields": [
+          {
+            "field_id": "age",
+            "standard_name": "age",
+            "display_name": "年龄",
+            "value": 60.0,
+            "unit": "岁",
+            "value_type": "number",
+            "status": "present",
+            "is_missing": false,
+            "source_type": "patient_data",
+            "source_module": "patient_info",
+            "source_record": "patient_info.patient_age",
+            "acquired_at": null,
+            "confidence": null,
+            "review_status": "pending",
+            "clinician_confirmed": false,
+            "review_section_id": "patient_context",
+            "clinician_note": null,
+            "reviewed_at": null
+          },
+          {
+            "field_id": "sex",
+            "standard_name": "sex",
+            "display_name": "性别",
+            "value": "female",
+            "unit": "",
+            "value_type": "code",
+            "status": "present",
+            "is_missing": false,
+            "source_type": "patient_data",
+            "source_module": "patient_info",
+            "source_record": "patient_info.patient_sex",
+            "acquired_at": null,
+            "confidence": null,
+            "review_status": "pending",
+            "clinician_confirmed": false,
+            "review_section_id": "patient_context",
+            "clinician_note": null,
+            "reviewed_at": null
+          },
+          {
+            "field_id": "onset_to_admission_hours",
+            "standard_name": "onset_to_admission_hours",
+            "display_name": "发病至入院",
+            "value": null,
+            "unit": "h",
+            "value_type": "number",
+            "status": "missing",
+            "is_missing": true,
+            "source_type": "patient_data",
+            "source_module": "patient_context",
+            "source_record": "onset_exact_time->admission_time",
+            "acquired_at": null,
+            "confidence": null,
+            "review_status": "pending",
+            "clinician_confirmed": false,
+            "review_section_id": "patient_context",
+            "clinician_note": null,
+            "reviewed_at": null
+          },
+          {
+            "field_id": "admission_nihss",
+            "standard_name": "admission_nihss",
+            "display_name": "入院 NIHSS",
+            "value": null,
+            "unit": "分",
+            "value_type": "number",
+            "status": "missing",
+            "is_missing": true,
+            "source_type": "patient_data",
+            "source_module": "patient_info",
+            "source_record": "patient_info.admission_nihss",
+            "acquired_at": null,
+            "confidence": null,
+            "review_status": "pending",
+            "clinician_confirmed": false,
+            "review_section_id": "patient_context",
+            "clinician_note": null,
+            "reviewed_at": null
+          }
+        ]
+      },
+      "clinical_context": {
+        "available_modalities": [
+          "ncct",
+          "mcta",
+          "vcta",
+          "dcta"
+        ],
+        "hemisphere": null,
+        "fields": []
+      },
+      "quality_control": {},
+      "imaging_findings": [
+        {
+          "finding_id": "ncct_classification",
+          "display_name": "NCCT 三分类",
+          "value": "正常",
+          "status": "completed",
+          "source_type": "algorithm_output",
+          "source_module": "NCCTThreeClassAgent",
+          "confidence": 0.8,
+          "evidence_ids": [
+            "ev_2d3e89434909e2fdfbe0"
+          ],
+          "limitations": [],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "imaging_summary",
+          "clinician_note": "保留备注",
+          "reviewed_at": "2026-08-06T10:21:21.545480+00:00"
+        },
+        {
+          "finding_id": "vessel_occlusion_class",
+          "display_name": "血管闭塞分类",
+          "value": null,
+          "status": "missing",
+          "source_type": "algorithm_output",
+          "source_module": "VesselOcclusionAgent",
+          "confidence": null,
+          "evidence_ids": [
+            "ev_b0dc847515574eef159d"
+          ],
+          "limitations": [
+            "未获得有效血管闭塞分类结果。"
+          ],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "imaging_summary",
+          "clinician_note": "保留备注",
+          "reviewed_at": "2026-08-06T10:21:21.545480+00:00"
+        },
+        {
+          "finding_id": "perfusion_analysis",
+          "display_name": "灌注分析",
+          "value": "Core 6.14 mL · Penumbra 17.21 mL · Mismatch 2.80",
+          "status": "completed",
+          "source_type": "algorithm_output",
+          "source_module": "CTPAnalysisAgent",
+          "confidence": null,
+          "evidence_ids": [
+            "ev_b12b6f26503c5c1eb454",
+            "ev_8a1da35fe96c117de2f9",
+            "ev_51a496c1f6328215a830"
+          ],
+          "limitations": [],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "imaging_summary",
+          "clinician_note": "保留备注",
+          "reviewed_at": "2026-08-06T10:21:21.545480+00:00"
+        },
+        {
+          "finding_id": "cta_assessment",
+          "display_name": "CTA / 多期 CTA",
+          "value": "已获得影像，等待结构化观察",
+          "status": "unknown",
+          "source_type": "imaging_finding",
+          "source_module": "detect_modalities",
+          "confidence": null,
+          "evidence_ids": [
+            "ev_3d7bdd882ca04be9ace6"
+          ],
+          "limitations": [
+            "仅确认已上传 CTA 模态，未获得结构化模型观察。"
+          ],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "imaging_summary",
+          "clinician_note": "保留备注",
+          "reviewed_at": "2026-08-06T10:21:21.545480+00:00"
+        }
+      ],
+      "quantitative_metrics": [
+        {
+          "metric_id": "core_infarct_volume",
+          "display_name": "核心梗死体积",
+          "value": 6.14,
+          "unit": "mL",
+          "status": "present",
+          "reference_operator": "<",
+          "reference_value": 70.0,
+          "evaluation": "below_threshold",
+          "source_type": "algorithm_output",
+          "source_module": "StrokeAnalysisAgent",
+          "source_record": "run_stroke_analysis.core_infarct_volume",
+          "confidence": null,
+          "evidence_ids": [
+            "ev_b12b6f26503c5c1eb454"
+          ],
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "ctp_quant",
+          "clinician_note": null,
+          "reviewed_at": null
+        },
+        {
+          "metric_id": "penumbra_volume",
+          "display_name": "半暗带体积",
+          "value": 17.21,
+          "unit": "mL",
+          "status": "present",
+          "reference_operator": null,
+          "reference_value": null,
+          "evaluation": "observed",
+          "source_type": "algorithm_output",
+          "source_module": "StrokeAnalysisAgent",
+          "source_record": "run_stroke_analysis.penumbra_volume",
+          "confidence": null,
+          "evidence_ids": [
+            "ev_8a1da35fe96c117de2f9"
+          ],
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "ctp_quant",
+          "clinician_note": null,
+          "reviewed_at": null
+        },
+        {
+          "metric_id": "mismatch_ratio",
+          "display_name": "不匹配比值",
+          "value": 2.8,
+          "unit": "",
+          "status": "present",
+          "reference_operator": ">",
+          "reference_value": 1.8,
+          "evaluation": "above_threshold",
+          "source_type": "algorithm_output",
+          "source_module": "StrokeAnalysisAgent",
+          "source_record": "run_stroke_analysis.mismatch_ratio",
+          "confidence": null,
+          "evidence_ids": [
+            "ev_51a496c1f6328215a830"
+          ],
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "ctp_quant",
+          "clinician_note": null,
+          "reviewed_at": null
+        }
+      ],
+      "rule_evaluations": [
+        {
+          "rule_id": "CTP_MISMATCH_RATIO_1_8_V1",
+          "rule_name": "灌注不匹配比值评估",
+          "input_value": 2.8,
+          "operator": ">",
+          "threshold": 1.8,
+          "result": "met",
+          "clinical_meaning": "提示存在具有临床意义的灌注不匹配，需结合血管、时间窗和出血风险进一步评估。",
+          "source": {
+            "type": "internal_rule",
+            "title": "StrokeClaw 内部卒中规则集",
+            "version": "v1",
+            "section": "CTP_MISMATCH_RATIO_1_8_V1",
+            "guideline_bound": false
+          },
+          "evidence_ids": [
+            "ev_51a496c1f6328215a830",
+            "ev_1818254d84b2536d4b8c"
+          ],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "ctp_quant",
+          "clinician_note": null,
+          "reviewed_at": null
+        },
+        {
+          "rule_id": "CTP_CORE_VOLUME_70ML_V1",
+          "rule_name": "核心梗死体积高负荷复核",
+          "input_value": 6.14,
+          "operator": "<",
+          "threshold": 70.0,
+          "result": "met",
+          "clinical_meaning": "核心梗死体积未达到当前内部规则的高负荷界值。",
+          "source": {
+            "type": "internal_rule",
+            "title": "StrokeClaw 内部卒中规则集",
+            "version": "v1",
+            "section": "CTP_CORE_VOLUME_70ML_V1",
+            "guideline_bound": false
+          },
+          "evidence_ids": [
+            "ev_b12b6f26503c5c1eb454",
+            "ev_d944f84743e630b8779f"
+          ],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "ctp_quant",
+          "clinician_note": null,
+          "reviewed_at": null
+        },
+        {
+          "rule_id": "ONSET_TO_ADMISSION_6H_V1",
+          "rule_name": "早期时间窗提示",
+          "input_value": null,
+          "operator": "<=",
+          "threshold": 6.0,
+          "result": "unknown",
+          "clinical_meaning": "缺少时间信息，无法评估。",
+          "source": {
+            "type": "internal_rule",
+            "title": "StrokeClaw 内部卒中规则集",
+            "version": "v1",
+            "section": "ONSET_TO_ADMISSION_6H_V1",
+            "guideline_bound": false
+          },
+          "evidence_ids": [
+            "ev_96910f74ecbc76e48e4f"
+          ],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "ctp_quant",
+          "clinician_note": null,
+          "reviewed_at": null
+        },
+        {
+          "rule_id": "ONSET_TO_ADMISSION_24H_SELECTIVE_V1",
+          "rule_name": "选择性延长时间窗提示",
+          "input_value": null,
+          "operator": "<=",
+          "threshold": 24.0,
+          "result": "unknown",
+          "clinical_meaning": "缺少时间信息，无法评估。",
+          "source": {
+            "type": "internal_rule",
+            "title": "StrokeClaw 内部卒中规则集",
+            "version": "v1",
+            "section": "ONSET_TO_ADMISSION_24H_SELECTIVE_V1",
+            "guideline_bound": false
+          },
+          "evidence_ids": [
+            "ev_099fa6f7c4fce43fa564"
+          ],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "ctp_quant",
+          "clinician_note": null,
+          "reviewed_at": null
+        }
+      ],
+      "evidence_chain": [
+        {
+          "claim_id": "claim_significant_mismatch",
+          "claim": "灌注定量提示存在具有临床意义的不匹配。",
+          "claim_type": "clinical_assessment",
+          "support_status": "supported",
+          "evidence_ids": [
+            "ev_51a496c1f6328215a830",
+            "ev_1818254d84b2536d4b8c"
+          ],
+          "limitations": [],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "question_answer",
+          "clinician_note": null,
+          "reviewed_at": null
+        },
+        {
+          "claim_id": "recommendation_clinician_review",
+          "claim": "由卒中团队结合原始影像、禁忌证和患者基础状态完成最终临床决策。",
+          "claim_type": "recommendation",
+          "support_status": "supported",
+          "evidence_ids": [
+            "ev_51a496c1f6328215a830",
+            "ev_1818254d84b2536d4b8c"
+          ],
+          "limitations": [
+            "本报告不能替代临床医生最终判断。"
+          ],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "next_steps",
+          "clinician_note": null,
+          "reviewed_at": null,
+          "priority": "high",
+          "action_type": "clinician_review"
+        },
+        {
+          "claim_id": "recommendation_vessel_review",
+          "claim": "优先复核 CTA/MRA 责任血管及闭塞状态。",
+          "claim_type": "recommendation",
+          "support_status": "supported",
+          "evidence_ids": [
+            "ev_b0dc847515574eef159d"
+          ],
+          "limitations": [
+            "当前血管分类结果缺失。"
+          ],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "next_steps",
+          "clinician_note": null,
+          "reviewed_at": null,
+          "priority": "high",
+          "action_type": "additional_review"
+        }
+      ],
+      "evidence_catalog": [
+        {
+          "evidence_id": "ev_eed675505564707ebc46",
+          "legacy_aliases": [],
+          "evidence_type": "patient_data",
+          "display_name": "年龄",
+          "value": 60.0,
+          "unit": "岁",
+          "source_module": "patient_info",
+          "source_record": "patient_info.patient_age",
+          "confidence": null,
+          "generated_at": null,
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": null,
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_28029ea17b8cdece2200",
+          "legacy_aliases": [],
+          "evidence_type": "patient_data",
+          "display_name": "性别",
+          "value": "female",
+          "unit": "",
+          "source_module": "patient_info",
+          "source_record": "patient_info.patient_sex",
+          "confidence": null,
+          "generated_at": null,
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": null,
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_b12b6f26503c5c1eb454",
+          "legacy_aliases": [],
+          "evidence_type": "algorithm_output",
+          "display_name": "核心梗死体积",
+          "value": 6.14,
+          "unit": "mL",
+          "source_module": "StrokeAnalysisAgent",
+          "source_record": "run_stroke_analysis.core_infarct_volume",
+          "confidence": null,
+          "generated_at": "2026-08-06T10:21:21Z",
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": null,
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_8a1da35fe96c117de2f9",
+          "legacy_aliases": [],
+          "evidence_type": "algorithm_output",
+          "display_name": "半暗带体积",
+          "value": 17.21,
+          "unit": "mL",
+          "source_module": "StrokeAnalysisAgent",
+          "source_record": "run_stroke_analysis.penumbra_volume",
+          "confidence": null,
+          "generated_at": "2026-08-06T10:21:21Z",
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": null,
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_51a496c1f6328215a830",
+          "legacy_aliases": [],
+          "evidence_type": "algorithm_output",
+          "display_name": "不匹配比值",
+          "value": 2.8,
+          "unit": "",
+          "source_module": "StrokeAnalysisAgent",
+          "source_record": "run_stroke_analysis.mismatch_ratio",
+          "confidence": null,
+          "generated_at": "2026-08-06T10:21:21Z",
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": null,
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_2d3e89434909e2fdfbe0",
+          "legacy_aliases": [],
+          "evidence_type": "algorithm_output",
+          "display_name": "NCCT 三分类结果",
+          "value": "正常",
+          "unit": "",
+          "source_module": "NCCTThreeClassAgent",
+          "source_record": "three_class.predicted_label",
+          "confidence": 0.8,
+          "generated_at": "2026-08-06T10:21:21Z",
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": null,
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_b0dc847515574eef159d",
+          "legacy_aliases": [],
+          "evidence_type": "algorithm_output",
+          "display_name": "血管闭塞分类运行状态",
+          "value": null,
+          "unit": "",
+          "source_module": "VesselOcclusionAgent",
+          "source_record": "vessel_occlusion.vessel_occlusion_class_result",
+          "confidence": null,
+          "generated_at": "2026-08-06T10:21:21Z",
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": "未获得有效血管闭塞分类结果。",
+          "binding_status": "missing",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_3d7bdd882ca04be9ace6",
+          "legacy_aliases": [],
+          "evidence_type": "imaging_finding",
+          "display_name": "CTA / 多期 CTA 观察",
+          "value": "已获得 CTA 模态",
+          "unit": "",
+          "source_module": "detect_modalities",
+          "source_record": "available_modalities.cta",
+          "confidence": null,
+          "generated_at": "2026-08-06T10:21:21Z",
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": null,
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_1818254d84b2536d4b8c",
+          "legacy_aliases": [],
+          "evidence_type": "clinical_rule",
+          "display_name": "灌注不匹配比值评估",
+          "value": "met",
+          "unit": "",
+          "source_module": "StrokeClawRuleEngine",
+          "source_record": "CTP_MISMATCH_RATIO_1_8_V1",
+          "confidence": null,
+          "generated_at": "2026-08-06T10:21:21Z",
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": "提示存在具有临床意义的灌注不匹配，需结合血管、时间窗和出血风险进一步评估。",
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_d944f84743e630b8779f",
+          "legacy_aliases": [],
+          "evidence_type": "clinical_rule",
+          "display_name": "核心梗死体积高负荷复核",
+          "value": "met",
+          "unit": "",
+          "source_module": "StrokeClawRuleEngine",
+          "source_record": "CTP_CORE_VOLUME_70ML_V1",
+          "confidence": null,
+          "generated_at": "2026-08-06T10:21:21Z",
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": "核心梗死体积未达到当前内部规则的高负荷界值。",
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_96910f74ecbc76e48e4f",
+          "legacy_aliases": [],
+          "evidence_type": "clinical_rule",
+          "display_name": "早期时间窗提示",
+          "value": "unknown",
+          "unit": "",
+          "source_module": "StrokeClawRuleEngine",
+          "source_record": "ONSET_TO_ADMISSION_6H_V1",
+          "confidence": null,
+          "generated_at": "2026-08-06T10:21:21Z",
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": "缺少时间信息，无法评估。",
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        },
+        {
+          "evidence_id": "ev_099fa6f7c4fce43fa564",
+          "legacy_aliases": [],
+          "evidence_type": "clinical_rule",
+          "display_name": "选择性延长时间窗提示",
+          "value": "unknown",
+          "unit": "",
+          "source_module": "StrokeClawRuleEngine",
+          "source_record": "ONSET_TO_ADMISSION_24H_SELECTIVE_V1",
+          "confidence": null,
+          "generated_at": "2026-08-06T10:21:21Z",
+          "source_ref": null,
+          "document_title": null,
+          "document_version": null,
+          "page": null,
+          "snippet": "缺少时间信息，无法评估。",
+          "binding_status": "bound",
+          "clinician_confirmed": false
+        }
+      ],
+      "clinical_assessment": [
+        {
+          "claim_id": "claim_significant_mismatch",
+          "claim": "灌注定量提示存在具有临床意义的不匹配。",
+          "claim_type": "clinical_assessment",
+          "support_status": "supported",
+          "evidence_ids": [
+            "ev_51a496c1f6328215a830",
+            "ev_1818254d84b2536d4b8c"
+          ],
+          "limitations": [],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "question_answer",
+          "clinician_note": null,
+          "reviewed_at": null
+        }
+      ],
+      "recommendations": [
+        {
+          "claim_id": "recommendation_clinician_review",
+          "claim": "由卒中团队结合原始影像、禁忌证和患者基础状态完成最终临床决策。",
+          "claim_type": "recommendation",
+          "support_status": "supported",
+          "evidence_ids": [
+            "ev_51a496c1f6328215a830",
+            "ev_1818254d84b2536d4b8c"
+          ],
+          "limitations": [
+            "本报告不能替代临床医生最终判断。"
+          ],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "next_steps",
+          "clinician_note": null,
+          "reviewed_at": null,
+          "priority": "high",
+          "action_type": "clinician_review"
+        },
+        {
+          "claim_id": "recommendation_vessel_review",
+          "claim": "优先复核 CTA/MRA 责任血管及闭塞状态。",
+          "claim_type": "recommendation",
+          "support_status": "supported",
+          "evidence_ids": [
+            "ev_b0dc847515574eef159d"
+          ],
+          "limitations": [
+            "当前血管分类结果缺失。"
+          ],
+          "requires_clinician_review": true,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "next_steps",
+          "clinician_note": null,
+          "reviewed_at": null,
+          "priority": "high",
+          "action_type": "additional_review"
+        }
+      ],
+      "warnings": [],
+      "missing_information": [
+        {
+          "issue_id": "missing_onset_to_admission_hours",
+          "field": "onset_to_admission_hours",
+          "status": "missing",
+          "message": "发病至入院缺失。",
+          "impact": "可能限制临床规则和风险评估。",
+          "recommended_action": "请核对并补充发病至入院。",
+          "severity": "medium",
+          "requires_clinician_review": true,
+          "review_section_id": "risk_uncertainty"
+        },
+        {
+          "issue_id": "missing_admission_nihss",
+          "field": "admission_nihss",
+          "status": "missing",
+          "message": "入院 NIHSS缺失。",
+          "impact": "可能限制临床规则和风险评估。",
+          "recommended_action": "请核对并补充入院 NIHSS。",
+          "severity": "medium",
+          "requires_clinician_review": true,
+          "review_section_id": "risk_uncertainty"
+        },
+        {
+          "issue_id": "missing_vessel_occlusion_class",
+          "field": "vessel_occlusion_class",
+          "status": "missing",
+          "message": "血管闭塞分类结果缺失。",
+          "impact": "无法完整评估大血管闭塞证据和血管内治疗条件。",
+          "recommended_action": "结合原始 CTA/MRA 或后续血管影像进一步确认。",
+          "severity": "high",
+          "requires_clinician_review": true,
+          "review_section_id": "risk_uncertainty"
+        }
+      ],
+      "uncertainties": [
+        {
+          "issue_id": "uncertainty_1",
+          "field": "report",
+          "status": "uncertain",
+          "message": "病灶侧别: 外部知识验证未生成该结论。",
+          "impact": "可能影响报告结论的完整性。",
+          "recommended_action": "请结合原始数据和临床信息复核。",
+          "severity": "medium",
+          "requires_clinician_review": true,
+          "review_section_id": "risk_uncertainty"
+        },
+        {
+          "issue_id": "uncertainty_2",
+          "field": "report",
+          "status": "uncertain",
+          "message": "核心梗死体积: 外部知识验证未生成该结论。",
+          "impact": "可能影响报告结论的完整性。",
+          "recommended_action": "请结合原始数据和临床信息复核。",
+          "severity": "medium",
+          "requires_clinician_review": true,
+          "review_section_id": "risk_uncertainty"
+        },
+        {
+          "issue_id": "uncertainty_3",
+          "field": "report",
+          "status": "uncertain",
+          "message": "半暗带体积: 外部知识验证未生成该结论。",
+          "impact": "可能影响报告结论的完整性。",
+          "recommended_action": "请结合原始数据和临床信息复核。",
+          "severity": "medium",
+          "requires_clinician_review": true,
+          "review_section_id": "risk_uncertainty"
+        },
+        {
+          "issue_id": "uncertainty_4",
+          "field": "report",
+          "status": "uncertain",
+          "message": "不匹配比值: 外部知识验证未生成该结论。",
+          "impact": "可能影响报告结论的完整性。",
+          "recommended_action": "请结合原始数据和临床信息复核。",
+          "severity": "medium",
+          "requires_clinician_review": true,
+          "review_section_id": "risk_uncertainty"
+        },
+        {
+          "issue_id": "uncertainty_5",
+          "field": "report",
+          "status": "uncertain",
+          "message": "显著不匹配: 外部知识验证未生成该结论。",
+          "impact": "可能影响报告结论的完整性。",
+          "recommended_action": "请结合原始数据和临床信息复核。",
+          "severity": "medium",
+          "requires_clinician_review": true,
+          "review_section_id": "risk_uncertainty"
+        },
+        {
+          "issue_id": "uncertainty_6",
+          "field": "report",
+          "status": "uncertain",
+          "message": "治疗时间窗提示: 外部知识验证未生成该结论。",
+          "impact": "可能影响报告结论的完整性。",
+          "recommended_action": "请结合原始数据和临床信息复核。",
+          "severity": "medium",
+          "requires_clinician_review": true,
+          "review_section_id": "risk_uncertainty"
+        }
+      ],
+      "narrative_summary": {
+        "deterministic_summary": "不匹配比值 2.80 高于内部规则阈值 1.80。 核心梗死体积 6.14 mL，半暗带体积 17.21 mL。 血管闭塞分类结果缺失，取栓相关判断必须进一步复核。",
+        "ai_supplement": null,
+        "generation_mode": "deterministic",
+        "claim_ids": [],
+        "legacy_text": null
+      },
+      "clinician_review": {
+        "overall_status": "pending",
+        "sections": [
+          {
+            "section_id": "imaging_summary",
+            "review_status": "pending",
+            "doctor_note": "保留备注",
+            "clinician_confirmed": false,
+            "updated_at": "2026-08-06T10:21:21.545480+00:00"
+          }
+        ],
+        "field_confirmation_map": {
+          "age": {
+            "section_id": "patient_context",
+            "status": "pending",
+            "clinician_confirmed": false
+          },
+          "sex": {
+            "section_id": "patient_context",
+            "status": "pending",
+            "clinician_confirmed": false
+          },
+          "onset_to_admission_hours": {
+            "section_id": "patient_context",
+            "status": "pending",
+            "clinician_confirmed": false
+          },
+          "admission_nihss": {
+            "section_id": "patient_context",
+            "status": "pending",
+            "clinician_confirmed": false
+          },
+          "core_infarct_volume": {
+            "section_id": "ctp_quant",
+            "status": "pending",
+            "clinician_confirmed": false
+          },
+          "penumbra_volume": {
+            "section_id": "ctp_quant",
+            "status": "pending",
+            "clinician_confirmed": false
+          },
+          "mismatch_ratio": {
+            "section_id": "ctp_quant",
+            "status": "pending",
+            "clinician_confirmed": false
+          }
+        },
+        "claim_confirmation_map": {
+          "claim_significant_mismatch": {
+            "section_id": "question_answer",
+            "status": "pending",
+            "clinician_confirmed": false
+          },
+          "recommendation_clinician_review": {
+            "section_id": "next_steps",
+            "status": "pending",
+            "clinician_confirmed": false
+          },
+          "recommendation_vessel_review": {
+            "section_id": "next_steps",
+            "status": "pending",
+            "clinician_confirmed": false
+          }
+        },
+        "updated_at": null
+      }
+    },
+    "three_class_result": {
+      "status": "completed",
+      "three_class_label": "normal",
+      "three_class_label_cn": "正常",
+      "three_class_confidence": 0.8,
+      "class_counts": {
+        "normal": 1,
+        "hemo": 0,
+        "infarct": 0
+      },
+      "total_slices": 1,
+      "safety_gate": {
+        "blocked": false,
+        "reason_code": null,
+        "reason": null,
+        "requires_clinician_review": false
+      }
+    },
+    "three_class_status": "completed",
+    "three_class_label": "normal",
+    "three_class_label_cn": "正常",
+    "three_class_confidence": 0.8,
+    "safety_gate": {
+      "blocked": false,
+      "reason_code": null,
+      "reason": null,
+      "requires_clinician_review": false
+    },
+    "final_report": {
+      "summary": "基于多模态校验输出生成的综合摘要。已为 0/6 项发现映射证据。",
+      "key_findings": [
+        {
+          "finding_id": "hemisphere",
+          "claim_id": "hemisphere",
+          "title": "病灶侧别",
+          "claim_text": "病灶侧别",
+          "verdict": "unavailable",
+          "message": "该结论在外部知识验证输出中缺失。",
+          "evidence_ids": [],
+          "unavailable_reason": "外部知识验证未生成该结论。",
+          "severity": "medium",
+          "suggested_action": "请检查源数据输出并重新生成外部知识验证结论。"
+        },
+        {
+          "finding_id": "core_infarct_volume",
+          "claim_id": "core_infarct_volume",
+          "title": "核心梗死体积",
+          "claim_text": "核心梗死体积",
+          "verdict": "unavailable",
+          "message": "该结论在外部知识验证输出中缺失。",
+          "evidence_ids": [],
+          "unavailable_reason": "外部知识验证未生成该结论。",
+          "severity": "medium",
+          "suggested_action": "请检查源数据输出并重新生成外部知识验证结论。"
+        },
+        {
+          "finding_id": "penumbra_volume",
+          "claim_id": "penumbra_volume",
+          "title": "半暗带体积",
+          "claim_text": "半暗带体积",
+          "verdict": "unavailable",
+          "message": "该结论在外部知识验证输出中缺失。",
+          "evidence_ids": [],
+          "unavailable_reason": "外部知识验证未生成该结论。",
+          "severity": "medium",
+          "suggested_action": "请检查源数据输出并重新生成外部知识验证结论。"
+        },
+        {
+          "finding_id": "mismatch_ratio",
+          "claim_id": "mismatch_ratio",
+          "title": "不匹配比值",
+          "claim_text": "不匹配比值",
+          "verdict": "unavailable",
+          "message": "该结论在外部知识验证输出中缺失。",
+          "evidence_ids": [],
+          "unavailable_reason": "外部知识验证未生成该结论。",
+          "severity": "medium",
+          "suggested_action": "请检查源数据输出并重新生成外部知识验证结论。"
+        },
+        {
+          "finding_id": "significant_mismatch",
+          "claim_id": "significant_mismatch",
+          "title": "显著不匹配",
+          "claim_text": "显著不匹配",
+          "verdict": "unavailable",
+          "message": "该结论在外部知识验证输出中缺失。",
+          "evidence_ids": [],
+          "unavailable_reason": "外部知识验证未生成该结论。",
+          "severity": "medium",
+          "suggested_action": "请检查源数据输出并重新生成外部知识验证结论。"
+        },
+        {
+          "finding_id": "treatment_window_notice",
+          "claim_id": "treatment_window_notice",
+          "title": "治疗时间窗提示",
+          "claim_text": "治疗时间窗提示",
+          "verdict": "unavailable",
+          "message": "该结论在外部知识验证输出中缺失。",
+          "evidence_ids": [],
+          "unavailable_reason": "外部知识验证未生成该结论。",
+          "severity": "medium",
+          "suggested_action": "请检查源数据输出并重新生成外部知识验证结论。"
+        }
+      ],
+      "risk_level": "medium",
+      "confidence": 0.0,
+      "citations": [],
+      "uncertainties": [
+        "病灶侧别: 外部知识验证未生成该结论。",
+        "核心梗死体积: 外部知识验证未生成该结论。",
+        "半暗带体积: 外部知识验证未生成该结论。",
+        "不匹配比值: 外部知识验证未生成该结论。",
+        "显著不匹配: 外部知识验证未生成该结论。",
+        "治疗时间窗提示: 外部知识验证未生成该结论。"
+      ],
+      "next_actions": [
+        "请检查源数据输出并重新生成外部知识验证结论。"
+      ]
+    },
+    "evidence_items": [],
+    "evidence_map": {
+      "hemisphere": {
+        "evidence_ids": [],
+        "unavailable_reason": "外部知识验证未生成该结论。"
+      },
+      "core_infarct_volume": {
+        "evidence_ids": [],
+        "unavailable_reason": "外部知识验证未生成该结论。"
+      },
+      "penumbra_volume": {
+        "evidence_ids": [],
+        "unavailable_reason": "外部知识验证未生成该结论。"
+      },
+      "mismatch_ratio": {
+        "evidence_ids": [],
+        "unavailable_reason": "外部知识验证未生成该结论。"
+      },
+      "significant_mismatch": {
+        "evidence_ids": [],
+        "unavailable_reason": "外部知识验证未生成该结论。"
+      },
+      "treatment_window_notice": {
+        "evidence_ids": [],
+        "unavailable_reason": "外部知识验证未生成该结论。"
+      }
+    },
+    "traceability": {
+      "total_findings": 6,
+      "mapped_findings": 0,
+      "coverage": 0.0,
+      "unmapped_ids": [
+        "hemisphere",
+        "core_infarct_volume",
+        "penumbra_volume",
+        "mismatch_ratio",
+        "significant_mismatch",
+        "treatment_window_notice"
+      ],
+      "high_risk_unmapped_count": 4
+    },
+    "question_answer": {
+      "question": "请基于当前病例给出综合诊疗建议。",
+      "direct_answer": "综合结论：该患者影像量化数据显示：核心梗死体积约6.14 ml，半暗带体积约17.21 ml，不匹配比值为2.8，受累侧别为未知。不匹配比值2.8>1.8，提示存在显著灌注不匹配，可作为进一步评估潜在可挽救脑组织的依据之一。核心梗死体积未达到当前内部规则的高负荷界值，可进一步评估再通治疗条件，但不能据此直接形成治疗结论。血管堵塞三分类未获得有效模型结果，不能据此推断大血管闭塞或机械取栓适应证，需结合原始血管影像和人工复核。当前能够给出初步结论，但部分关键证据不足，需结合完整影像序列与临床信息复核。建议尽快完善相关检查，以便做出更准确的治疗决策。",
+      "key_points": [
+        "病灶侧别：该结论在外部知识验证输出中缺失。（不可用）",
+        "核心梗死体积：该结论在外部知识验证输出中缺失。（不可用）",
+        "半暗带体积：该结论在外部知识验证输出中缺失。（不可用）",
+        "不匹配比值：该结论在外部知识验证输出中缺失。（不可用）",
+        "显著不匹配：该结论在外部知识验证输出中缺失。（不可用）"
+      ],
+      "recommendations": [
+        "请检查源数据输出并重新生成外部知识验证结论。"
+      ],
+      "confidence": 0.0,
+      "evidence_refs": [
+        {
+          "finding_id": "hemisphere",
+          "claim_id": "hemisphere",
+          "verdict": "unavailable",
+          "evidence_ids": [],
+          "evidence": [],
+          "unavailable_reason": "外部知识验证未生成该结论。"
+        },
+        {
+          "finding_id": "core_infarct_volume",
+          "claim_id": "core_infarct_volume",
+          "verdict": "unavailable",
+          "evidence_ids": [],
+          "evidence": [],
+          "unavailable_reason": "外部知识验证未生成该结论。"
+        },
+        {
+          "finding_id": "penumbra_volume",
+          "claim_id": "penumbra_volume",
+          "verdict": "unavailable",
+          "evidence_ids": [],
+          "evidence": [],
+          "unavailable_reason": "外部知识验证未生成该结论。"
+        },
+        {
+          "finding_id": "mismatch_ratio",
+          "claim_id": "mismatch_ratio",
+          "verdict": "unavailable",
+          "evidence_ids": [],
+          "evidence": [],
+          "unavailable_reason": "外部知识验证未生成该结论。"
+        },
+        {
+          "finding_id": "significant_mismatch",
+          "claim_id": "significant_mismatch",
+          "verdict": "unavailable",
+          "evidence_ids": [],
+          "evidence": [],
+          "unavailable_reason": "外部知识验证未生成该结论。"
+        }
+      ],
+      "uncertainties": [
+        "病灶侧别: 外部知识验证未生成该结论。",
+        "核心梗死体积: 外部知识验证未生成该结论。",
+        "半暗带体积: 外部知识验证未生成该结论。",
+        "不匹配比值: 外部知识验证未生成该结论。",
+        "显著不匹配: 外部知识验证未生成该结论。",
+        "治疗时间窗提示: 外部知识验证未生成该结论。"
+      ],
+      "consensus_decision": "accept",
+      "llm_enhanced": false,
+      "llm_claim_ids": [],
+      "llm_limitations": []
+    },
+    "answer_evidence_ledger": {
+      "question": "请基于当前病例给出综合诊疗建议。",
+      "generated_at": "2026-08-06T10:21:21.545764Z",
+      "mapping": {
+        "hemisphere": {
+          "claim_id": "hemisphere",
+          "verdict": "unavailable",
+          "evidence_ids": [],
+          "source_refs": [],
+          "unavailable_reason": "外部知识验证未生成该结论。"
+        },
+        "core_infarct_volume": {
+          "claim_id": "core_infarct_volume",
+          "verdict": "unavailable",
+          "evidence_ids": [],
+          "source_refs": [],
+          "unavailable_reason": "外部知识验证未生成该结论。"
+        },
+        "penumbra_volume": {
+          "claim_id": "penumbra_volume",
+          "verdict": "unavailable",
+          "evidence_ids": [],
+          "source_refs": [],
+          "unavailable_reason": "外部知识验证未生成该结论。"
+        },
+        "mismatch_ratio": {
+          "claim_id": "mismatch_ratio",
+          "verdict": "unavailable",
+          "evidence_ids": [],
+          "source_refs": [],
+          "unavailable_reason": "外部知识验证未生成该结论。"
+        },
+        "significant_mismatch": {
+          "claim_id": "significant_mismatch",
+          "verdict": "unavailable",
+          "evidence_ids": [],
+          "source_refs": [],
+          "unavailable_reason": "外部知识验证未生成该结论。"
+        }
+      }
+    },
+    "answer_metrics": {},
+    "repair_meta": {
+      "version": "ncct-perfusion-v1",
+      "source_sha256": "9982a2787e30e6b546e407e3a1124d8f599acdd208c1081d1848cead3a03ab3b",
+      "source_name_sha256": "37cac2b24adf967be4047729047834cdc83f1399cd877cb2001341b6c733ca82",
+      "repaired_at": "2026-08-06T10:21:21.569150+00:00",
+      "review_reset": true
+    }
+  },
+  "structured_report_v2": {
+    "schema_version": "2.0",
+    "report_meta": {
+      "schema_version": "2.0",
+      "report_id": "report_d086c52e603453163e6a",
+      "run_id": "repair:ncct-perfusion-v1",
+      "file_id": "case-a",
+      "generated_at": "2026-08-06T10:21:21Z",
+      "risk_level": "medium",
+      "urgency": "attention",
+      "requires_clinician_review": true,
+      "review_status": "pending",
+      "legacy_mode": false,
+      "evidence_coverage": 0.6667
+    },
+    "patient_summary": {
+      "fields": [
+        {
+          "field_id": "age",
+          "standard_name": "age",
+          "display_name": "年龄",
+          "value": 60.0,
+          "unit": "岁",
+          "value_type": "number",
+          "status": "present",
+          "is_missing": false,
+          "source_type": "patient_data",
+          "source_module": "patient_info",
+          "source_record": "patient_info.patient_age",
+          "acquired_at": null,
+          "confidence": null,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "patient_context",
+          "clinician_note": null,
+          "reviewed_at": null
+        },
+        {
+          "field_id": "sex",
+          "standard_name": "sex",
+          "display_name": "性别",
+          "value": "female",
+          "unit": "",
+          "value_type": "code",
+          "status": "present",
+          "is_missing": false,
+          "source_type": "patient_data",
+          "source_module": "patient_info",
+          "source_record": "patient_info.patient_sex",
+          "acquired_at": null,
+          "confidence": null,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "patient_context",
+          "clinician_note": null,
+          "reviewed_at": null
+        },
+        {
+          "field_id": "onset_to_admission_hours",
+          "standard_name": "onset_to_admission_hours",
+          "display_name": "发病至入院",
+          "value": null,
+          "unit": "h",
+          "value_type": "number",
+          "status": "missing",
+          "is_missing": true,
+          "source_type": "patient_data",
+          "source_module": "patient_context",
+          "source_record": "onset_exact_time->admission_time",
+          "acquired_at": null,
+          "confidence": null,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "patient_context",
+          "clinician_note": null,
+          "reviewed_at": null
+        },
+        {
+          "field_id": "admission_nihss",
+          "standard_name": "admission_nihss",
+          "display_name": "入院 NIHSS",
+          "value": null,
+          "unit": "分",
+          "value_type": "number",
+          "status": "missing",
+          "is_missing": true,
+          "source_type": "patient_data",
+          "source_module": "patient_info",
+          "source_record": "patient_info.admission_nihss",
+          "acquired_at": null,
+          "confidence": null,
+          "review_status": "pending",
+          "clinician_confirmed": false,
+          "review_section_id": "patient_context",
+          "clinician_note": null,
+          "reviewed_at": null
+        }
+      ]
+    },
+    "clinical_context": {
+      "available_modalities": [
+        "ncct",
+        "mcta",
+        "vcta",
+        "dcta"
+      ],
+      "hemisphere": null,
+      "fields": []
+    },
+    "quality_control": {},
+    "imaging_findings": [
+      {
+        "finding_id": "ncct_classification",
+        "display_name": "NCCT 三分类",
+        "value": "正常",
+        "status": "completed",
+        "source_type": "algorithm_output",
+        "source_module": "NCCTThreeClassAgent",
+        "confidence": 0.8,
+        "evidence_ids": [
+          "ev_2d3e89434909e2fdfbe0"
+        ],
+        "limitations": [],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "imaging_summary",
+        "clinician_note": "保留备注",
+        "reviewed_at": "2026-08-06T10:21:21.545480+00:00"
+      },
+      {
+        "finding_id": "vessel_occlusion_class",
+        "display_name": "血管闭塞分类",
+        "value": null,
+        "status": "missing",
+        "source_type": "algorithm_output",
+        "source_module": "VesselOcclusionAgent",
+        "confidence": null,
+        "evidence_ids": [
+          "ev_b0dc847515574eef159d"
+        ],
+        "limitations": [
+          "未获得有效血管闭塞分类结果。"
+        ],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "imaging_summary",
+        "clinician_note": "保留备注",
+        "reviewed_at": "2026-08-06T10:21:21.545480+00:00"
+      },
+      {
+        "finding_id": "perfusion_analysis",
+        "display_name": "灌注分析",
+        "value": "Core 6.14 mL · Penumbra 17.21 mL · Mismatch 2.80",
+        "status": "completed",
+        "source_type": "algorithm_output",
+        "source_module": "CTPAnalysisAgent",
+        "confidence": null,
+        "evidence_ids": [
+          "ev_b12b6f26503c5c1eb454",
+          "ev_8a1da35fe96c117de2f9",
+          "ev_51a496c1f6328215a830"
+        ],
+        "limitations": [],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "imaging_summary",
+        "clinician_note": "保留备注",
+        "reviewed_at": "2026-08-06T10:21:21.545480+00:00"
+      },
+      {
+        "finding_id": "cta_assessment",
+        "display_name": "CTA / 多期 CTA",
+        "value": "已获得影像，等待结构化观察",
+        "status": "unknown",
+        "source_type": "imaging_finding",
+        "source_module": "detect_modalities",
+        "confidence": null,
+        "evidence_ids": [
+          "ev_3d7bdd882ca04be9ace6"
+        ],
+        "limitations": [
+          "仅确认已上传 CTA 模态，未获得结构化模型观察。"
+        ],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "imaging_summary",
+        "clinician_note": "保留备注",
+        "reviewed_at": "2026-08-06T10:21:21.545480+00:00"
+      }
+    ],
+    "quantitative_metrics": [
+      {
+        "metric_id": "core_infarct_volume",
+        "display_name": "核心梗死体积",
+        "value": 6.14,
+        "unit": "mL",
+        "status": "present",
+        "reference_operator": "<",
+        "reference_value": 70.0,
+        "evaluation": "below_threshold",
+        "source_type": "algorithm_output",
+        "source_module": "StrokeAnalysisAgent",
+        "source_record": "run_stroke_analysis.core_infarct_volume",
+        "confidence": null,
+        "evidence_ids": [
+          "ev_b12b6f26503c5c1eb454"
+        ],
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "ctp_quant",
+        "clinician_note": null,
+        "reviewed_at": null
+      },
+      {
+        "metric_id": "penumbra_volume",
+        "display_name": "半暗带体积",
+        "value": 17.21,
+        "unit": "mL",
+        "status": "present",
+        "reference_operator": null,
+        "reference_value": null,
+        "evaluation": "observed",
+        "source_type": "algorithm_output",
+        "source_module": "StrokeAnalysisAgent",
+        "source_record": "run_stroke_analysis.penumbra_volume",
+        "confidence": null,
+        "evidence_ids": [
+          "ev_8a1da35fe96c117de2f9"
+        ],
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "ctp_quant",
+        "clinician_note": null,
+        "reviewed_at": null
+      },
+      {
+        "metric_id": "mismatch_ratio",
+        "display_name": "不匹配比值",
+        "value": 2.8,
+        "unit": "",
+        "status": "present",
+        "reference_operator": ">",
+        "reference_value": 1.8,
+        "evaluation": "above_threshold",
+        "source_type": "algorithm_output",
+        "source_module": "StrokeAnalysisAgent",
+        "source_record": "run_stroke_analysis.mismatch_ratio",
+        "confidence": null,
+        "evidence_ids": [
+          "ev_51a496c1f6328215a830"
+        ],
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "ctp_quant",
+        "clinician_note": null,
+        "reviewed_at": null
+      }
+    ],
+    "rule_evaluations": [
+      {
+        "rule_id": "CTP_MISMATCH_RATIO_1_8_V1",
+        "rule_name": "灌注不匹配比值评估",
+        "input_value": 2.8,
+        "operator": ">",
+        "threshold": 1.8,
+        "result": "met",
+        "clinical_meaning": "提示存在具有临床意义的灌注不匹配，需结合血管、时间窗和出血风险进一步评估。",
+        "source": {
+          "type": "internal_rule",
+          "title": "StrokeClaw 内部卒中规则集",
+          "version": "v1",
+          "section": "CTP_MISMATCH_RATIO_1_8_V1",
+          "guideline_bound": false
+        },
+        "evidence_ids": [
+          "ev_51a496c1f6328215a830",
+          "ev_1818254d84b2536d4b8c"
+        ],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "ctp_quant",
+        "clinician_note": null,
+        "reviewed_at": null
+      },
+      {
+        "rule_id": "CTP_CORE_VOLUME_70ML_V1",
+        "rule_name": "核心梗死体积高负荷复核",
+        "input_value": 6.14,
+        "operator": "<",
+        "threshold": 70.0,
+        "result": "met",
+        "clinical_meaning": "核心梗死体积未达到当前内部规则的高负荷界值。",
+        "source": {
+          "type": "internal_rule",
+          "title": "StrokeClaw 内部卒中规则集",
+          "version": "v1",
+          "section": "CTP_CORE_VOLUME_70ML_V1",
+          "guideline_bound": false
+        },
+        "evidence_ids": [
+          "ev_b12b6f26503c5c1eb454",
+          "ev_d944f84743e630b8779f"
+        ],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "ctp_quant",
+        "clinician_note": null,
+        "reviewed_at": null
+      },
+      {
+        "rule_id": "ONSET_TO_ADMISSION_6H_V1",
+        "rule_name": "早期时间窗提示",
+        "input_value": null,
+        "operator": "<=",
+        "threshold": 6.0,
+        "result": "unknown",
+        "clinical_meaning": "缺少时间信息，无法评估。",
+        "source": {
+          "type": "internal_rule",
+          "title": "StrokeClaw 内部卒中规则集",
+          "version": "v1",
+          "section": "ONSET_TO_ADMISSION_6H_V1",
+          "guideline_bound": false
+        },
+        "evidence_ids": [
+          "ev_96910f74ecbc76e48e4f"
+        ],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "ctp_quant",
+        "clinician_note": null,
+        "reviewed_at": null
+      },
+      {
+        "rule_id": "ONSET_TO_ADMISSION_24H_SELECTIVE_V1",
+        "rule_name": "选择性延长时间窗提示",
+        "input_value": null,
+        "operator": "<=",
+        "threshold": 24.0,
+        "result": "unknown",
+        "clinical_meaning": "缺少时间信息，无法评估。",
+        "source": {
+          "type": "internal_rule",
+          "title": "StrokeClaw 内部卒中规则集",
+          "version": "v1",
+          "section": "ONSET_TO_ADMISSION_24H_SELECTIVE_V1",
+          "guideline_bound": false
+        },
+        "evidence_ids": [
+          "ev_099fa6f7c4fce43fa564"
+        ],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "ctp_quant",
+        "clinician_note": null,
+        "reviewed_at": null
+      }
+    ],
+    "evidence_chain": [
+      {
+        "claim_id": "claim_significant_mismatch",
+        "claim": "灌注定量提示存在具有临床意义的不匹配。",
+        "claim_type": "clinical_assessment",
+        "support_status": "supported",
+        "evidence_ids": [
+          "ev_51a496c1f6328215a830",
+          "ev_1818254d84b2536d4b8c"
+        ],
+        "limitations": [],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "question_answer",
+        "clinician_note": null,
+        "reviewed_at": null
+      },
+      {
+        "claim_id": "recommendation_clinician_review",
+        "claim": "由卒中团队结合原始影像、禁忌证和患者基础状态完成最终临床决策。",
+        "claim_type": "recommendation",
+        "support_status": "supported",
+        "evidence_ids": [
+          "ev_51a496c1f6328215a830",
+          "ev_1818254d84b2536d4b8c"
+        ],
+        "limitations": [
+          "本报告不能替代临床医生最终判断。"
+        ],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "next_steps",
+        "clinician_note": null,
+        "reviewed_at": null,
+        "priority": "high",
+        "action_type": "clinician_review"
+      },
+      {
+        "claim_id": "recommendation_vessel_review",
+        "claim": "优先复核 CTA/MRA 责任血管及闭塞状态。",
+        "claim_type": "recommendation",
+        "support_status": "supported",
+        "evidence_ids": [
+          "ev_b0dc847515574eef159d"
+        ],
+        "limitations": [
+          "当前血管分类结果缺失。"
+        ],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "next_steps",
+        "clinician_note": null,
+        "reviewed_at": null,
+        "priority": "high",
+        "action_type": "additional_review"
+      }
+    ],
+    "evidence_catalog": [
+      {
+        "evidence_id": "ev_eed675505564707ebc46",
+        "legacy_aliases": [],
+        "evidence_type": "patient_data",
+        "display_name": "年龄",
+        "value": 60.0,
+        "unit": "岁",
+        "source_module": "patient_info",
+        "source_record": "patient_info.patient_age",
+        "confidence": null,
+        "generated_at": null,
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": null,
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_28029ea17b8cdece2200",
+        "legacy_aliases": [],
+        "evidence_type": "patient_data",
+        "display_name": "性别",
+        "value": "female",
+        "unit": "",
+        "source_module": "patient_info",
+        "source_record": "patient_info.patient_sex",
+        "confidence": null,
+        "generated_at": null,
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": null,
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_b12b6f26503c5c1eb454",
+        "legacy_aliases": [],
+        "evidence_type": "algorithm_output",
+        "display_name": "核心梗死体积",
+        "value": 6.14,
+        "unit": "mL",
+        "source_module": "StrokeAnalysisAgent",
+        "source_record": "run_stroke_analysis.core_infarct_volume",
+        "confidence": null,
+        "generated_at": "2026-08-06T10:21:21Z",
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": null,
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_8a1da35fe96c117de2f9",
+        "legacy_aliases": [],
+        "evidence_type": "algorithm_output",
+        "display_name": "半暗带体积",
+        "value": 17.21,
+        "unit": "mL",
+        "source_module": "StrokeAnalysisAgent",
+        "source_record": "run_stroke_analysis.penumbra_volume",
+        "confidence": null,
+        "generated_at": "2026-08-06T10:21:21Z",
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": null,
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_51a496c1f6328215a830",
+        "legacy_aliases": [],
+        "evidence_type": "algorithm_output",
+        "display_name": "不匹配比值",
+        "value": 2.8,
+        "unit": "",
+        "source_module": "StrokeAnalysisAgent",
+        "source_record": "run_stroke_analysis.mismatch_ratio",
+        "confidence": null,
+        "generated_at": "2026-08-06T10:21:21Z",
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": null,
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_2d3e89434909e2fdfbe0",
+        "legacy_aliases": [],
+        "evidence_type": "algorithm_output",
+        "display_name": "NCCT 三分类结果",
+        "value": "正常",
+        "unit": "",
+        "source_module": "NCCTThreeClassAgent",
+        "source_record": "three_class.predicted_label",
+        "confidence": 0.8,
+        "generated_at": "2026-08-06T10:21:21Z",
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": null,
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_b0dc847515574eef159d",
+        "legacy_aliases": [],
+        "evidence_type": "algorithm_output",
+        "display_name": "血管闭塞分类运行状态",
+        "value": null,
+        "unit": "",
+        "source_module": "VesselOcclusionAgent",
+        "source_record": "vessel_occlusion.vessel_occlusion_class_result",
+        "confidence": null,
+        "generated_at": "2026-08-06T10:21:21Z",
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": "未获得有效血管闭塞分类结果。",
+        "binding_status": "missing",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_3d7bdd882ca04be9ace6",
+        "legacy_aliases": [],
+        "evidence_type": "imaging_finding",
+        "display_name": "CTA / 多期 CTA 观察",
+        "value": "已获得 CTA 模态",
+        "unit": "",
+        "source_module": "detect_modalities",
+        "source_record": "available_modalities.cta",
+        "confidence": null,
+        "generated_at": "2026-08-06T10:21:21Z",
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": null,
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_1818254d84b2536d4b8c",
+        "legacy_aliases": [],
+        "evidence_type": "clinical_rule",
+        "display_name": "灌注不匹配比值评估",
+        "value": "met",
+        "unit": "",
+        "source_module": "StrokeClawRuleEngine",
+        "source_record": "CTP_MISMATCH_RATIO_1_8_V1",
+        "confidence": null,
+        "generated_at": "2026-08-06T10:21:21Z",
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": "提示存在具有临床意义的灌注不匹配，需结合血管、时间窗和出血风险进一步评估。",
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_d944f84743e630b8779f",
+        "legacy_aliases": [],
+        "evidence_type": "clinical_rule",
+        "display_name": "核心梗死体积高负荷复核",
+        "value": "met",
+        "unit": "",
+        "source_module": "StrokeClawRuleEngine",
+        "source_record": "CTP_CORE_VOLUME_70ML_V1",
+        "confidence": null,
+        "generated_at": "2026-08-06T10:21:21Z",
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": "核心梗死体积未达到当前内部规则的高负荷界值。",
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_96910f74ecbc76e48e4f",
+        "legacy_aliases": [],
+        "evidence_type": "clinical_rule",
+        "display_name": "早期时间窗提示",
+        "value": "unknown",
+        "unit": "",
+        "source_module": "StrokeClawRuleEngine",
+        "source_record": "ONSET_TO_ADMISSION_6H_V1",
+        "confidence": null,
+        "generated_at": "2026-08-06T10:21:21Z",
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": "缺少时间信息，无法评估。",
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      },
+      {
+        "evidence_id": "ev_099fa6f7c4fce43fa564",
+        "legacy_aliases": [],
+        "evidence_type": "clinical_rule",
+        "display_name": "选择性延长时间窗提示",
+        "value": "unknown",
+        "unit": "",
+        "source_module": "StrokeClawRuleEngine",
+        "source_record": "ONSET_TO_ADMISSION_24H_SELECTIVE_V1",
+        "confidence": null,
+        "generated_at": "2026-08-06T10:21:21Z",
+        "source_ref": null,
+        "document_title": null,
+        "document_version": null,
+        "page": null,
+        "snippet": "缺少时间信息，无法评估。",
+        "binding_status": "bound",
+        "clinician_confirmed": false
+      }
+    ],
+    "clinical_assessment": [
+      {
+        "claim_id": "claim_significant_mismatch",
+        "claim": "灌注定量提示存在具有临床意义的不匹配。",
+        "claim_type": "clinical_assessment",
+        "support_status": "supported",
+        "evidence_ids": [
+          "ev_51a496c1f6328215a830",
+          "ev_1818254d84b2536d4b8c"
+        ],
+        "limitations": [],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "question_answer",
+        "clinician_note": null,
+        "reviewed_at": null
+      }
+    ],
+    "recommendations": [
+      {
+        "claim_id": "recommendation_clinician_review",
+        "claim": "由卒中团队结合原始影像、禁忌证和患者基础状态完成最终临床决策。",
+        "claim_type": "recommendation",
+        "support_status": "supported",
+        "evidence_ids": [
+          "ev_51a496c1f6328215a830",
+          "ev_1818254d84b2536d4b8c"
+        ],
+        "limitations": [
+          "本报告不能替代临床医生最终判断。"
+        ],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "next_steps",
+        "clinician_note": null,
+        "reviewed_at": null,
+        "priority": "high",
+        "action_type": "clinician_review"
+      },
+      {
+        "claim_id": "recommendation_vessel_review",
+        "claim": "优先复核 CTA/MRA 责任血管及闭塞状态。",
+        "claim_type": "recommendation",
+        "support_status": "supported",
+        "evidence_ids": [
+          "ev_b0dc847515574eef159d"
+        ],
+        "limitations": [
+          "当前血管分类结果缺失。"
+        ],
+        "requires_clinician_review": true,
+        "review_status": "pending",
+        "clinician_confirmed": false,
+        "review_section_id": "next_steps",
+        "clinician_note": null,
+        "reviewed_at": null,
+        "priority": "high",
+        "action_type": "additional_review"
+      }
+    ],
+    "warnings": [],
+    "missing_information": [
+      {
+        "issue_id": "missing_onset_to_admission_hours",
+        "field": "onset_to_admission_hours",
+        "status": "missing",
+        "message": "发病至入院缺失。",
+        "impact": "可能限制临床规则和风险评估。",
+        "recommended_action": "请核对并补充发病至入院。",
+        "severity": "medium",
+        "requires_clinician_review": true,
+        "review_section_id": "risk_uncertainty"
+      },
+      {
+        "issue_id": "missing_admission_nihss",
+        "field": "admission_nihss",
+        "status": "missing",
+        "message": "入院 NIHSS缺失。",
+        "impact": "可能限制临床规则和风险评估。",
+        "recommended_action": "请核对并补充入院 NIHSS。",
+        "severity": "medium",
+        "requires_clinician_review": true,
+        "review_section_id": "risk_uncertainty"
+      },
+      {
+        "issue_id": "missing_vessel_occlusion_class",
+        "field": "vessel_occlusion_class",
+        "status": "missing",
+        "message": "血管闭塞分类结果缺失。",
+        "impact": "无法完整评估大血管闭塞证据和血管内治疗条件。",
+        "recommended_action": "结合原始 CTA/MRA 或后续血管影像进一步确认。",
+        "severity": "high",
+        "requires_clinician_review": true,
+        "review_section_id": "risk_uncertainty"
+      }
+    ],
+    "uncertainties": [
+      {
+        "issue_id": "uncertainty_1",
+        "field": "report",
+        "status": "uncertain",
+        "message": "病灶侧别: 外部知识验证未生成该结论。",
+        "impact": "可能影响报告结论的完整性。",
+        "recommended_action": "请结合原始数据和临床信息复核。",
+        "severity": "medium",
+        "requires_clinician_review": true,
+        "review_section_id": "risk_uncertainty"
+      },
+      {
+        "issue_id": "uncertainty_2",
+        "field": "report",
+        "status": "uncertain",
+        "message": "核心梗死体积: 外部知识验证未生成该结论。",
+        "impact": "可能影响报告结论的完整性。",
+        "recommended_action": "请结合原始数据和临床信息复核。",
+        "severity": "medium",
+        "requires_clinician_review": true,
+        "review_section_id": "risk_uncertainty"
+      },
+      {
+        "issue_id": "uncertainty_3",
+        "field": "report",
+        "status": "uncertain",
+        "message": "半暗带体积: 外部知识验证未生成该结论。",
+        "impact": "可能影响报告结论的完整性。",
+        "recommended_action": "请结合原始数据和临床信息复核。",
+        "severity": "medium",
+        "requires_clinician_review": true,
+        "review_section_id": "risk_uncertainty"
+      },
+      {
+        "issue_id": "uncertainty_4",
+        "field": "report",
+        "status": "uncertain",
+        "message": "不匹配比值: 外部知识验证未生成该结论。",
+        "impact": "可能影响报告结论的完整性。",
+        "recommended_action": "请结合原始数据和临床信息复核。",
+        "severity": "medium",
+        "requires_clinician_review": true,
+        "review_section_id": "risk_uncertainty"
+      },
+      {
+        "issue_id": "uncertainty_5",
+        "field": "report",
+        "status": "uncertain",
+        "message": "显著不匹配: 外部知识验证未生成该结论。",
+        "impact": "可能影响报告结论的完整性。",
+        "recommended_action": "请结合原始数据和临床信息复核。",
+        "severity": "medium",
+        "requires_clinician_review": true,
+        "review_section_id": "risk_uncertainty"
+      },
+      {
+        "issue_id": "uncertainty_6",
+        "field": "report",
+        "status": "uncertain",
+        "message": "治疗时间窗提示: 外部知识验证未生成该结论。",
+        "impact": "可能影响报告结论的完整性。",
+        "recommended_action": "请结合原始数据和临床信息复核。",
+        "severity": "medium",
+        "requires_clinician_review": true,
+        "review_section_id": "risk_uncertainty"
+      }
+    ],
+    "narrative_summary": {
+      "deterministic_summary": "不匹配比值 2.80 高于内部规则阈值 1.80。 核心梗死体积 6.14 mL，半暗带体积 17.21 mL。 血管闭塞分类结果缺失，取栓相关判断必须进一步复核。",
+      "ai_supplement": null,
+      "generation_mode": "deterministic",
+      "claim_ids": [],
+      "legacy_text": null
+    },
+    "clinician_review": {
+      "overall_status": "pending",
+      "sections": [
+        {
+          "section_id": "imaging_summary",
+          "review_status": "pending",
+          "doctor_note": "保留备注",
+          "clinician_confirmed": false,
+          "updated_at": "2026-08-06T10:21:21.545480+00:00"
+        }
+      ],
+      "field_confirmation_map": {
+        "age": {
+          "section_id": "patient_context",
+          "status": "pending",
+          "clinician_confirmed": false
+        },
+        "sex": {
+          "section_id": "patient_context",
+          "status": "pending",
+          "clinician_confirmed": false
+        },
+        "onset_to_admission_hours": {
+          "section_id": "patient_context",
+          "status": "pending",
+          "clinician_confirmed": false
+        },
+        "admission_nihss": {
+          "section_id": "patient_context",
+          "status": "pending",
+          "clinician_confirmed": false
+        },
+        "core_infarct_volume": {
+          "section_id": "ctp_quant",
+          "status": "pending",
+          "clinician_confirmed": false
+        },
+        "penumbra_volume": {
+          "section_id": "ctp_quant",
+          "status": "pending",
+          "clinician_confirmed": false
+        },
+        "mismatch_ratio": {
+          "section_id": "ctp_quant",
+          "status": "pending",
+          "clinician_confirmed": false
+        }
+      },
+      "claim_confirmation_map": {
+        "claim_significant_mismatch": {
+          "section_id": "question_answer",
+          "status": "pending",
+          "clinician_confirmed": false
+        },
+        "recommendation_clinician_review": {
+          "section_id": "next_steps",
+          "status": "pending",
+          "clinician_confirmed": false
+        },
+        "recommendation_vessel_review": {
+          "section_id": "next_steps",
+          "status": "pending",
+          "clinician_confirmed": false
+        }
+      },
+      "updated_at": null
+    }
+  },
+  "repair_meta": {
+    "version": "ncct-perfusion-v1",
+    "source_sha256": "9982a2787e30e6b546e407e3a1124d8f599acdd208c1081d1848cead3a03ab3b",
+    "source_name_sha256": "37cac2b24adf967be4047729047834cdc83f1399cd877cb2001341b6c733ca82",
+    "repaired_at": "2026-08-06T10:21:21.569150+00:00",
+    "review_reset": true
+  }
+}

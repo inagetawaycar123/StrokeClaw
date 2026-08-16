@@ -41,3 +41,63 @@ backend/three_class/best_model.pt
 
 # .idea
 .idea/
+
+# ==============================
+# Large AI model files
+# ==============================
+*.safetensors
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.state
+
+# Training arrays and caches
+*.npy
+*.npz
+
+# Large model directories
+MedGemma_Model/
+palette/weights/
+dinov3/ckpt/
+
+# Training outputs and caches
+outputs/
+cache/
+checkpoints/
+runs/
+
+# Local datasets
+data/
+dataset/
+datasets/
+uploads/
+patients/
+dicom/
+nifti/
+
+# Medical images
+*.dcm
+*.nii
+*.nii.gz
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+
+# IDE
+.idea/
+.vscode/

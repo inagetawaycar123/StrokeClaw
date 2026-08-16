@@ -27,11 +27,11 @@
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
-
+        
         // 从 URL 路径获取 patient_id: /report/123
         const pathParts = window.location.pathname.split('/');
         const patientId = parseInt(pathParts[pathParts.length - 1]) || null;
-
+        
         const fileId = urlParams.get('file_id') || null;
         const runId = urlParams.get('run_id') || null;
         const firstPresent = (...values) => values.find(

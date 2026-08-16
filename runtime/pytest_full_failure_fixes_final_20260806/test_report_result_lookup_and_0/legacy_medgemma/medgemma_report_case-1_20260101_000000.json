@@ -1,0 +1,18 @@
+{
+  "report_payload": {
+    "doctor_notes": {
+      "html": "<p>复核完成</p>",
+      "text": "复核完成",
+      "saved_at": "2026-07-28T00:00:00Z",
+      "patient_id": 1,
+      "file_id": "case-1"
+    }
+  },
+  "doctor_notes": {
+    "html": "<p>复核完成</p>",
+    "text": "复核完成",
+    "saved_at": "2026-07-28T00:00:00Z",
+    "patient_id": 1,
+    "file_id": "case-1"
+  }
+}

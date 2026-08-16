@@ -1,0 +1,148 @@
+{
+  "meta": {
+    "timestamp": "2026-08-06T10:44:51.421184+00:00",
+    "file_id": "case-gated",
+    "provider": "baichuan_m3",
+    "model": "Baichuan-M3",
+    "elapsed_seconds": 0.0,
+    "format": "markdown"
+  },
+  "report_payload": {
+    "provider": "baichuan_m3",
+    "provider_model": "Baichuan-M3",
+    "is_mock": false,
+    "modalities": [
+      "cbf",
+      "cbv",
+      "dcta",
+      "mcta",
+      "ncct",
+      "tmax",
+      "vcta"
+    ],
+    "quality_control_result": {},
+    "combo": "NCCT_MCTA_CTP",
+    "sections": {
+      "ncct": {
+        "status": "completed",
+        "three_class_label": "hemo",
+        "three_class_label_cn": "脑出血",
+        "three_class_confidence": 0.91,
+        "class_counts": {
+          "normal": 0,
+          "hemo": 0,
+          "infarct": 0
+        },
+        "total_slices": 0,
+        "safety_gate": {
+          "blocked": true,
+          "reason_code": "NCCT_SUSPECTED_HEMORRHAGE",
+          "reason": "NCCT 三分类提示疑似脑出血，已阻断后续 AIS/灌注分析",
+          "requires_clinician_review": true
+        }
+      },
+      "cta": [
+        {
+          "title": "血管闭塞分类",
+          "data": {
+            "status": "completed",
+            "vessel_occlusion_class_result": "large_vessel_occlusion",
+            "confidence": 0.82
+          }
+        }
+      ],
+      "ctp": {
+        "enabled": false,
+        "status": "skipped",
+        "reason": "NCCT 三分类提示疑似脑出血，已阻断后续 AIS/灌注分析",
+        "core_infarct_volume": 6.14,
+        "penumbra_volume": 17.21,
+        "mismatch_ratio": 2.8
+      }
+    },
+    "summary_findings": [
+      "NCCT 三分类结果：脑出血。",
+      "血管闭塞分类结果：large_vessel_occlusion。",
+      "NCCT 三分类提示疑似脑出血，已阻断后续 AIS/灌注分析"
+    ],
+    "risk_notice": [
+      "AI结果仅作为影像辅助信息，不可替代神经影像医师阅片和临床综合判断。",
+      "关键结论需回到原始影像、算法输出和临床资料进行医生复核。"
+    ],
+    "quality_checks": {
+      "passed": false,
+      "issues": [
+        "NCCT 三分类提示疑似脑出血，已阻断后续 AIS/灌注分析"
+      ]
+    },
+    "ncct_enhanced": [],
+    "cta_enhanced": {
+      "arterial": [],
+      "venous": [],
+      "delayed": []
+    },
+    "ctp_enhanced": null,
+    "report": "## 患者信息\n- 患者ID：patient-123\n- 姓名：测试患者甲\n\n安全报告",
+    "goal_question": "请回答测试患者甲 patient-123 的取栓风险",
+    "question": "请回答测试患者甲 patient-123 的取栓风险",
+    "patient_age": 68,
+    "patient_sex": "女",
+    "admission_nihss": 12,
+    "onset_to_admission_hours": 3.5,
+    "hemisphere": "left",
+    "core_infarct_volume": 6.14,
+    "penumbra_volume": 17.21,
+    "mismatch_ratio": 2.8,
+    "three_class_status": "completed",
+    "three_class_label": "hemo",
+    "three_class_label_cn": "脑出血",
+    "three_class_confidence": 0.91,
+    "three_class_result": {
+      "status": "completed",
+      "three_class_label": "hemo",
+      "three_class_label_cn": "脑出血",
+      "three_class_confidence": 0.91,
+      "class_counts": {
+        "normal": 0,
+        "hemo": 0,
+        "infarct": 0
+      },
+      "total_slices": 0,
+      "safety_gate": {
+        "blocked": true,
+        "reason_code": "NCCT_SUSPECTED_HEMORRHAGE",
+        "reason": "NCCT 三分类提示疑似脑出血，已阻断后续 AIS/灌注分析",
+        "requires_clinician_review": true
+      }
+    },
+    "safety_gate": {
+      "blocked": true,
+      "reason_code": "NCCT_SUSPECTED_HEMORRHAGE",
+      "reason": "NCCT 三分类提示疑似脑出血，已阻断后续 AIS/灌注分析",
+      "requires_clinician_review": true
+    },
+    "vessel_occlusion_result": {
+      "status": "completed",
+      "vessel_occlusion_class_result": "large_vessel_occlusion",
+      "predicted_class": "Class_1_LVO",
+      "confidence": 0.82,
+      "class_counts": {
+        "Class_0": 0,
+        "Class_1_LVO": 1,
+        "Class_2_MEVO": 0
+      },
+      "total_slices": 0,
+      "valid_predictions": 1,
+      "error_code": null,
+      "error_message": null,
+      "failures": []
+    },
+    "vessel_occlusion_status": "completed",
+    "vessel_occlusion_class_result": "large_vessel_occlusion",
+    "vessel_occlusion_confidence": 0.82,
+    "patient_id": "patient-123",
+    "patient_name": "测试患者甲"
+  },
+  "markdown": "## 患者信息\n- 患者ID：patient-123\n- 姓名：测试患者甲\n\n安全报告",
+  "report": "## 患者信息\n- 患者ID：patient-123\n- 姓名：测试患者甲\n\n安全报告"
+}

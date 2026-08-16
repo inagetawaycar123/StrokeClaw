@@ -76,7 +76,7 @@ def test_registers_missing_pytorch_21_dynamo_setting():
     assert "accumulated_cache_size_limit" in config._allowed_keys
 
 
-def test_registers_missing_modern_dynamo_setting_as_config_entry(monkeypatch):
+def test_registers_missing_modern_dynamo_setting_with_compat_classes(monkeypatch):
     import torch.utils._config_module as torch_config_module
 
     class _Config:
@@ -98,6 +98,40 @@ def test_registers_missing_modern_dynamo_setting_as_config_entry(monkeypatch):
     monkeypatch.setattr(
         torch_config_module, "_ConfigEntry", _ConfigEntry, raising=False
     )
+
+    class _ModernConfig:
+        def __init__(self) -> None:
+            object.__setattr__(
+                self,
+                "_config",
+                {"existing_limit": _ConfigEntry(_Config(default=1, value_type=int))},
+            )
+            object.__setattr__(self, "_default", None)
+            object.__setattr__(self, "_allowed_keys", None)
+
+        def __getattr__(self, name):
+            try:
+                return self._config[name].default
+            except KeyError as exc:
+                raise AttributeError(name) from exc
+
+    config = _ModernConfig()
+
+    adapter._ensure_dynamo_config_compat(config)
+
+    entry = config._config["accumulated_cache_size_limit"]
+    assert isinstance(entry, _ConfigEntry)
+    assert entry.default == 1024
+    assert config.accumulated_cache_size_limit == 1024
+
+
+def test_registers_missing_modern_dynamo_setting_as_config_entry():
+    import torch.utils._config_module as torch_config_module
+
+    _Config = getattr(torch_config_module, "_Config", None)
+    _ConfigEntry = getattr(torch_config_module, "_ConfigEntry", None)
+    if _Config is None or _ConfigEntry is None:
+        pytest.skip("Current PyTorch does not expose modern ConfigEntry internals")
 
     class _ModernConfig:
         def __init__(self) -> None:

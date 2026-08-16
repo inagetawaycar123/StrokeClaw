@@ -134,7 +134,12 @@ class AgentLoopController:
             loop_state.updated_at = time.time()
 
             if obs.status == "failed":
-                if tool_name in {"icv", "ekv", "consensus_lite"}:
+                if tool_name in {
+                    "icv",
+                    "ekv",
+                    "consensus_lite",
+                    "run_mrs_prognosis_prediction",
+                }:
                     self.cb.agent_log(
                         run_id=run_id,
                         stage=self.cb.stage_for_tool(tool_name),
@@ -335,6 +340,7 @@ class AgentLoopController:
             "tool_results": run.get("tool_results", []),
             "patient_context": context.get("patient_context"),
             "analysis_result": context.get("analysis_result"),
+            "mrs_prognosis_result": context.get("mrs_prognosis_result"),
             "icv": context.get("icv_result"),
             "ekv": context.get("ekv_result"),
             "consensus": context.get("consensus_result"),

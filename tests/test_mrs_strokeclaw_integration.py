@@ -387,7 +387,7 @@ def test_frontend_formats_null_as_dash_and_exposes_required_fields():
         assert hidden_detail not in cockpit
 
 
-def test_optional_mrs_clinical_fields_route_without_database_schema_change():
+def test_mrs_clinical_fields_support_persisted_and_fallback_routes():
     record, observed = mrs_prognosis.build_mrs_record(
         run={"id": "clinical-db-route", "planner_input": {"patient_id": 7}},
         patient_data={
@@ -402,11 +402,15 @@ def test_optional_mrs_clinical_fields_route_without_database_schema_change():
     assert record["NIHSS 24 HOURS"] == 7
     assert record["onset_to_ct_hours"] == 2.5
 
+    base_schema = Path("sql/PATIENT_INFO_TANLE.sql").read_text(encoding="utf-8")
+    migration = Path("sql/mrs_clinical_fields.sql").read_text(encoding="utf-8")
     patient_form = Path("backend/templates/patient/index.html").read_text(encoding="utf-8")
     patient_js = Path("static/js/patient.js").read_text(encoding="utf-8")
     upload_js = Path("static/js/upload.js").read_text(encoding="utf-8")
     app_source = Path("backend/app.py").read_text(encoding="utf-8")
     for field in ("nihss_24h", "onset_to_ct_hours"):
+        assert field in base_schema
+        assert field in migration
         assert f'id="{field}"' in patient_form
         assert field in patient_js
     assert "mrs_clinical_record_${patientId}" in patient_js

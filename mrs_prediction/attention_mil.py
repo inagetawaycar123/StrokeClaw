@@ -31,3 +31,4 @@ class MaskedAttentionMIL(nn.Module):
         weights = weights.masked_fill(~valid_mask, 0.0)
         pooled = torch.sum(features * weights.unsqueeze(-1), dim=1)
         return pooled, weights
+

@@ -5717,10 +5717,16 @@ def _tool_icv(run):
                 if tr.get("tool_name") == "run_stroke_analysis" and tr.get("status") == "completed":
                     analysis_ctx = tr.get("structured_output") or {}
                     break
+        icv_patient_context = copy.deepcopy(context.get("patient_context") or {})
+        icv_patient_context["expected_identifiers"] = {
+            "patient_id": (run.get("planner_input") or {}).get("patient_id") or run.get("patient_id"),
+            "file_id": (run.get("planner_input") or {}).get("file_id") or run.get("file_id"),
+            "run_id": run.get("run_id") or run.get("id"),
+        }
         icv_out = evaluate_icv(
             planner_output=planner_output,
             tool_results=tool_results,
-            patient_context=context.get("patient_context"),
+            patient_context=icv_patient_context,
             analysis_result=analysis_ctx,
         )
         if not icv_out or not icv_out.get("success"):
@@ -7483,10 +7489,10 @@ def init_ai_models():
             find_weight_file(config["weight_dir"], "_Network.pth") is not None
         )
 
-        print(f"  配置文件: {'✓' if config_exists else '✗'}")
+        print(f"  配置文件: {'[OK]' if config_exists else '[MISSING]'}")
         print(f"  权重基础路径: {weight_base}")
-        print(f"  EMA权重: {'✓' if ema_exists else '✗'}") # AI辅助生成：GLM-5, 2026-03-04
-        print(f"  普通权重: {'✓' if normal_exists else '✗'}")
+        print(f"  EMA权重: {'[OK]' if ema_exists else '[MISSING]'}") # AI辅助生成：GLM-5, 2026-03-04
+        print(f"  普通权重: {'[OK]' if normal_exists else '[MISSING]'}")
 
         if config_exists and weight_base:
             try:
@@ -7501,24 +7507,24 @@ def init_ai_models():
                         "available": True,
                     }
                     models_initialized += 1
-                    print(f"  ✓ {config['name']} 模型初始化成功")
+                    print(f"  [OK] {config['name']} 模型初始化成功")
                 else:
                     ai_models[model_key] = {
                         "model": None,
                         "config": config,
                         "available": False,
                     }
-                    print(f"  ✗ {config['name']} 模型初始化失败")
+                    print(f"  [ERROR] {config['name']} 模型初始化失败")
             except Exception as e:
                 ai_models[model_key] = {
                     "model": None,
                     "config": config,
                     "available": False,
                 }
-                print(f"  ✗ {config['name']} 模型初始化异常: {e}") # AI辅助生成：GLM-5, 2026-03-05
+                print(f"  [ERROR] {config['name']} 模型初始化异常: {e}") # AI辅助生成：GLM-5, 2026-03-05
         else:
             ai_models[model_key] = {"model": None, "config": config, "available": False}
-            print(f"  ✗ {config['name']} 模型文件不完整")
+            print(f"  [MISSING] {config['name']} 模型文件不完整")
 
     print(f"\n模型初始化统计: {models_initialized}/{len(MODEL_CONFIGS)} 个模型成功初始化")
     print("=" * 50)
@@ -15226,9 +15232,3 @@ def api_save_and_generate_report():
         )
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
-
-
-
-
-

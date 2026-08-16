@@ -1539,10 +1539,10 @@ function nodeCard(node, ctx = {}) {
         <div class="runtime-summary-row"><span class="runtime-summary-key">临床意义</span><span class="runtime-summary-value">${t(node.summary.meaning)}</span></div>
         <div class="runtime-summary-row"><span class="runtime-summary-key">当前结论</span><span class="runtime-summary-value">${t(node.summary.conclusion)}</span></div>
       </div>
+      ${mrsPanel}
       ${node.riskItems.length ? `<div class="runtime-risk-box level-${riskClass}"><div class="runtime-risk-head">风险提示（${riskClass.toUpperCase()}）</div><ul class="runtime-risk-list">${node.riskItems.map((x) => `<li>${x}</li>`).join("")}</ul></div>` : ""}
       ${node.actionRequired ? `<div class="runtime-human-box"><div class="runtime-human-head">人工操作节点</div><div class="runtime-human-line">待执行动作：${node.actionRequired}</div>${node.actionLog ? `<div class="runtime-human-line">操作记录：${node.actionLog}</div>` : ""}</div>` : ""}
       ${qualityReviewForm}
-      ${mrsPanel}
       <button class="runtime-detail-toggle" type="button" data-toggle-node="${node.id}">${expanded ? "收起详情" : "展开详情"}</button>
       ${detail}
       <div class="runtime-node-meta">${(node.meta.length ? node.meta : [node.group === "upload" ? "upload_chain" : "agent_network"]).map((m) => `<span class="runtime-node-meta-item">${m}</span>`).join("")}</div>`;
