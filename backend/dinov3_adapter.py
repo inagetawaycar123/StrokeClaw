@@ -1,4 +1,4 @@
-"""PyTorch 2.1 compatible DINOv3 vessel-classification adapter.
+"""PyTorch 2.1-2.10 compatible DINOv3 vessel-classification adapter.
 
 This module intentionally imports only ``dinov3.hub.backbones``.  Importing the
 repository's ``hubconf.py`` also imports optional segmentation dependencies,
@@ -21,6 +21,11 @@ import torch.nn as nn
 from PIL import Image
 from torchvision import transforms
 
+try:
+    from torch._dynamo import config as _TORCH_DYNAMO_CONFIG
+except (AttributeError, ImportError):
+    _TORCH_DYNAMO_CONFIG = None
+
 
 DEFAULT_CLASS_NAMES: Tuple[str, ...] = (
     "Class_0",
@@ -37,39 +42,64 @@ def _ensure_dynamo_config_compat(config_module=None) -> None:
     DINOv3 assigns ``torch._dynamo.config.accumulated_cache_size_limit`` while
     importing its transformer blocks.  PyTorch 2.1's strict ``ConfigModule``
     rejects unknown keys, so the key has to be registered before importing the
-    backbone package.  Newer PyTorch versions already expose it and are left
-    unchanged.
+    backbone package. Modern PyTorch stores the same setting in ConfigEntry
+    objects, which must be preserved when compatibility registration is needed.
     """
 
+    key = "accumulated_cache_size_limit"
+    default_value = 1024
     if config_module is None:
-        try:
-            config_module = torch._dynamo.config
-        except (AttributeError, ImportError):
+        # Resolve this before any DINO import hook is installed. Torch exposes
+        # ``_dynamo.config`` lazily, and resolving it later can be intercepted
+        # by an import hook intended for ``dinov3.hub.backbones``.
+        config_module = _TORCH_DYNAMO_CONFIG
+        if config_module is None:
+            return
+
+    config = getattr(config_module, "_config", None)
+    # Modern PyTorch represents configuration values with _ConfigEntry
+    # objects. Avoid replacing an existing visible entry with a plain int.
+    if isinstance(config, dict) and key in config:
+        entry = config[key]
+        if not bool(getattr(entry, "hide", False)):
             return
 
     try:
-        getattr(config_module, "accumulated_cache_size_limit")
+        getattr(config_module, key)
         return
     except AttributeError:
         pass
 
-    key = "accumulated_cache_size_limit"
-    default_value = 1024
-    config = getattr(config_module, "_config", None)
     defaults = getattr(config_module, "_default", None)
     allowed_keys = getattr(config_module, "_allowed_keys", None)
 
-    # PyTorch 2.1 installs a strict ConfigModule backed by these containers.
+    # PyTorch 2.1 stores plain values in ``_config``. PyTorch 2.10 stores
+    # private _ConfigEntry objects and is corrupted if a plain int is inserted.
     if isinstance(config, dict):
-        config[key] = default_value
+        sample_entry = next(iter(config.values()), None)
+        if sample_entry is not None and hasattr(sample_entry, "alias"):
+            try:
+                from torch.utils._config_module import _Config, _ConfigEntry
+
+                config[key] = _ConfigEntry(
+                    _Config(default=default_value, value_type=int)
+                )
+            except (ImportError, TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    "Unable to register DINOv3's PyTorch Dynamo compatibility "
+                    "setting for this PyTorch version"
+                ) from exc
+        else:
+            config[key] = default_value
     if isinstance(defaults, dict):
         defaults[key] = default_value
     if isinstance(allowed_keys, set):
         allowed_keys.add(key)
 
     try:
-        setattr(config_module, key, default_value)
-    except AttributeError as exc:
+        if not hasattr(config_module, key):
+            setattr(config_module, key, default_value)
+    except (AttributeError, TypeError) as exc:
         raise RuntimeError(
             "Unable to register DINOv3's PyTorch Dynamo compatibility setting"
         ) from exc
@@ -118,6 +148,29 @@ def _import_backbone_factory(repo_dir: str) -> Callable[..., nn.Module]:
     if not callable(factory):
         raise ImportError("dinov3.hub.backbones.dinov3_vitb16 is unavailable")
     return factory
+
+
+def validate_model_assets(
+    model_path: str,
+    dinov3_weights: str,
+    repo_dir: str,
+) -> None:
+    """Validate all local vessel-model assets before slice inference starts."""
+
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(
+            f"Vessel classifier weights not found: {model_path}"
+        )
+    if not os.path.isfile(dinov3_weights):
+        raise FileNotFoundError(
+            f"DINOv3 pretrained weights not found: {dinov3_weights}"
+        )
+    if not os.path.isdir(repo_dir):
+        raise FileNotFoundError(f"DINOv3 repository not found: {repo_dir}")
+
+    # Importing the lightweight factory verifies the source tree and Python
+    # compatibility without constructing the 3-class model or reading weights.
+    _import_backbone_factory(repo_dir)
 
 
 def _load_backbone(weights_path: str, repo_dir: str) -> nn.Module:
@@ -289,12 +342,7 @@ class ModelManager:
             if cached is not None:
                 return cached
 
-            if not os.path.isfile(model_path):
-                raise FileNotFoundError(
-                    f"Vessel classifier weights not found: {model_path}"
-                )
-            if not os.path.isdir(repo_dir):
-                raise FileNotFoundError(f"DINOv3 repository not found: {repo_dir}")
+            validate_model_assets(model_path, dinov3_weights, repo_dir)
 
             model = CAMClassifier(
                 num_classes=num_classes,
@@ -424,4 +472,5 @@ __all__ = [
     "build_transform",
     "load_image",
     "predict_single_image",
+    "validate_model_assets",
 ]

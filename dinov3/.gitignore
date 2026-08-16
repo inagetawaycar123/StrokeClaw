@@ -1,0 +1,3 @@
+# Local model weights are deployed separately from the vendored source.
+/dinov3权重.pth
+/ckpt/*.pth

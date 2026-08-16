@@ -76,6 +76,88 @@ def test_registers_missing_pytorch_21_dynamo_setting():
     assert "accumulated_cache_size_limit" in config._allowed_keys
 
 
+def test_registers_missing_modern_dynamo_setting_as_config_entry(monkeypatch):
+    import torch.utils._config_module as torch_config_module
+
+    class _Config:
+        def __init__(self, *, default, value_type) -> None:
+            self.default = default
+            self.value_type = value_type
+
+    class _ConfigEntry:
+        alias = None
+        hide = False
+
+        def __init__(self, config) -> None:
+            self.default = config.default
+            self.value_type = config.value_type
+
+    # Torch 2.10 provides these private classes. Add compatible stand-ins when
+    # the test itself runs under the production Torch 2.2 environment.
+    monkeypatch.setattr(torch_config_module, "_Config", _Config, raising=False)
+    monkeypatch.setattr(
+        torch_config_module, "_ConfigEntry", _ConfigEntry, raising=False
+    )
+
+    class _ModernConfig:
+        def __init__(self) -> None:
+            object.__setattr__(
+                self,
+                "_config",
+                {"existing_limit": _ConfigEntry(_Config(default=1, value_type=int))},
+            )
+            object.__setattr__(self, "_default", None)
+            object.__setattr__(self, "_allowed_keys", None)
+
+        def __getattr__(self, name):
+            try:
+                return self._config[name].default
+            except KeyError as exc:
+                raise AttributeError(name) from exc
+
+    config = _ModernConfig()
+
+    adapter._ensure_dynamo_config_compat(config)
+
+    entry = config._config["accumulated_cache_size_limit"]
+    assert isinstance(entry, _ConfigEntry)
+    assert entry.default == 1024
+    assert config.accumulated_cache_size_limit == 1024
+
+
+def test_validate_model_assets_rejects_pyc_only_source_tree(tmp_path):
+    image_path, model_path, weights_path, repo_dir = _write_required_files(tmp_path)
+    del image_path
+    backbones_path = repo_dir / "dinov3" / "hub" / "backbones.py"
+    backbones_path.unlink()
+    pycache = backbones_path.parent / "__pycache__"
+    pycache.mkdir()
+    (pycache / "backbones.cpython-311.pyc").write_bytes(b"stale")
+
+    with pytest.raises(FileNotFoundError, match="backbone module not found"):
+        adapter.validate_model_assets(
+            str(model_path), str(weights_path), str(repo_dir)
+        )
+
+
+def test_validate_model_assets_rejects_missing_pretrained_weights(
+    monkeypatch, tmp_path
+):
+    image_path, model_path, weights_path, repo_dir = _write_required_files(tmp_path)
+    del image_path
+    weights_path.unlink()
+    monkeypatch.setattr(
+        adapter,
+        "_import_backbone_factory",
+        lambda _path: pytest.fail("source import must not run"),
+    )
+
+    with pytest.raises(FileNotFoundError, match="pretrained weights"):
+        adapter.validate_model_assets(
+            str(model_path), str(weights_path), str(repo_dir)
+        )
+
+
 def test_imports_backbone_directly_without_torch_hub(monkeypatch, tmp_path):
     repo_dir = tmp_path / "repo"
     backbones_path = repo_dir / "dinov3" / "hub" / "backbones.py"

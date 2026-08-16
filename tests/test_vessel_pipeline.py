@@ -18,6 +18,7 @@ def _configure_fake_model(monkeypatch, processed_dir: Path, predictor):
     monkeypatch.setitem(app_module.app.config, "PROCESSED_FOLDER", str(processed_dir))
     monkeypatch.setattr(app_module, "PROJECT_ROOT", str(project_root))
     monkeypatch.setattr(app_module, "_DINOV3_AVAILABLE", True)
+    monkeypatch.setattr(app_module, "_dinov3_validate_assets", lambda **_kwargs: None)
     monkeypatch.setattr(app_module, "_dinov3_predict_single", predictor)
 
 
@@ -38,6 +39,41 @@ def test_vessel_classification_requires_cta_input(monkeypatch, tmp_path):
     assert result["error_code"] == "CTA_INPUT_MISSING"
     assert result["vessel_occlusion_class_result"] is None
     assert "CTA" in message
+
+
+def test_vessel_dependency_preflight_stops_before_slice_inference(
+    monkeypatch, tmp_path
+):
+    case_dir = tmp_path / "case-missing-source"
+    case_dir.mkdir()
+    (case_dir / "slice_000_mcta.png").write_bytes(b"input")
+    (case_dir / "slice_000_vcta.png").write_bytes(b"input")
+    (case_dir / "slice_000_dcta.png").write_bytes(b"input")
+    _configure_fake_model(
+        monkeypatch,
+        tmp_path,
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("slice inference must not run")
+        ),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "_dinov3_validate_assets",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            FileNotFoundError("DINOv3 backbone module not found")
+        ),
+    )
+
+    ok, result, message = app_module._run_vessel_occlusion_on_file(
+        "case-missing-source"
+    )
+
+    assert ok is False
+    assert result["status"] == "unavailable"
+    assert result["error_code"] == "MODEL_DEPENDENCY_UNAVAILABLE"
+    assert result["valid_predictions"] == 0
+    assert result["failures"] == []
+    assert "backbone module not found" in message
 
 
 def test_vessel_classification_keeps_partial_failures(monkeypatch, tmp_path):

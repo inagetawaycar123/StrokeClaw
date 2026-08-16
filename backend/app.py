@@ -76,11 +76,13 @@ _DINOV3_AVAILABLE = False
 _DINOV3_IMPORT_ERROR = None
 try:
     from .dinov3_adapter import predict_single_image as _dinov3_predict_single
+    from .dinov3_adapter import validate_model_assets as _dinov3_validate_assets
     _DINOV3_AVAILABLE = True
     print("[DINOv3] 血管闭塞三分类模块加载成功")
 except ImportError as e:
     try:
         from dinov3_adapter import predict_single_image as _dinov3_predict_single
+        from dinov3_adapter import validate_model_assets as _dinov3_validate_assets
         _DINOV3_AVAILABLE = True
         print("[DINOv3] 血管闭塞三分类模块加载成功")
     except Exception as direct_error:
@@ -5368,6 +5370,22 @@ def _run_vessel_occlusion_on_file(file_id):
                 error_message=message,
             )
             return False, result, message
+
+    try:
+        _dinov3_validate_assets(
+            model_path=model_path,
+            dinov3_weights=dinov3_weights,
+            repo_dir=repo_dir,
+        )
+    except Exception as exc:
+        message = f"DINOv3 model dependency unavailable: {exc}"
+        result = empty_vessel_occlusion_result(
+            "unavailable",
+            total_slices=preferred_slice_count,
+            error_code="MODEL_DEPENDENCY_UNAVAILABLE",
+            error_message=message,
+        )
+        return False, result, message
 
     predictions = []
     failures = []
